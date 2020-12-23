@@ -51,35 +51,15 @@ pub mod process;
 pub use channel::Channel;
 pub use process::Process;
 
-/// Rust doesn't have a native representation for Externrefs.
-/// Lunatic will do the transfomration to i32s during normalisation.
-pub type Externref = i32;
-
 pub mod stdlib {
-    use super::Externref;
-
     #[link(wasm_import_module = "lunatic")]
     extern "C" {
-        pub fn r#yield();
-        pub fn drop_externref(externref: Externref);
-        pub fn clone_externref(externref: Externref) -> Externref;
+        pub fn yield_();
     }
 }
 
 pub fn yield_() {
     unsafe {
-        stdlib::r#yield();
+        stdlib::yield_();
     }
-}
-
-// Drop Externref resource from table.
-fn drop(externref: Externref) {
-    unsafe {
-        stdlib::drop_externref(externref);
-    }
-}
-
-// Duplicate Externref resource on table.
-fn clone(externref: Externref) -> Externref {
-    unsafe { stdlib::clone_externref(externref) }
 }

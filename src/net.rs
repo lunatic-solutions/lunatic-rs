@@ -1,37 +1,30 @@
-use crate::{clone, drop, Externref};
-
-use std::fmt;
-use std::io::{self, Error, ErrorKind, IoSlice, IoSliceMut, Write, Read};
 use serde::de::{self, Deserialize, Deserializer, Visitor};
 use serde::ser::{Serialize, Serializer};
+use std::fmt;
+use std::io::{self, Error, ErrorKind, IoSlice, IoSliceMut, Read, Write};
 
 pub mod stdlib {
-    use crate::Externref;
     use std::io::{IoSlice, IoSliceMut};
 
     #[link(wasm_import_module = "lunatic")]
     extern "C" {
-        pub fn tcp_bind_str(addr_ptr: *const u8, addr_len: usize, listener: *mut Externref) -> i32;
-        pub fn tcp_accept(
-            listener: Externref,
-            tcp_socket: *mut Externref,
-            addr: *mut Externref,
-        ) -> i32;
-        pub fn tcp_stream_serialize(tcp_stream: Externref) -> u64;
-        pub fn tcp_stream_deserialize(tcp_stream: u64) -> Externref;
+        pub fn tcp_bind_str(addr_ptr: *const u8, addr_len: usize, listener: *mut i32) -> i32;
+        pub fn tcp_accept(listener: i32, tcp_socket: *mut i32) -> i32;
+        pub fn tcp_stream_serialize(tcp_stream: i32) -> u64;
+        pub fn tcp_stream_deserialize(tcp_stream: u64) -> i32;
     }
 
     #[link(wasm_import_module = "wasi_snapshot_preview1")]
     extern "C" {
         pub fn fd_write(
-            tcp_stream: Externref,
+            tcp_stream: i32,
             ciovs_ptr: *const IoSlice<'_>,
             ciovs_len: usize,
             nwritten_ptr: *mut usize,
         ) -> i32;
 
         pub fn fd_read(
-            tcp_stream: Externref,
+            tcp_stream: i32,
             iovs_ptr: *mut IoSliceMut<'_>,
             iovs_len: usize,
             nread_ptr: *mut usize,
@@ -40,37 +33,27 @@ pub mod stdlib {
 }
 
 pub struct TcpListener {
-    externref: Externref,
+    id: i32,
 }
 
 impl TcpListener {
     pub fn bind(addr: &str) -> Result<Self, i32> {
-        let mut externref = 0;
-        let result = unsafe {
-            stdlib::tcp_bind_str(addr.as_ptr(), addr.len(), &mut externref as *mut Externref)
-        };
+        let mut id = 0;
+        let result =
+            unsafe { stdlib::tcp_bind_str(addr.as_ptr(), addr.len(), &mut id as *mut i32) };
         if result == 0 {
-            Ok(Self { externref })
+            Ok(Self { id })
         } else {
             Err(result)
         }
     }
 
     pub fn accept(&self) -> Result<TcpStream, i32> {
-        let mut tcp_stream_externref = 0;
-        let mut socket_addr_externref = 0;
-        let result = unsafe {
-            stdlib::tcp_accept(
-                self.externref,
-                &mut tcp_stream_externref as *mut Externref,
-                &mut socket_addr_externref as *mut Externref,
-            )
-        };
+        let mut tcp_stream_id = 0;
+        let result = unsafe { stdlib::tcp_accept(self.id, &mut tcp_stream_id as *mut i32) };
         if result == 0 {
-            // TODO: We never use socket_addr_externref, this leaks the externref.
-            Ok(TcpStream {
-                externref: tcp_stream_externref,
-            })
+            // TODO: We never use socket_addr_id, this leaks the id.
+            Ok(TcpStream { id: tcp_stream_id })
         } else {
             Err(result)
         }
@@ -79,34 +62,24 @@ impl TcpListener {
 
 impl Drop for TcpListener {
     fn drop(&mut self) {
-        drop(self.externref);
+        drop(self.id);
     }
 }
 
+#[derive(Clone)]
 pub struct TcpStream {
-    externref: Externref,
+    id: i32,
 }
 
 impl TcpStream {
-    pub unsafe fn from_externref(externref: Externref) -> Self {
-        Self {
-            externref
-        }
-    }
-}
-
-impl Clone for TcpStream {
-    fn clone(&self) -> Self {
-        let externref = clone(self.externref);
-        Self {
-            externref
-        }
+    pub unsafe fn from_id(id: i32) -> Self {
+        Self { id }
     }
 }
 
 impl Drop for TcpStream {
     fn drop(&mut self) {
-        drop(self.externref);
+        drop(self.id);
     }
 }
 
@@ -120,7 +93,7 @@ impl Write for TcpStream {
         let mut nwritten: usize = 0;
         let result = unsafe {
             stdlib::fd_write(
-                self.externref,
+                self.id,
                 bufs.as_ptr(),
                 bufs.len(),
                 &mut nwritten as *mut usize,
@@ -151,7 +124,7 @@ impl Read for TcpStream {
         let mut nread: usize = 0;
         let result = unsafe {
             stdlib::fd_read(
-                self.externref,
+                self.id,
                 bufs.as_mut_ptr(),
                 bufs.len(),
                 &mut nread as *mut usize,
@@ -168,32 +141,31 @@ impl Read for TcpStream {
     }
 }
 
-
 impl Serialize for TcpStream {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let serialized_tcp_stream = unsafe { stdlib::tcp_stream_serialize(self.externref) };
+        let serialized_tcp_stream = unsafe { stdlib::tcp_stream_serialize(self.id) };
         serializer.serialize_u64(serialized_tcp_stream)
     }
 }
 
 struct TcpStreamVisitor {}
 
-impl<'de> Visitor<'de> for  TcpStreamVisitor {
+impl<'de> Visitor<'de> for TcpStreamVisitor {
     type Value = TcpStream;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("an pointer to an externref containing a  tcp_stream")
+        formatter.write_str("an pointer to an id containing a  tcp_stream")
     }
 
     fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
     where
         E: de::Error,
     {
-        let  tcp_stream_externref = unsafe { stdlib::tcp_stream_deserialize(value) };
-        unsafe { Ok(TcpStream::from_externref( tcp_stream_externref)) }
+        let tcp_stream_id = unsafe { stdlib::tcp_stream_deserialize(value) };
+        unsafe { Ok(TcpStream::from_id(tcp_stream_id)) }
     }
 }
 
@@ -202,6 +174,6 @@ impl<'de> Deserialize<'de> for TcpStream {
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_u64( TcpStreamVisitor {})
+        deserializer.deserialize_u64(TcpStreamVisitor {})
     }
 }
