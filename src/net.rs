@@ -1,46 +1,41 @@
 use serde::de::{self, Deserialize, Deserializer, Visitor};
 use serde::ser::{Serialize, Serializer};
-use std::fmt;
 use std::io::{self, Error, ErrorKind, IoSlice, IoSliceMut, Read, Write};
+use std::{ffi::c_void, fmt};
 
-pub mod stdlib {
-    use std::io::{IoSlice, IoSliceMut};
+mod stdlib {
+    use std::ffi::c_void;
 
     #[link(wasm_import_module = "lunatic")]
     extern "C" {
-        pub fn tcp_bind_str(addr_ptr: *const u8, addr_len: usize, listener: *mut i32) -> i32;
-        pub fn tcp_accept(listener: i32, tcp_socket: *mut i32) -> i32;
-        pub fn tcp_stream_serialize(tcp_stream: i32) -> u64;
-        pub fn tcp_stream_deserialize(tcp_stream: u64) -> i32;
-    }
-
-    #[link(wasm_import_module = "wasi_snapshot_preview1")]
-    extern "C" {
-        pub fn fd_write(
-            tcp_stream: i32,
-            ciovs_ptr: *const IoSlice<'_>,
-            ciovs_len: usize,
-            nwritten_ptr: *mut usize,
-        ) -> i32;
-
-        pub fn fd_read(
-            tcp_stream: i32,
-            iovs_ptr: *mut IoSliceMut<'_>,
-            iovs_len: usize,
-            nread_ptr: *mut usize,
-        ) -> i32;
+        pub fn tcp_bind_str(addr_ptr: *const u8, addr_len: usize, listener: *mut u32) -> u32;
+        pub fn tcp_accept(listener: u32, tcp_socket: *mut u32) -> u32;
+        pub fn tcp_write_vectored(
+            tcp_stream: u32,
+            data: *const c_void,
+            data_len: usize,
+            nwritten: *mut usize,
+        ) -> u32;
+        pub fn tcp_read_vectored(
+            tcp_stream: u32,
+            data: *mut c_void,
+            data_len: usize,
+            nwritten: *mut usize,
+        ) -> u32;
+        pub fn tcp_stream_serialize(tcp_stream: u32) -> u64;
+        pub fn tcp_stream_deserialize(tcp_stream: u64) -> u32;
     }
 }
 
 pub struct TcpListener {
-    id: i32,
+    id: u32,
 }
 
 impl TcpListener {
-    pub fn bind(addr: &str) -> Result<Self, i32> {
+    pub fn bind(addr: &str) -> Result<Self, u32> {
         let mut id = 0;
         let result =
-            unsafe { stdlib::tcp_bind_str(addr.as_ptr(), addr.len(), &mut id as *mut i32) };
+            unsafe { stdlib::tcp_bind_str(addr.as_ptr(), addr.len(), &mut id as *mut u32) };
         if result == 0 {
             Ok(Self { id })
         } else {
@@ -48,9 +43,9 @@ impl TcpListener {
         }
     }
 
-    pub fn accept(&self) -> Result<TcpStream, i32> {
+    pub fn accept(&self) -> Result<TcpStream, u32> {
         let mut tcp_stream_id = 0;
-        let result = unsafe { stdlib::tcp_accept(self.id, &mut tcp_stream_id as *mut i32) };
+        let result = unsafe { stdlib::tcp_accept(self.id, &mut tcp_stream_id as *mut u32) };
         if result == 0 {
             // TODO: We never use socket_addr_id, this leaks the id.
             Ok(TcpStream { id: tcp_stream_id })
@@ -68,11 +63,11 @@ impl Drop for TcpListener {
 
 #[derive(Clone)]
 pub struct TcpStream {
-    id: i32,
+    id: u32,
 }
 
 impl TcpStream {
-    pub unsafe fn from_id(id: i32) -> Self {
+    pub unsafe fn from_id(id: u32) -> Self {
         Self { id }
     }
 }
@@ -92,9 +87,9 @@ impl Write for TcpStream {
     fn write_vectored(&mut self, bufs: &[IoSlice<'_>]) -> io::Result<usize> {
         let mut nwritten: usize = 0;
         let result = unsafe {
-            stdlib::fd_write(
+            stdlib::tcp_write_vectored(
                 self.id,
-                bufs.as_ptr(),
+                bufs.as_ptr() as *const c_void,
                 bufs.len(),
                 &mut nwritten as *mut usize,
             )
@@ -123,9 +118,9 @@ impl Read for TcpStream {
     fn read_vectored(&mut self, bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> {
         let mut nread: usize = 0;
         let result = unsafe {
-            stdlib::fd_read(
+            stdlib::tcp_read_vectored(
                 self.id,
-                bufs.as_mut_ptr(),
+                bufs.as_mut_ptr() as *mut c_void,
                 bufs.len(),
                 &mut nread as *mut usize,
             )

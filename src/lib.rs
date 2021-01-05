@@ -51,13 +51,14 @@ pub mod process;
 pub use channel::Channel;
 pub use process::Process;
 
-pub mod stdlib {
+mod stdlib {
     #[link(wasm_import_module = "lunatic")]
     extern "C" {
         pub fn yield_();
     }
 }
 
+/// Yields current process off the scheduler.
 pub fn yield_() {
     unsafe {
         stdlib::yield_();

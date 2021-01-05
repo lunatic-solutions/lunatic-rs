@@ -9,9 +9,9 @@ mod stdlib {
     #[link(wasm_import_module = "lunatic")]
     extern "C" {
         pub fn spawn(
-            function: unsafe extern "C" fn(usize, u64),
+            function: unsafe extern "C" fn(usize, u32),
             argument1: usize,
-            argument2: u64,
+            argument2: u32,
         ) -> i32;
 
         pub fn join(pid: i32);
@@ -38,15 +38,15 @@ impl Process {
     /// Spawn a new process from a function and cotext.
     /// `function` is going to be starting point of the new process.
     /// `context` is some data that we want to pass to the newly spawned process.
-    pub fn spawn<'de, T>(context: T, function: fn(T)) -> Result<Process, SpawnError>
+    pub fn spawn<T>(context: T, function: fn(T)) -> Result<Process, SpawnError>
     where
         T: Serialize + DeserializeOwned,
     {
-        unsafe extern "C" fn spawn_with_context<'de, T>(function: usize, channel: u64)
+        unsafe extern "C" fn spawn_with_context<'de, T>(function: usize, channel_id: u32)
         where
             T: Serialize + DeserializeOwned,
         {
-            let channel: Channel<T> = Channel::deserialize_from_u64(channel);
+            let channel: Channel<T> = Channel::from(channel_id);
             let context: T = channel.receive();
             let function: fn(T) = transmute(function);
             function(context);
@@ -54,15 +54,10 @@ impl Process {
 
         let channel = Channel::new(1);
         channel.send(context);
-        let serialized_channel = channel.serialize_as_u64();
+        let channel_raw_id = channel.id();
 
-        let id = unsafe {
-            stdlib::spawn(
-                spawn_with_context::<T>,
-                transmute(function),
-                serialized_channel,
-            )
-        };
+        let id =
+            unsafe { stdlib::spawn(spawn_with_context::<T>, transmute(function), channel_raw_id) };
 
         Ok(Self { id })
     }
@@ -73,7 +68,6 @@ impl Process {
             stdlib::join(self.id);
         };
         forget(self);
-        // TODO: Drop id
     }
 
     /// Suspends the current process for `milliseconds`.
