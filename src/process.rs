@@ -1,73 +1,102 @@
 use std::mem::{forget, transmute};
 
-use serde::de::DeserializeOwned;
-use serde::ser::Serialize;
+use serde::{de, ser, Deserialize, Serialize};
 
-use crate::Channel;
+use crate::channel::Receiver;
 
 mod stdlib {
     #[link(wasm_import_module = "lunatic")]
     extern "C" {
-        pub fn spawn(
-            function: unsafe extern "C" fn(usize, u32),
-            argument1: usize,
-            argument2: u32,
-        ) -> i32;
+        pub fn spawn_with_context(
+            function: unsafe extern "C" fn(),
+            buf_ptr: *const u8,
+            buf_len: usize,
+        ) -> u32;
 
-        pub fn join(pid: i32);
+        pub fn detach_process(pid: u32);
+        pub fn cancel_process(pid: u32);
+        pub fn join(pid: u32) -> u32;
         pub fn sleep_ms(millis: u64);
     }
 }
 
-#[derive(Debug)]
-pub struct SpawnError {}
-
-/// A process consists of its own stack and heap. It can only share data with other processes by
-/// exchanging the data with messages passing.
+/// A `Process` consists of its own stack and heap. It can only share data with other processes
+/// through message passing.
+///
+/// Dropping a `Process` cancels it. To drop the Task handle without canceling it, use `detach()`
+/// instead.
 pub struct Process {
-    id: i32,
+    id: u32,
 }
 
 impl Drop for Process {
     fn drop(&mut self) {
-        drop(self.id);
+        unsafe { stdlib::cancel_process(self.id) };
     }
 }
 
 impl Process {
-    /// Spawn a new process from a function and cotext.
-    /// `function` is going to be starting point of the new process.
-    /// `context` is some data that we want to pass to the newly spawned process.
-    pub fn spawn<T>(context: T, function: fn(T)) -> Result<Process, SpawnError>
+    /// Spawns a new process from a function and context.
+    ///
+    /// - `function` is the starting point of the new process. The new process doesn't share
+    ///   memory with its parent, because of this the function can't capture anything from parents.
+    ///
+    /// - `context` is  data that we want to pass to the newly spawned process. It needs to be
+    ///    serializable.
+    ///
+    /// Safety:
+    /// Rust doesn't have a concept of "separate" memories and you will still be able to reference
+    /// global static variables, but **IT'S NOT SAFE** to do so.
+    pub fn spawn_with<T>(context: T, function: fn(T)) -> Process
     where
-        T: Serialize + DeserializeOwned,
+        T: ser::Serialize + de::DeserializeOwned,
     {
-        unsafe extern "C" fn spawn_with_context<'de, T>(function: usize, channel_id: u32)
+        unsafe extern "C" fn spawn_with_context<'de, T>()
         where
-            T: Serialize + DeserializeOwned,
+            T: ser::Serialize + de::DeserializeOwned,
         {
-            let channel: Channel<T> = Channel::from(channel_id);
-            let context: T = channel.receive();
-            let function: fn(T) = transmute(function);
-            function(context);
+            let receiver: Receiver<Context<T>> = Receiver::from(0);
+            let context: Context<T> = receiver.receive().unwrap();
+            let function: fn(T) = transmute(context.function_ptr);
+            function(context.context);
         }
 
-        let channel = Channel::new(1);
-        channel.send(context);
-        let channel_raw_id = channel.id();
+        let context = Context {
+            function_ptr: unsafe { transmute(function) },
+            context: context,
+        };
 
-        let id =
-            unsafe { stdlib::spawn(spawn_with_context::<T>, transmute(function), channel_raw_id) };
+        let context_serialized = bincode::serialize(&context).unwrap();
 
-        Ok(Self { id })
+        let id = unsafe {
+            stdlib::spawn_with_context(
+                spawn_with_context::<T>,
+                context_serialized.as_ptr(),
+                context_serialized.len(),
+            )
+        };
+
+        Self { id }
     }
 
-    /// Wait on a process to finish.
-    pub fn join(self) {
-        unsafe {
-            stdlib::join(self.id);
-        };
+    /// Detaches the `Process` to let it keep running in the background.
+    pub fn detach(self) {
+        unsafe { stdlib::detach_process(self.id) };
+        // Avoid calling stdlib::cancel_process in the Drop implementation
         forget(self);
+    }
+
+    /// Waits on a `Process` to finish.
+    ///
+    /// Returns an error if the process failed.
+    pub fn join(self) -> Result<(), ()> {
+        let result = unsafe { stdlib::join(self.id) };
+        // Avoid calling stdlib::cancel_process in the Drop implementation
+        forget(self);
+        match result {
+            0 => Ok(()),
+            _ => Err(()),
+        }
     }
 
     /// Suspends the current process for `milliseconds`.
@@ -76,4 +105,10 @@ impl Process {
             stdlib::sleep_ms(milliseconds);
         };
     }
+}
+
+#[derive(Serialize, Deserialize)]
+struct Context<T> {
+    function_ptr: u32,
+    context: T,
 }
