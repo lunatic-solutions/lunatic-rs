@@ -63,8 +63,8 @@
 //! Others are specific to Lunatic, like process spawning (`lunatic::Process`).
 //!
 //! Some features that are usually available in Rust's standard library (like TCP, e.g. `std::net::TcpListener`) are
-//! not standardised by [WASI][4] yet. So we made them available through **this library** (e.g. `lunatic::net::TcpListener`).
-//! Once WASI gets support for this features you will be able to just use the stand library versions.
+//! not standardised yet by [WASI][4]. So we made them available through **this library** (e.g. `lunatic::net::TcpListener`).
+//! Once WASI gets support for this features you will be able to just use the standard library versions.
 //!
 //! What currently works:
 //!
