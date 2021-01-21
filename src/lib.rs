@@ -13,7 +13,7 @@
 //! process fails it will not affect the rest of the system. This allows you to create very powerful and fault-tolerant
 //! abstraction.
 //!
-//! All processes running on Lunatic are preemptively scheduled and executed by a [work steeling async executor][6]. This
+//! All processes running on Lunatic are preemptively scheduled and executed by a [work stealing async executor][6]. This
 //! gives you the freedom to write simple _blocking_ code, but the runtime is going to make sure it actually never blocks
 //! a thread if waiting on I/O.
 //!
