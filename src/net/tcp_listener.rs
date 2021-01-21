@@ -26,8 +26,7 @@ mod stdlib {
 ///
 /// After creating a [`TcpListener`] by [`bind`][`TcpListener::bind()`]ing it to an address, it
 /// listens for incoming TCP connections. These can be accepted by calling
-/// [`accept()`][`TcpListener::accept()`] or by awaiting items from the stream of
-/// [`incoming`][`TcpListener::incoming()`] connections.
+/// [`accept()`][`TcpListener::accept()`].
 ///
 /// Cloning a [`TcpListener`] creates another handle to the same socket. The socket will be closed
 /// when all handles to it are dropped.

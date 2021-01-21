@@ -43,7 +43,7 @@ mod stdlib {
 /// A TCP connection.
 ///
 /// A [`TcpStream`] can be created by [`connect`][`TcpStream::connect()`]ing to an endpoint or by
-/// [`accept`][`TcpListener::accept()`]ing an incoming connection.
+/// [`accept`][`super::TcpListener::accept()`]ing an incoming connection.
 ///
 /// [`TcpStream`] is a bidirectional stream that implements traits [`Read`] and [`Write`].
 ///

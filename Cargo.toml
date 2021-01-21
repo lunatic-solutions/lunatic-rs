@@ -21,6 +21,3 @@ criterion = "0.3"
 [[bench]]
 name = "lunatic_benchmark"
 harness = false
-
-[package.metadata.docs.rs]
-default-target = "x86_64-unknown-linux-gnu"

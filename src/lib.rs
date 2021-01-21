@@ -68,13 +68,13 @@
 //!
 //! What currently works:
 //!
-//! - [x] **Process creation & joining** (with this library)
-//! - [ ] **Fine-grained process permissions** (with this library)
-//! - [x] **Channel based message passing** (with this library)
-//! - [x] **TCP networking** (with this library)
-//! - [ ] **Filesystem access**
-//! - [x] **Environment variables**
-//! - [ ] **Multithreading**
+//! - `[x]` **Process creation & joining** (with this library)
+//! - `[ ]` **Fine-grained process permissions** (with this library)
+//! - `[x]` **Channel based message passing** (with this library)
+//! - `[x]` **TCP networking** (with this library)
+//! - `[ ]` **Filesystem access**
+//! - `[x]` **Environment variables**
+//! - `[ ]` **Multithreading**
 //!
 //! > **NOTE:**
 //! > Some libraries currently don't compile under the target `wasm32-wasi` and can't be used inside Lunatic applications.
