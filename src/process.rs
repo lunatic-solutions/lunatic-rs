@@ -109,6 +109,6 @@ impl Process {
 
 #[derive(Serialize, Deserialize)]
 struct Context<T> {
-    function_ptr: u32,
+    function_ptr: usize,
     context: T,
 }

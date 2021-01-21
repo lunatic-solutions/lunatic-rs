@@ -35,7 +35,7 @@ fn  main()  {
 }
 ```
 
-Check out more examples [here](https://github.com/lunatic-solutions/rust-lib/examples).
+Check out more examples [here](https://github.com/lunatic-solutions/rust-lib/tree/main/examples).
 
 ### Requirements
 
