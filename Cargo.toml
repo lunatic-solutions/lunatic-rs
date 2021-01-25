@@ -1,6 +1,6 @@
 [package]
 name = "lunatic"
-version = "0.3.4"
+version = "0.3.5"
 authors = ["Bernard Kolobara <me@kolobara.com>"]
 edition = "2018"
 description = "This library contains higher level wrappers for low level Lunatic syscalls."
