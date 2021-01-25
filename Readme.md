@@ -26,12 +26,12 @@ This example application spawns a process and waits for it to print a message on
 ```rust
 use  lunatic::Process;
 
-fn  main()  {
-	Process::spawn((),  |_:  ()|  {
-		println!("Hello from inside the new process!");
-	})
-	.unwrap()
-	.join();
+fn main() {
+    Process::spawn_with((), |_: ()| {
+        println!("Hello from inside the new process!");
+    })
+    .join()
+    .unwrap();
 }
 ```
 
