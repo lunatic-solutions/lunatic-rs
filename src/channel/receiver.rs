@@ -1,6 +1,10 @@
-use serde::{de, ser};
+use serde::{
+    de::{self, Visitor},
+    ser, Serializer,
+};
 use std::{
     alloc::{alloc, dealloc, Layout},
+    fmt,
     marker::PhantomData,
     mem,
     rc::Rc,
@@ -12,6 +16,8 @@ mod stdlib {
     extern "C" {
         pub fn close_receiver(sender: u32);
         pub fn drop_last_message();
+        pub fn receiver_serialize(sender: u32) -> u32;
+        pub fn receiver_deserialize(index: u32) -> u32;
         pub fn channel_receive_prepare(channel: u32, buf_len: *mut u32) -> usize;
         pub fn channel_receive(buf: *mut u8, buf_len: usize) -> u32;
     }
@@ -85,5 +91,55 @@ where
         }
 
         Ok(result)
+    }
+}
+
+impl<T> ser::Serialize for Receiver<T>
+where
+    T: ser::Serialize + de::DeserializeOwned,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let index = unsafe { stdlib::receiver_serialize(self.inner.id) };
+        serializer.serialize_u32(index)
+    }
+}
+
+struct ReceiverVisitor<T> {
+    phantom: PhantomData<T>,
+}
+
+impl<'de, T> Visitor<'de> for ReceiverVisitor<T>
+where
+    T: ser::Serialize + de::DeserializeOwned,
+{
+    type Value = Receiver<T>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("an integer between -0 and 2^32")
+    }
+
+    fn visit_u32<E>(self, value: u32) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        let id = unsafe { stdlib::receiver_deserialize(value) };
+        Ok(Receiver::from(id))
+    }
+}
+
+impl<'de, T> de::Deserialize<'de> for Receiver<T>
+where
+    T: ser::Serialize + de::DeserializeOwned,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Receiver<T>, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        deserializer.deserialize_u32(ReceiverVisitor {
+            phantom: PhantomData,
+        })
     }
 }

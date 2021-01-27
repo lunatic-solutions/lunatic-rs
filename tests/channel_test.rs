@@ -31,3 +31,20 @@ fn channel_across_process_test() {
     assert_eq!(1337, receiver.receive().unwrap());
     assert_eq!(1337, receiver.receive().unwrap());
 }
+
+#[test]
+fn channel_across_process2_test() {
+    let (sender, receiver) = channel::unbounded();
+
+    let p1 = Process::spawn_with(receiver.clone(), |receiver| {
+        let result = receiver.receive().unwrap();
+        assert_eq!(result, 1337);
+    });
+
+    let p2 = Process::spawn_with(sender, |sender| {
+        sender.send(1337).unwrap();
+    });
+
+    assert!(p1.join().is_ok());
+    assert!(p2.join().is_ok());
+}
