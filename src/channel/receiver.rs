@@ -27,10 +27,19 @@ mod stdlib {
 ///
 /// Receivers can be cloned and shared among processes. When all receivers associated with a channel
 /// are dropped, the channel becomes closed.
-#[derive(Clone)]
 pub struct Receiver<T> {
     inner: Rc<ReceiverInner>,
     phantom: PhantomData<T>,
+}
+
+// See: https://github.com/rust-lang/rust/issues/26925
+impl<T> Clone for Receiver<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            phantom: PhantomData,
+        }
+    }
 }
 
 struct ReceiverInner {

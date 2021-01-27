@@ -18,10 +18,19 @@ mod stdlib {
 ///
 /// Senders can be cloned and shared among processes. When all senders associated with a channel are
 /// dropped, the channel becomes closed.
-#[derive(Clone)]
 pub struct Sender<T> {
     inner: Rc<SenderInner>,
     phantom: PhantomData<T>,
+}
+
+// See: https://github.com/rust-lang/rust/issues/26925
+impl<T> Clone for Sender<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            phantom: PhantomData,
+        }
+    }
 }
 
 struct SenderInner {
