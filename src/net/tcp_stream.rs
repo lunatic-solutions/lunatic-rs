@@ -127,7 +127,14 @@ impl Write for TcpStream {
             )
         };
         if result == 0 {
-            Ok(nwritten)
+            if nwritten == 0 {
+                Err(Error::new(
+                    ErrorKind::ConnectionAborted,
+                    "Connection closed",
+                ))
+            } else {
+                Ok(nwritten)
+            }
         } else {
             Err(Error::new(
                 ErrorKind::Other,
@@ -158,7 +165,14 @@ impl Read for TcpStream {
             )
         };
         if result == 0 {
-            Ok(nread)
+            if nread == 0 {
+                Err(Error::new(
+                    ErrorKind::ConnectionAborted,
+                    "Connection closed",
+                ))
+            } else {
+                Ok(nread)
+            }
         } else {
             Err(Error::new(
                 ErrorKind::Other,
