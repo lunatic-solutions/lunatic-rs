@@ -32,3 +32,8 @@ fn detach_process_test() {
     })
     .detach();
 }
+
+#[test]
+fn panic_detach_process_test() {
+    Process::spawn_with((), |_| Process::spawn_with((), |_| panic!("hi")).detach()).detach();
+}

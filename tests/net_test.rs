@@ -7,7 +7,7 @@ fn tcp_test() {
     let server = Process::spawn_with((), |_| {
         let listener = net::TcpListener::bind("127.0.0.1:3337").unwrap();
         let tcp_stream = listener.accept().unwrap();
-        let mut buf_reader = BufReader::new(tcp_stream.clone());
+        let mut buf_reader = BufReader::new(tcp_stream);
         let mut buffer = String::new();
         buf_reader.read_line(&mut buffer).unwrap();
         let result = buffer.contains("test");
