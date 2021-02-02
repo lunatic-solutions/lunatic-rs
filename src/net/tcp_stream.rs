@@ -29,6 +29,7 @@ mod stdlib {
             data_len: usize,
             nwritten: *mut usize,
         ) -> u32;
+        pub fn tcp_flush(tcp_stream: u32) -> u32;
         pub fn tcp_read_vectored(
             tcp_stream: u32,
             data: *mut c_void,
@@ -137,7 +138,10 @@ impl Write for TcpStream {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        Ok(())
+        match unsafe { stdlib::tcp_flush(self.inner.id) } {
+            0 => Ok(()),
+            _ => Err(Error::new(ErrorKind::Other, format!("tcp_flush error"))),
+        }
     }
 }
 

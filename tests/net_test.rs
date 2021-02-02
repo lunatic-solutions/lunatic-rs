@@ -19,6 +19,7 @@ fn tcp_test() {
     let client = Process::spawn_with((), |_| {
         let mut tcp_stream = net::TcpStream::connect("127.0.0.1:3337").unwrap();
         tcp_stream.write("test".as_bytes()).unwrap();
+        tcp_stream.flush().unwrap();
     });
 
     assert!(server.join().is_ok());
