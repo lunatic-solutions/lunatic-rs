@@ -25,3 +25,8 @@ fn tcp_test() {
     assert!(server.join().is_ok());
     assert!(client.join().is_ok());
 }
+
+#[test]
+fn resolve_test() {
+    let _google = net::resolve("google:80").unwrap();
+}
