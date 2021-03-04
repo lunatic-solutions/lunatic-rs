@@ -54,10 +54,12 @@ mod stdlib {
 /// The Transmission Control Protocol is specified in [IETF RFC 793].
 ///
 /// [IETF RFC 793]: https://tools.ietf.org/html/rfc793
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TcpStream {
     inner: Rc<TcpStreamInner>,
 }
+
+#[derive(Debug)]
 pub struct TcpStreamInner {
     id: u32,
 }
