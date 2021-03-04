@@ -1,3 +1,5 @@
+#![deny(missing_debug_implementations)]
+
 mod errors;
 mod tcp_listener;
 mod tcp_stream;
@@ -24,6 +26,7 @@ mod stdlib {
     }
 }
 
+#[derive(Debug)]
 pub struct SocketAddrIterator {
     resolver_id: u32,
 }

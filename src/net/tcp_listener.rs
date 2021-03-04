@@ -41,10 +41,12 @@ mod stdlib {
 /// use lunatic::net::TcpListener;
 ///
 /// ```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TcpListener {
     inner: Rc<TcpListenerInner>,
 }
+
+#[derive(Debug)]
 pub struct TcpListenerInner {
     id: u32,
 }
@@ -122,7 +124,7 @@ impl Serialize for TcpListener {
     }
 }
 
-struct TcpListenerVisitor {}
+struct TcpListenerVisitor;
 
 impl<'de> Visitor<'de> for TcpListenerVisitor {
     type Value = TcpListener;
@@ -145,6 +147,6 @@ impl<'de> Deserialize<'de> for TcpListener {
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_u32(TcpListenerVisitor {})
+        deserializer.deserialize_u32(TcpListenerVisitor)
     }
 }
