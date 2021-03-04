@@ -28,5 +28,5 @@ fn tcp_test() {
 
 #[test]
 fn resolve_test() {
-    let _google = net::resolve("google:80").unwrap();
+    let _google = net::resolve("google.com:80").unwrap();
 }
