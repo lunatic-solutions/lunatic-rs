@@ -74,7 +74,7 @@ What currently works:
 - [x] **TCP networking** (with this library)
 - [ ] **Filesystem access**
 - [x] **Environment variables**
-- [ ] **Multithreading**
+- [x] **Multithreading Executor**
 
 > **NOTE:**
 > Some libraries currently don't compile under the target `wasm32-wasi` and can't be used inside Lunatic applications.
