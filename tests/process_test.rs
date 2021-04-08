@@ -37,3 +37,12 @@ fn detach_process_test() {
 fn panic_detach_process_test() {
     Process::spawn_with((), |_| Process::spawn_with((), |_| panic!("hi")).detach()).detach();
 }
+
+#[test]
+fn parent_dies_before_child_test() {
+    for _ in 0..10 {
+        Process::spawn_with((), |_| {
+            Process::spawn_with((), |_| Process::sleep(100)).detach()
+        });
+    }
+}
