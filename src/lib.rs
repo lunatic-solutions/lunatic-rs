@@ -27,7 +27,7 @@
 //! use  lunatic::Process;
 //!
 //! fn  main()  {
-//! 	Process::spawn((),  |_:  ()|  {
+//! 	Process::spawn_with((), |_:  ()|  {
 //! 		println!("Hello from inside the new process!");
 //! 	})
 //! 	.unwrap()

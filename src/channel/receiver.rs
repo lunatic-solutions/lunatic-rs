@@ -6,7 +6,6 @@ use std::{
     alloc::{alloc, dealloc, Layout},
     fmt,
     marker::PhantomData,
-    mem,
     rc::Rc,
     slice::from_raw_parts,
 };
@@ -80,7 +79,7 @@ where
         // Allocate buffer on guest to copy serialized data into.
         let buffer: *mut u8 = unsafe {
             let layout = Layout::from_size_align(buf_len as usize, 16).expect("Invalid layout");
-            mem::transmute(alloc(layout))
+            alloc(layout)
         };
 
         let result = unsafe { stdlib::channel_receive(buffer, buf_len as usize) };

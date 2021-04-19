@@ -25,9 +25,7 @@ where
     T: ser::Serialize + de::DeserializeOwned,
 {
     assert!(cap > 0, "capacity cannot be zero");
-    let mut receiver_id: u32 = 0;
-    let sender_id = unsafe { stdlib::channel(cap, &mut receiver_id as *mut u32) };
-    (Sender::from(sender_id), Receiver::from(receiver_id))
+    unbounded()
 }
 
 /// Creates an unbounded channel.
