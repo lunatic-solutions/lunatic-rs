@@ -79,12 +79,12 @@
 //! > **NOTE:**
 //! > Some libraries currently don't compile under the target `wasm32-wasi` and can't be used inside Lunatic applications.
 //!
-//! [1]: https://!github.com/lunatic-solutions/lunatic
-//! [2]: https://!www.erlang.org/
-//! [3]: https://!webassembly.org/
-//! [4]: https://!wasi.dev/
-//! [5]: https://!golangbot.com/goroutines
-//! [6]: https://!docs.rs/smol
+//! [1]: https://github.com/lunatic-solutions/lunatic
+//! [2]: https://www.erlang.org/
+//! [3]: https://webassembly.org/
+//! [4]: https://wasi.dev/
+//! [5]: https://golangbot.com/goroutines
+//! [6]: https://docs.rs/smol
 
 pub mod channel;
 pub mod net;
