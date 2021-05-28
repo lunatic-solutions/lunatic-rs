@@ -130,7 +130,7 @@ impl<'de> Visitor<'de> for TcpListenerVisitor {
     type Value = TcpListener;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("an pointer to an id containing a  tcp_stream")
+        formatter.write_str("an pointer to an id containing a tcp_stream")
     }
 
     fn visit_u32<E>(self, value: u32) -> Result<Self::Value, E>
