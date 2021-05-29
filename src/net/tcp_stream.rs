@@ -5,11 +5,11 @@ use serde::ser::{Serialize, Serializer};
 
 use std::{ffi::c_void, fmt, net::SocketAddr};
 use std::{
-    io::{self, Error, ErrorKind, IoSlice, IoSliceMut, Read, Write},
+    io::{self, IoSlice, IoSliceMut, Read, Write},
     rc::Rc,
 };
 
-use super::errors;
+use super::errors::IoError;
 
 mod stdlib {
     use std::ffi::c_void;
@@ -84,7 +84,7 @@ impl TcpStream {
     /// If `addr` yields multiple addresses, connecting will be attempted with each of the
     /// addresses until connecting to one succeeds. If none of the addresses result in a successful
     /// connection, the error from the last connect attempt is returned.
-    pub fn connect<A>(addr: A) -> Result<Self>
+    pub fn connect<A>(addr: A) -> io::Result<Self>
     where
         A: std::net::ToSocketAddrs,
     {
@@ -109,7 +109,7 @@ impl TcpStream {
                 });
             }
         }
-        Err(errors::TcpStreamError::CanNotEstablishTcpConnection(result).into())
+        Err(From::from(IoError::from(result)))
     }
 }
 
@@ -132,17 +132,14 @@ impl Write for TcpStream {
         if result == 0 {
             Ok(nwritten)
         } else {
-            Err(Error::new(
-                ErrorKind::Other,
-                format!("write_vectored error: {}", result),
-            ))
+            Err(From::from(IoError::from(result)))
         }
     }
 
     fn flush(&mut self) -> io::Result<()> {
         match unsafe { stdlib::tcp_flush(self.inner.id) } {
             0 => Ok(()),
-            _ => Err(Error::new(ErrorKind::Other, format!("tcp_flush error"))),
+            result => Err(IoError::from(result).into_io_error_with_text("tcp_flush error")),
         }
     }
 }
@@ -166,10 +163,8 @@ impl Read for TcpStream {
         if result == 0 {
             Ok(nread)
         } else {
-            Err(Error::new(
-                ErrorKind::Other,
-                format!("read_vectored error: {}", result),
-            ))
+            Err(IoError::from(result)
+                .into_io_error_with_text(format!("read_vectored error: {}", result)))
         }
     }
 }
