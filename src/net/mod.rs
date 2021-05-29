@@ -7,8 +7,12 @@ mod tcp_stream;
 pub use tcp_listener::TcpListener;
 pub use tcp_stream::TcpStream;
 
-use anyhow::Result;
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use std::{
+    io,
+    net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
+};
+
+use self::errors::IoError;
 
 mod stdlib {
     #[link(wasm_import_module = "lunatic")]
@@ -79,12 +83,12 @@ impl Iterator for SocketAddrIterator {
     }
 }
 
-pub fn resolve(name: &str) -> Result<SocketAddrIterator> {
+pub fn resolve(name: &str) -> io::Result<SocketAddrIterator> {
     let mut resolver_id: u32 = 0;
     let result =
         unsafe { stdlib::resolve(name.as_ptr(), name.len(), &mut resolver_id as *mut u32) };
     if result != 0 {
-        Err(errors::ResolveError::CanNotResolveAddress(result).into())
+        Err(IoError::from(result).into_io_error_with_text("resolve error"))
     } else {
         Ok(SocketAddrIterator { resolver_id })
     }

@@ -1,4 +1,4 @@
-use std::io::{BufRead, BufReader, Write};
+use std::io::{self, BufRead, BufReader, Write};
 
 use lunatic::{net, Process};
 
@@ -24,6 +24,19 @@ fn tcp_test() {
 
     assert!(server.join().is_ok());
     assert!(client.join().is_ok());
+}
+
+#[test]
+fn test_bind_to_unavailable_host() {
+    let process = Process::spawn_with((), |_| {
+        let listener = net::TcpListener::bind("1.1.1.1:5000");
+        assert_eq!(
+            io::ErrorKind::AddrNotAvailable,
+            listener.unwrap_err().kind()
+        );
+    });
+
+    assert!(process.join().is_ok());
 }
 
 #[test]

@@ -1,10 +1,10 @@
-use anyhow::Result;
-
 use serde::de::{self, Deserialize, Deserializer, Visitor};
 use serde::ser::{Serialize, Serializer};
+use std::io;
 use std::{fmt, net::SocketAddr, rc::Rc};
 
-use super::{errors, TcpStream};
+use super::errors::IoError;
+use super::TcpStream;
 
 mod stdlib {
     #[link(wasm_import_module = "lunatic")]
@@ -72,7 +72,7 @@ impl TcpListener {
     /// If `addr` yields multiple addresses, binding will be attempted with each of the addresses
     /// until one succeeds and returns the listener. If none of the addresses succeed in creating a
     /// listener, the error from the last attempt is returned.
-    pub fn bind<A>(addr: A) -> Result<Self>
+    pub fn bind<A>(addr: A) -> io::Result<Self>
     where
         A: std::net::ToSocketAddrs,
     {
@@ -97,19 +97,19 @@ impl TcpListener {
                 });
             }
         }
-        Err(errors::TcpListenerError::CanNotBindingToSocket(result).into())
+        Err(From::from(IoError::from(result)))
     }
 
     /// Accepts a new incoming connection.
     ///
     /// Returns a TCP stream.
-    pub fn accept(&self) -> Result<TcpStream, u32> {
+    pub fn accept(&self) -> io::Result<TcpStream> {
         let mut tcp_stream_id = 0;
         let result = unsafe { stdlib::tcp_accept(self.inner.id, &mut tcp_stream_id as *mut u32) };
         if result == 0 {
             Ok(TcpStream::from(tcp_stream_id))
         } else {
-            Err(result)
+            Err(From::from(IoError::from(result)))
         }
     }
 }
