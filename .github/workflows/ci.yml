@@ -1,0 +1,35 @@
+name: CI Testing
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Check out repository"
+        uses: actions/checkout@v1
+      - name: "Setup node"
+        uses: actions/setup-node@v2
+        with:
+          node-version: 15
+      - name: "Install lunatic"
+        run: |
+          wget https://github.com/lunatic-solutions/lunatic/releases/download/v0.3.1/lunatic-linux-amd64.tar.gz
+          tar -xf lunatic-linux-amd64.tar.gz
+          echo $PWD >> $GITHUB_PATH
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: standard
+          override: true
+          components: rustfmt, clippy
+      - name: "Run tests"
+        run: cargo test
+      - name: "Run examples"
+        run: |
+          cargo run --example channel
+          cargo run --example cli
+          cargo run --example process
+          cargo run --example resolve
