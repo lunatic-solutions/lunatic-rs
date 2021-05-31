@@ -19,6 +19,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+          target: wasm32-wasi
           override: true
           components: rustfmt, clippy
       - name: "Run tests"
