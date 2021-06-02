@@ -25,6 +25,8 @@ mod stdlib {
 ///
 /// Dropping a `Process` cancels it. To drop the Task handle without canceling it, use `detach()`
 /// instead.
+#[must_use = "`Process`es are cancelled when they are dropped. To avoid dropping this process
+immediately, you should use it (e.g. by calling `Process::detach` or `Process::join`)."]
 pub struct Process {
     id: u32,
 }
