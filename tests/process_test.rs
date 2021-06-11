@@ -39,6 +39,7 @@ fn panic_detach_process_test() {
 }
 
 #[test]
+#[allow(unused_must_use)]
 fn parent_dies_before_child_test() {
     for _ in 0..10 {
         Process::spawn_with((), |_| {

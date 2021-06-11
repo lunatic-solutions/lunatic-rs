@@ -38,6 +38,10 @@ impl Drop for Process {
 }
 
 impl Process {
+    pub(crate) fn from(id: u32) -> Process {
+        Process { id }
+    }
+
     /// Spawns a new process from a function and context.
     ///
     /// - `function` is the starting point of the new process. The new process doesn't share
