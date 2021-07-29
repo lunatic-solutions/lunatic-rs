@@ -153,48 +153,48 @@ impl ToSocketAddrs for String {
 impl ToSocketAddrs for SocketAddr {
     type Iter = IntoIter<SocketAddr>;
     fn to_socket_addrs(&self) -> Result<Self::Iter> {
-        <SocketAddr as std::net::ToSocketAddrs>::to_socket_addrs(&self)
+        <SocketAddr as std::net::ToSocketAddrs>::to_socket_addrs(self)
     }
 }
 
 impl ToSocketAddrs for (IpAddr, u16) {
     type Iter = IntoIter<SocketAddr>;
     fn to_socket_addrs(&self) -> Result<Self::Iter> {
-        <(IpAddr, u16) as std::net::ToSocketAddrs>::to_socket_addrs(&self)
+        <(IpAddr, u16) as std::net::ToSocketAddrs>::to_socket_addrs(self)
     }
 }
 
 impl ToSocketAddrs for (Ipv4Addr, u16) {
     type Iter = IntoIter<SocketAddr>;
     fn to_socket_addrs(&self) -> Result<Self::Iter> {
-        <(Ipv4Addr, u16) as std::net::ToSocketAddrs>::to_socket_addrs(&self)
+        <(Ipv4Addr, u16) as std::net::ToSocketAddrs>::to_socket_addrs(self)
     }
 }
 
 impl ToSocketAddrs for (Ipv6Addr, u16) {
     type Iter = IntoIter<SocketAddr>;
     fn to_socket_addrs(&self) -> Result<Self::Iter> {
-        <(Ipv6Addr, u16) as std::net::ToSocketAddrs>::to_socket_addrs(&self)
+        <(Ipv6Addr, u16) as std::net::ToSocketAddrs>::to_socket_addrs(self)
     }
 }
 
 impl ToSocketAddrs for SocketAddrV4 {
     type Iter = IntoIter<SocketAddr>;
     fn to_socket_addrs(&self) -> Result<Self::Iter> {
-        <SocketAddrV4 as std::net::ToSocketAddrs>::to_socket_addrs(&self)
+        <SocketAddrV4 as std::net::ToSocketAddrs>::to_socket_addrs(self)
     }
 }
 
 impl ToSocketAddrs for SocketAddrV6 {
     type Iter = IntoIter<SocketAddr>;
     fn to_socket_addrs(&self) -> Result<Self::Iter> {
-        <SocketAddrV6 as std::net::ToSocketAddrs>::to_socket_addrs(&self)
+        <SocketAddrV6 as std::net::ToSocketAddrs>::to_socket_addrs(self)
     }
 }
 
 impl<'a> ToSocketAddrs for &'a [SocketAddr] {
     type Iter = Cloned<Iter<'a, SocketAddr>>;
     fn to_socket_addrs(&self) -> Result<Self::Iter> {
-        <&[SocketAddr] as std::net::ToSocketAddrs>::to_socket_addrs(&self)
+        <&[SocketAddr] as std::net::ToSocketAddrs>::to_socket_addrs(self)
     }
 }
