@@ -1,0 +1,21 @@
+[package]
+name = "lunatic"
+version = "0.5.0"
+edition = "2018"
+description = "This library contains higher level wrappers for low level Lunatic syscalls."
+license = "Apache-2.0/MIT"
+readme = "Readme.md"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lunatic_message_derive = { version="0.1", path = "message_derive" }
+anyhow = "1.0"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+bincode= "1.3"
+
+[workspace]
+members = [
+    "message_derive"
+]

@@ -1,0 +1,28 @@
+name: CI Testing
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Check out repository"
+        uses: actions/checkout@v1
+      - name: "Install lunatic"
+        run: |
+          wget https://github.com/lunatic-solutions/lunatic/releases/download/v0.5.0/lunatic-linux-amd64.tar.gz
+          tar -xf lunatic-linux-amd64.tar.gz
+          echo $PWD >> $GITHUB_PATH
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-wasi
+          override: true
+          components: rustfmt, clippy
+      - name: "Run tests"
+        run: cargo test
+      - name: "Run clippy"
+        run: cargo clippy
