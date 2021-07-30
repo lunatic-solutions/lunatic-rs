@@ -49,10 +49,20 @@ fn message_custom_type_test() {
     }
 
     #[derive(Message, Debug, PartialEq)]
+    enum E {
+        A(u32, u32),
+        B(String),
+        C,
+    }
+
+    #[derive(Message, Debug, PartialEq)]
     struct X {
         y: Y,
         m: M,
         v: Vec<(i32, f64)>,
+        en: E,
+        enb: E,
+        enc: E,
     }
 
     process::spawn(|m: Mailbox<X>| {
@@ -64,6 +74,9 @@ fn message_custom_type_test() {
                 },
                 m: M { hello: 1337 },
                 v: vec![(1, 1.22), (55555, 3.14)],
+                en: E::A(1, 2),
+                enb: E::B("A longer string #$".to_string()),
+                enc: E::C,
             };
             parent.send(x);
         })
@@ -74,6 +87,9 @@ fn message_custom_type_test() {
             },
             m: M { hello: 1337 },
             v: vec![(1, 1.22), (55555, 3.14)],
+            en: E::A(1, 2),
+            enb: E::B("A longer string #$".to_string()),
+            enc: E::C,
         };
         assert_eq!(m.receive(), expected);
     })
