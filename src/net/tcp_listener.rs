@@ -1,8 +1,8 @@
 use std::io::{Error, ErrorKind, Result};
 use std::net::SocketAddr;
 
-use super::{SocketAddrIterator, TcpStream};
-use crate::{error::LunaticError, host_api};
+use super::SocketAddrIterator;
+use crate::{error::LunaticError, host_api, net::TcpStream};
 
 /// A TCP server, listening for connections.
 ///
@@ -108,8 +108,8 @@ impl TcpListener {
 
     /// Accepts a new incoming connection.
     ///
-    /// Returns a TCP stream and the peer address in forma of an iterator containing only 1 element.
-    pub fn accept(&self) -> Result<(TcpStream, SocketAddrIterator)> {
+    /// Returns a TCP stream and the peer address.
+    pub fn accept(&self) -> Result<(TcpStream, SocketAddr)> {
         let mut tcp_stream_or_error_id = 0;
         let mut dns_iter_id = 0;
         let result = unsafe {
@@ -121,8 +121,9 @@ impl TcpListener {
         };
         if result == 0 {
             let tcp_stream = TcpStream::from(tcp_stream_or_error_id);
-            let dns_iter = SocketAddrIterator::from(dns_iter_id);
-            Ok((tcp_stream, dns_iter))
+            let mut dns_iter = SocketAddrIterator::from(dns_iter_id);
+            let peer = dns_iter.next().expect("must contain one element");
+            Ok((tcp_stream, peer))
         } else {
             let lunatic_error = LunaticError::from(tcp_stream_or_error_id);
             Err(Error::new(ErrorKind::Other, lunatic_error))
