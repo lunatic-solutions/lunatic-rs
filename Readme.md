@@ -30,8 +30,9 @@ use lunatic::{process, Mailbox};
 
 fn main() {
     process::spawn(|_: Mailbox<()>| {
-        // This closure gets a new heap and stack to execute on,
-        // and can't access the memory of the parent process.
+        // This closure gets a new heap and stack to
+        // execute on, and can't access the memory of
+        // the parent process.
         println!("Hi! I'm a process.");
     })
     .unwrap()
@@ -46,15 +47,19 @@ Limit resources and syscalls for process by defining an environment of execution
 use lunatic::{Config, Environment, Mailbox};
 
 fn main() {
-    // Create a new environment where processes can use maximum 17 Wasm pages
-    // of emory (17 * 64KB) & 1 unit of compute (~=100k CPU cycles).
+    // Create a new environment where processes can use
+    // maximum 17 Wasm pages of memory (17 * 64KB) and one
+    // unit of compute (~=100k CPU cycles).
     let config = Config::new(17, Some(1));
-    // Allow only syscalls under the "wasi_snapshot_preview1::environ*" namespace
-    config.allow_namespace("wasi_snapshot_preview1::environ");
+    // Allow only syscalls under the
+    // "wasi_snapshot_preview1::environ*" namespace
+    config
+        .allow_namespace("wasi_snapshot_preview1::environ");
     let env = Environment::new(config).unwrap();
     let module = env.add_this_module().unwrap();
 
-    // This process will fail because it can't uses syscalls for std i/o
+    // This process will fail because it can't uses syscalls
+    // for std i/o
     let proc = module
         .spawn(|_: Mailbox<()>| {
             println!("Hi from a different env");
@@ -72,7 +77,8 @@ fn main() {
         .join();
     assert_eq!(proc.is_err(), true);
 
-    // This process will fail because it uses too much compute
+    // This process will fail because it uses too much
+    // compute
     let proc = module
         .spawn(|_: Mailbox<()>| loop {
             let _ = 1 + 1;
@@ -91,10 +97,12 @@ use lunatic::{net, process, Mailbox};
 use std::io::{BufRead, BufReader, Write};
 
 fn main() {
-    let listener = net::TcpListener::bind("127.0.0.1:1337").unwrap();
+    let listener =
+        net::TcpListener::bind("127.0.0.1:1337").unwrap();
     while let Ok((tcp_stream, _peer)) = listener.accept() {
-        // Pass the TCP stream as a context to the new process. We can't use a
-        // closures that capture parent variables because no memory is shared
+        // Pass the TCP stream as a context to the new
+        // process. We can't use a closures that capture
+        // parent variables because no memory is shared
         // between processes.
         process::spawn_with(tcp_stream, handle).unwrap();
     }
@@ -104,7 +112,8 @@ fn handle(mut tcp_stream: net::TcpStream, _: Mailbox<()>) {
     let mut buf_reader = BufReader::new(tcp_stream.clone());
     loop {
         let mut buffer = String::new();
-        let read = buf_reader.read_line(&mut buffer).unwrap();
+        let read =
+            buf_reader.read_line(&mut buffer).unwrap();
         if buffer.contains("exit") || read == 0 {
             return;
         }
