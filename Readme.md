@@ -8,7 +8,7 @@ This library allows you to build Rust applications that run on top of [Lunatic][
 Lunatic provides an [Erlang][2] like runtime for all programming languages that compile to
 [WebAssembly][3]. It's all about spawning _super lightweight_ processes, also known as green
 threads or [go-routines][5] in other runtimes. Lunatic processes are fast to create, have a small
-memory footprint and a low scheduling overhead. They are designed for **MASSIVE** concurrency.
+memory footprint and a low scheduling overhead. They are designed for **massive** concurrency.
 
 Lunatic processes are completely isolated from each other, they have their own stack, heap and even
 syscalls. If one process fails it will not affect the rest of the system. This allows you to create

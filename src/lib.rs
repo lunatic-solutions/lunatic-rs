@@ -1,11 +1,11 @@
 /*!
-Helper library for building Rust applications that run on [Lunatic][1].
+Helper library for building Rust applications that run on [lunatic][1].
 
 # Main concepts
 
-The main abstraction in [Lunatic][1] is a [`Process`](crate::process::Process). Contrary to
+The main abstraction in [lunatic][1] is a [`Process`](crate::process::Process). Contrary to
 operating system processes, lunatic processes are lightweight and fast to spawn. They are
-designed for **MASSIVE** concurrency.
+designed for **massive** concurrency.
 
 Processes can be spawned from just a function:
 ```
@@ -158,7 +158,7 @@ runner = "lunatic"
 
 Now you can just use the commands you were already familiar with, such as `cargo run`, `cargo test`
 and cargo is going to automatically build your project as a WebAssembly module and run it inside of
-`lunatic`.
+lunatic.
 
 # Debugging
 
