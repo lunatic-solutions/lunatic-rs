@@ -3,6 +3,7 @@ use std::{
     io::{Error, ErrorKind, IoSlice, Read, Result, Write},
     mem::forget,
     net::SocketAddr,
+    time::Duration,
 };
 
 use crate::{error::LunaticError, host_api, message::Message};
@@ -23,6 +24,8 @@ use crate::{error::LunaticError, host_api, message::Message};
 #[derive(Debug)]
 pub struct TcpStream {
     id: u64,
+    read_timeout: u32,  // ms
+    write_timeout: u32, // ms
 }
 
 impl Drop for TcpStream {
@@ -34,7 +37,11 @@ impl Drop for TcpStream {
 impl Clone for TcpStream {
     fn clone(&self) -> Self {
         let id = unsafe { host_api::networking::clone_tcp_stream(self.id) };
-        Self { id }
+        Self {
+            id,
+            read_timeout: self.read_timeout,
+            write_timeout: self.write_timeout,
+        }
     }
 }
 
@@ -49,7 +56,7 @@ impl Message for TcpStream {
 
     #[allow(clippy::wrong_self_convention)]
     unsafe fn to_bincode(self, dest: &mut Vec<u8>) {
-        let index = host_api::message::add_tcp_stream(self.id);
+        let index = host_api::message::push_tcp_stream(self.id);
         dest.extend(index.to_le_bytes());
         // By adding the tcp stream to the message it will be removed from our resources.
         // Dropping it would cause a trap.
@@ -59,7 +66,11 @@ impl Message for TcpStream {
 
 impl TcpStream {
     pub(crate) fn from(id: u64) -> Self {
-        TcpStream { id }
+        TcpStream {
+            id,
+            read_timeout: 0,
+            write_timeout: 0,
+        }
     }
 
     /// Creates a TCP connection to the specified address.
@@ -69,12 +80,16 @@ impl TcpStream {
     /// If `addr` yields multiple addresses, connecting will be attempted with each of the
     /// addresses until connecting to one succeeds. If none of the addresses result in a successful
     /// connection, the error from the last connect attempt is returned.
-    pub fn connect<A>(addr: A) -> Result<Self>
+    pub fn connect<A>(addr: A, timeout: Option<Duration>) -> Result<Self>
     where
         A: super::ToSocketAddrs,
     {
         let mut id = 0;
         for addr in addr.to_socket_addrs()? {
+            let timeout_ms = match timeout {
+                Some(timeout) => timeout.as_millis() as u32,
+                None => 0,
+            };
             let result = match addr {
                 SocketAddr::V4(v4_addr) => {
                     let ip = v4_addr.ip().octets();
@@ -86,6 +101,7 @@ impl TcpStream {
                             port,
                             0,
                             0,
+                            timeout_ms,
                             &mut id as *mut u64,
                         )
                     }
@@ -102,13 +118,14 @@ impl TcpStream {
                             port,
                             flow_info,
                             scope_id,
+                            timeout_ms,
                             &mut id as *mut u64,
                         )
                     }
                 }
             };
             if result == 0 {
-                return Ok(Self { id });
+                return Ok(TcpStream::from(id));
             }
         }
         let lunatic_error = LunaticError::from(id);
@@ -129,6 +146,7 @@ impl Write for TcpStream {
                 self.id,
                 bufs.as_ptr() as *const u32,
                 bufs.len(),
+                self.write_timeout,
                 &mut nwritten_or_error_id as *mut u64,
             )
         };
@@ -160,6 +178,7 @@ impl Read for TcpStream {
                 self.id,
                 buf.as_mut_ptr(),
                 buf.len(),
+                self.read_timeout,
                 &mut nread_or_error_id as *mut u64,
             )
         };

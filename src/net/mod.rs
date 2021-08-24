@@ -130,7 +130,7 @@ impl ToSocketAddrs for &str {
     type Iter = SocketAddrIterator;
 
     fn to_socket_addrs(&self) -> Result<Self::Iter> {
-        match resolve(self) {
+        match resolve(self, None) {
             Ok(iter) => Ok(iter),
             Err(err) => Err(Error::new(ErrorKind::Other, err)),
         }
@@ -141,7 +141,7 @@ impl ToSocketAddrs for String {
     type Iter = SocketAddrIterator;
 
     fn to_socket_addrs(&self) -> Result<Self::Iter> {
-        match resolve(self) {
+        match resolve(self, None) {
             Ok(iter) => Ok(iter),
             Err(err) => Err(Error::new(ErrorKind::Other, err)),
         }
