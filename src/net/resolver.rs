@@ -69,7 +69,19 @@ impl Iterator for SocketAddrIterator {
 ///
 /// The returned iterator may not actually yield any values depending on the
 /// outcome of any resolution performed.
-pub fn resolve(name: &str, timeout: Option<Duration>) -> Result<SocketAddrIterator, LunaticError> {
+pub fn resolve(name: &str) -> Result<SocketAddrIterator, LunaticError> {
+    resolve_timeout_(name, None)
+}
+
+/// Same as [`resolve`], but only waits for the duration of timeout to resolve.
+pub fn resolve_timeout(name: &str, timeout: Duration) -> Result<SocketAddrIterator, LunaticError> {
+    resolve_timeout_(name, Some(timeout))
+}
+
+fn resolve_timeout_(
+    name: &str,
+    timeout: Option<Duration>,
+) -> Result<SocketAddrIterator, LunaticError> {
     let mut dns_iter_or_error_id: u64 = 0;
     let timeout_ms = match timeout {
         Some(timeout) => timeout.as_millis() as u32,

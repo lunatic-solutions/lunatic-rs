@@ -1,12 +1,15 @@
 use std::{
-    convert::TryInto,
     io::{Error, ErrorKind, IoSlice, Read, Result, Write},
-    mem::forget,
     net::SocketAddr,
     time::Duration,
 };
 
-use crate::{error::LunaticError, host_api, message::Message};
+use serde::{
+    de::{self, Visitor},
+    Deserialize, Deserializer, Serialize, Serializer,
+};
+
+use crate::{error::LunaticError, host_api};
 
 /// A TCP connection.
 ///
@@ -45,22 +48,39 @@ impl Clone for TcpStream {
     }
 }
 
-impl Message for TcpStream {
-    fn from_bincode(data: &[u8], resources: &[u64]) -> (usize, Self) {
-        // The serialized value for a tcp stream is the u64 index inside the resources array.
-        // The resources array will contain the new resource index.
-        let index = u64::from_le_bytes(data.try_into().unwrap());
-        let proc = TcpStream::from(resources[index as usize]);
-        (8, proc)
+impl Serialize for TcpStream {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // TODO: Timeout info is not serialized
+        let index = unsafe { host_api::message::push_tcp_stream(self.id) };
+        serializer.serialize_u64(index)
+    }
+}
+struct TcpStreamVisitor;
+impl<'de> Visitor<'de> for TcpStreamVisitor {
+    type Value = TcpStream;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("an u64 index")
     }
 
-    #[allow(clippy::wrong_self_convention)]
-    unsafe fn to_bincode(self, dest: &mut Vec<u8>) {
-        let index = host_api::message::push_tcp_stream(self.id);
-        dest.extend(index.to_le_bytes());
-        // By adding the tcp stream to the message it will be removed from our resources.
-        // Dropping it would cause a trap.
-        forget(self);
+    fn visit_u64<E>(self, index: u64) -> std::result::Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        let id = unsafe { host_api::message::take_tcp_stream(index) };
+        Ok(TcpStream::from(id))
+    }
+}
+
+impl<'de> Deserialize<'de> for TcpStream {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<TcpStream, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_u64(TcpStreamVisitor)
     }
 }
 
@@ -80,7 +100,22 @@ impl TcpStream {
     /// If `addr` yields multiple addresses, connecting will be attempted with each of the
     /// addresses until connecting to one succeeds. If none of the addresses result in a successful
     /// connection, the error from the last connect attempt is returned.
-    pub fn connect<A>(addr: A, timeout: Option<Duration>) -> Result<Self>
+    pub fn connect<A>(addr: A) -> Result<Self>
+    where
+        A: super::ToSocketAddrs,
+    {
+        TcpStream::connect_timeout_(addr, None)
+    }
+
+    /// Same as [`TcpStream::connect`], but only waits for the duration of timeout to connect.
+    pub fn connect_timeout<A>(addr: A, timeout: Duration) -> Result<Self>
+    where
+        A: super::ToSocketAddrs,
+    {
+        TcpStream::connect_timeout_(addr, Some(timeout))
+    }
+
+    fn connect_timeout_<A>(addr: A, timeout: Option<Duration>) -> Result<Self>
     where
         A: super::ToSocketAddrs,
     {

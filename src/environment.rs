@@ -1,10 +1,11 @@
 use std::u128;
 
+use serde::{de::DeserializeOwned, Serialize};
+
 use crate::{
     error::LunaticError,
     host_api,
     mailbox::{LinkMailbox, Mailbox, TransformMailbox},
-    message::Message,
     process::{spawn_, Context, Process},
 };
 
@@ -138,7 +139,7 @@ impl Drop for Module {
 impl Module {
     /// Spawn a new process and use `function` as the entry point. If the function takes arguments
     /// the passed in `params` need to exactly match their types.
-    pub fn spawn<T: Message>(
+    pub fn spawn<T: Serialize + DeserializeOwned>(
         &self,
         function: &str,
         params: &[Param],
@@ -172,11 +173,11 @@ impl Module {
         params: &[Param],
     ) -> Result<(Process<T>, LinkMailbox<P>), LunaticError>
     where
-        T: Message,
-        P: Message,
+        T: Serialize + DeserializeOwned,
+        P: Serialize + DeserializeOwned,
         M: TransformMailbox<P>,
     {
-        let mailbox = mailbox.catch_child_panic();
+        let mailbox = mailbox.catch_link_panic();
         let mut process_or_error_id = 0;
         let params: Vec<u8> = params_to_vec(params);
         let result = unsafe {
@@ -219,7 +220,10 @@ impl ThisModule {
     ///
     /// - `function` is the starting point of the new process. The new process doesn't share
     ///   memory with its parent, because of this the function can't capture anything from parents.
-    pub fn spawn<T: Message>(&self, function: fn(Mailbox<T>)) -> Result<Process<T>, LunaticError> {
+    pub fn spawn<T: Serialize + DeserializeOwned>(
+        &self,
+        function: fn(Mailbox<T>),
+    ) -> Result<Process<T>, LunaticError> {
         // LinkMailbox<T> & Mailbox<T> are marker types and it's safe to cast to Mailbox<T> here if we
         //  set the `link` argument to `false`.
         let function = unsafe { std::mem::transmute(function) };
@@ -236,11 +240,11 @@ impl ThisModule {
         function: fn(Mailbox<T>),
     ) -> Result<(Process<T>, LinkMailbox<P>), LunaticError>
     where
-        T: Message,
-        P: Message,
+        T: Serialize + DeserializeOwned,
+        P: Serialize + DeserializeOwned,
         M: TransformMailbox<P>,
     {
-        let mailbox = mailbox.catch_child_panic();
+        let mailbox = mailbox.catch_link_panic();
         let proc = spawn_(Some(self.id), true, Context::<(), _>::Without(function))?;
         Ok((proc, mailbox))
     }
@@ -257,11 +261,11 @@ impl ThisModule {
         function: fn(Mailbox<T>),
     ) -> Result<(Process<T>, Mailbox<P>), LunaticError>
     where
-        T: Message,
-        P: Message,
+        T: Serialize + DeserializeOwned,
+        P: Serialize + DeserializeOwned,
         M: TransformMailbox<P>,
     {
-        let mailbox = mailbox.panic_if_child_panics();
+        let mailbox = mailbox.panic_if_link_panics();
         let proc = spawn_(Some(self.id), true, Context::<(), _>::Without(function))?;
         Ok((proc, mailbox))
     }
@@ -269,12 +273,12 @@ impl ThisModule {
     /// Spawns a new process from a function and context.
     ///
     /// - `context` is  data that we want to pass to the newly spawned process. It needs to impl.
-    ///    the [`Message`] trait.
+    ///    the [`Serialize + DeserializeOwned`] trait.
     ///
     /// - `function` is the starting point of the new process. The new process doesn't share
     ///   memory with its parent, because of this the function can't capture anything from parents.
     ///   The first argument of this function is going to be the received `context`.
-    pub fn spawn_with<C: Message, T: Message>(
+    pub fn spawn_with<C: Serialize + DeserializeOwned, T: Serialize + DeserializeOwned>(
         &self,
         context: C,
         function: fn(C, Mailbox<T>),
@@ -288,7 +292,7 @@ impl ThisModule {
     /// Spawns a new process from a function and context, and links it to the parent.
     ///
     /// - `context` is  data that we want to pass to the newly spawned process. It needs to impl.
-    ///    the [`Message`] trait.
+    ///    the [`Serialize + DeserializeOwned`] trait.
     ///
     /// - `function` is the starting point of the new process. The new process doesn't share
     ///   memory with its parent, because of this the function can't capture anything from parents.
@@ -300,12 +304,12 @@ impl ThisModule {
         function: fn(C, Mailbox<T>),
     ) -> Result<(Process<T>, LinkMailbox<P>), LunaticError>
     where
-        C: Message,
-        T: Message,
-        P: Message,
+        C: Serialize + DeserializeOwned,
+        T: Serialize + DeserializeOwned,
+        P: Serialize + DeserializeOwned,
         M: TransformMailbox<P>,
     {
-        let mailbox = mailbox.catch_child_panic();
+        let mailbox = mailbox.catch_link_panic();
         let proc = spawn_(Some(self.id), true, Context::With(function, context))?;
         Ok((proc, mailbox))
     }
@@ -313,7 +317,7 @@ impl ThisModule {
     /// Spawns a new process from a function and context, and links it to the parent.
     ///
     /// - `context` is  data that we want to pass to the newly spawned process. It needs to impl.
-    ///    the [`Message`] trait.
+    ///    the [`Serialize + DeserializeOwned`] trait.
     ///
     /// - `function` is the starting point of the new process. The new process doesn't share
     ///   memory with its parent, because of this the function can't capture anything from parents.
@@ -327,12 +331,12 @@ impl ThisModule {
         function: fn(C, Mailbox<T>),
     ) -> Result<(Process<T>, Mailbox<P>), LunaticError>
     where
-        C: Message,
-        T: Message,
-        P: Message,
+        C: Serialize + DeserializeOwned,
+        T: Serialize + DeserializeOwned,
+        P: Serialize + DeserializeOwned,
         M: TransformMailbox<P>,
     {
-        let mailbox = mailbox.panic_if_child_panics();
+        let mailbox = mailbox.panic_if_link_panics();
         let proc = spawn_(Some(self.id), true, Context::With(function, context))?;
         Ok((proc, mailbox))
     }

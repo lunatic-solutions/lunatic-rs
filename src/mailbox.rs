@@ -1,16 +1,19 @@
-use std::marker::PhantomData;
-
-use crate::{
-    host_api::{message, process},
-    message::Message,
+use std::{
+    io::{Read, Write},
+    marker::PhantomData,
+    time::Duration,
 };
 
+use serde::{de::DeserializeOwned, Serialize};
+
+use crate::host_api::{message, process};
+
 /// Mailbox for processes that are not linked, or linked and set to trap on notify signals.
-pub struct Mailbox<T: Message> {
+pub struct Mailbox<T: Serialize + DeserializeOwned> {
     _phantom: PhantomData<T>,
 }
 
-impl<T: Message> Mailbox<T> {
+impl<T: Serialize + DeserializeOwned> Mailbox<T> {
     pub(crate) fn new() -> Self {
         Self {
             _phantom: PhantomData {},
@@ -21,32 +24,31 @@ impl<T: Message> Mailbox<T> {
     ///
     /// If the mailbox is empty, this function will block until a new message arrives.
     pub fn receive(&self) -> T {
-        let mut data_size = 0;
-        let mut resource_size = 0;
-        let message_type = unsafe {
-            message::prepare_receive(
-                &mut data_size as *mut usize,
-                &mut resource_size as *mut usize,
-            )
+        self.receive_(None, None)
+    }
+
+    fn receive_(&self, tag: Option<i64>, timeout: Option<Duration>) -> T {
+        let tag = match tag {
+            Some(tag) => tag,
+            None => 0,
         };
-        // Mailbox can't receive Signal messages, only
+        let timeout_ms = match timeout {
+            Some(timeout) => timeout.as_millis() as u32,
+            None => 0,
+        };
+        let message_type = unsafe { message::receive(tag, timeout_ms) };
+        // Mailbox can't receive Signal messages.
         assert_eq!(message_type, 0);
-
-        let mut data = vec![0; data_size];
-        let mut resources = vec![0; resource_size];
-
-        unsafe { message::receive(data.as_mut_ptr(), resources.as_mut_ptr()) };
-        let (_bytes_read, value) = T::from_bincode(&data, &resources);
-        value
+        rmp_serde::from_read(MessageRw {}).unwrap()
     }
 }
 
-impl<T: Message> TransformMailbox<T> for Mailbox<T> {
-    fn catch_child_panic(self) -> LinkMailbox<T> {
+impl<T: Serialize + DeserializeOwned> TransformMailbox<T> for Mailbox<T> {
+    fn catch_link_panic(self) -> LinkMailbox<T> {
         unsafe { process::die_when_link_dies(0) };
         LinkMailbox::new()
     }
-    fn panic_if_child_panics(self) -> Mailbox<T> {
+    fn panic_if_link_panics(self) -> Mailbox<T> {
         self
     }
 }
@@ -54,11 +56,11 @@ impl<T: Message> TransformMailbox<T> for Mailbox<T> {
 /// Mailbox for linked processes.
 ///
 /// When a process is linked to others it will also receive messages if one of the others dies.
-pub struct LinkMailbox<T: Message> {
+pub struct LinkMailbox<T: Serialize + DeserializeOwned> {
     _phantom: PhantomData<T>,
 }
 
-impl<T: Message> LinkMailbox<T> {
+impl<T: Serialize + DeserializeOwned> LinkMailbox<T> {
     pub(crate) fn new() -> Self {
         Self {
             _phantom: PhantomData {},
@@ -69,32 +71,33 @@ impl<T: Message> LinkMailbox<T> {
     ///
     /// If the mailbox is empty, this function will block until a new message arrives.
     pub fn receive(&self) -> Result<T, Signal> {
-        let mut data_size = 0;
-        let mut resource_size = 0;
-        let message_type = unsafe {
-            message::prepare_receive(
-                &mut data_size as *mut usize,
-                &mut resource_size as *mut usize,
-            )
+        self.receive_(None, None)
+    }
+
+    fn receive_(&self, tag: Option<i64>, timeout: Option<Duration>) -> Result<T, Signal> {
+        let tag = match tag {
+            Some(tag) => tag,
+            None => 0,
         };
+        let timeout_ms = match timeout {
+            Some(timeout) => timeout.as_millis() as u32,
+            None => 0,
+        };
+        let message_type = unsafe { message::receive(tag, timeout_ms) };
+
         if message_type == 1 {
             return Err(Signal {});
         }
 
-        let mut data = vec![0; data_size];
-        let mut resources = vec![0; resource_size];
-
-        unsafe { message::receive(data.as_mut_ptr(), resources.as_mut_ptr()) };
-        let (_bytes_read, value) = T::from_bincode(&data, &resources);
-        Ok(value)
+        Ok(rmp_serde::from_read(MessageRw {}).unwrap())
     }
 }
 
-impl<T: Message> TransformMailbox<T> for LinkMailbox<T> {
-    fn catch_child_panic(self) -> LinkMailbox<T> {
+impl<T: Serialize + DeserializeOwned> TransformMailbox<T> for LinkMailbox<T> {
+    fn catch_link_panic(self) -> LinkMailbox<T> {
         self
     }
-    fn panic_if_child_panics(self) -> Mailbox<T> {
+    fn panic_if_link_panics(self) -> Mailbox<T> {
         unsafe { process::die_when_link_dies(1) };
         Mailbox::new()
     }
@@ -103,7 +106,24 @@ impl<T: Message> TransformMailbox<T> for LinkMailbox<T> {
 /// A Signal that was turned into a message.
 pub struct Signal {}
 
-pub trait TransformMailbox<T: Message> {
-    fn catch_child_panic(self) -> LinkMailbox<T>;
-    fn panic_if_child_panics(self) -> Mailbox<T>;
+pub trait TransformMailbox<T: Serialize + DeserializeOwned> {
+    fn catch_link_panic(self) -> LinkMailbox<T>;
+    fn panic_if_link_panics(self) -> Mailbox<T>;
+}
+
+// A helper struct to read and write into the message scratch buffer.
+pub(crate) struct MessageRw {}
+impl Read for MessageRw {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        Ok(unsafe { message::read_data(buf.as_mut_ptr(), buf.len()) })
+    }
+}
+impl Write for MessageRw {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        Ok(unsafe { message::write_data(buf.as_ptr(), buf.len()) })
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
 }

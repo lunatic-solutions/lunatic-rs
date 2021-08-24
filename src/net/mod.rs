@@ -10,7 +10,7 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV
 use std::option::IntoIter;
 use std::slice::Iter;
 
-pub use resolver::{resolve, SocketAddrIterator};
+pub use resolver::{resolve, resolve_timeout, SocketAddrIterator};
 pub use tcp_listener::TcpListener;
 pub use tcp_stream::TcpStream;
 
@@ -130,7 +130,7 @@ impl ToSocketAddrs for &str {
     type Iter = SocketAddrIterator;
 
     fn to_socket_addrs(&self) -> Result<Self::Iter> {
-        match resolve(self, None) {
+        match resolve(self) {
             Ok(iter) => Ok(iter),
             Err(err) => Err(Error::new(ErrorKind::Other, err)),
         }
@@ -141,7 +141,7 @@ impl ToSocketAddrs for String {
     type Iter = SocketAddrIterator;
 
     fn to_socket_addrs(&self) -> Result<Self::Iter> {
-        match resolve(self, None) {
+        match resolve(self) {
             Ok(iter) => Ok(iter),
             Err(err) => Err(Error::new(ErrorKind::Other, err)),
         }

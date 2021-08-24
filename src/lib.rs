@@ -66,7 +66,7 @@ it will get notified. A linked process can be spawned with the [`process::spawn_
 The function will take the current [`Mailbox`] and return a [`LinkMailbox`], that will also
 receive notifications about linked processes. If we would like to automatically fail as soon as
 one of the linked processes fails, we can turn the [`LinkMailbox`] back to a regular one with
-the `panic_if_child_panics()` function.
+the `panic_if_link_panics()` function.
 
 ```
 use lunatic::{process, Mailbox};
@@ -173,17 +173,9 @@ mod environment;
 mod error;
 mod host_api;
 mod mailbox;
-mod message;
 pub mod net;
 pub mod process;
 
 pub use environment::{Config, Environment, Module, ThisModule};
 pub use error::LunaticError;
 pub use mailbox::{LinkMailbox, Mailbox, Signal};
-pub use message::Message;
-
-// Re-export the `Message` derive macro.
-pub mod derive {
-    /*! Derive helpers */
-    pub use lunatic_message_derive::*;
-}

@@ -10,9 +10,9 @@ pub mod error {
 pub mod message {
     #[link(wasm_import_module = "lunatic::message")]
     extern "C" {
-        pub fn create(tag: i64, capacity: u64);
+        pub fn create_data(tag: i64, capacity: u64);
         pub fn write_data(data: *const u8, data_len: usize) -> usize;
-        pub fn read_data(data: *const u8, data_len: usize) -> usize;
+        pub fn read_data(data: *mut u8, data_len: usize) -> usize;
         pub fn seek_data(position: u64);
         pub fn get_tag() -> i64;
         pub fn data_size() -> u64;

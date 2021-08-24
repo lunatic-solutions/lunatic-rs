@@ -1,63 +1,83 @@
-use std::{
-    convert::TryInto,
-    marker::PhantomData,
-    mem::{forget, transmute},
-};
+use std::{marker::PhantomData, mem::transmute};
 
 use crate::{
     environment::{params_to_vec, Param},
     error::LunaticError,
     host_api::{self, message, process},
-    mailbox::{LinkMailbox, Mailbox, TransformMailbox},
-    message::Message,
+    mailbox::{LinkMailbox, Mailbox, MessageRw, TransformMailbox},
+};
+
+use serde::{
+    de::{self, DeserializeOwned, Visitor},
+    Deserialize, Deserializer, Serialize, Serializer,
 };
 
 /// A sandboxed computation.
 ///
 /// Processes are fundamental building blocks of Lunatic applications. Each of them has their own
-/// memory space. The only way for processes to interact is trough [`Message`] passing.
+/// memory space. The only way for processes to interact is trough [`Serialize + DeserializeOwned`] passing.
 ///
 /// ### Safety:
 /// It's not safe to use mutable `static` variables to share data between processes, because each
 /// of them is going to see a separate heap and a unique `static` variable.
-pub struct Process<T: Message> {
+pub struct Process<T: Serialize + DeserializeOwned> {
     id: u64,
     _phantom: PhantomData<T>,
 }
 
-impl<T: Message> Clone for Process<T> {
+impl<T: Serialize + DeserializeOwned> Clone for Process<T> {
     fn clone(&self) -> Self {
         let id = unsafe { host_api::process::clone_process(self.id) };
         Process::from(id)
     }
 }
 
-impl<T: Message> Drop for Process<T> {
+impl<T: Serialize + DeserializeOwned> Drop for Process<T> {
     fn drop(&mut self) {
         unsafe { process::drop_process(self.id) };
     }
 }
+impl<T: Serialize + DeserializeOwned> Serialize for Process<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // TODO: Timeout info is not serialized
+        let index = unsafe { host_api::message::push_process(self.id) };
+        serializer.serialize_u64(index)
+    }
+}
+struct ProcessVisitor<T> {
+    _phantom: PhantomData<T>,
+}
+impl<'de, T: Serialize + DeserializeOwned> Visitor<'de> for ProcessVisitor<T> {
+    type Value = Process<T>;
 
-impl<T: Message> Message for Process<T> {
-    fn from_bincode(data: &[u8], resources: &[u64]) -> (usize, Self) {
-        // The serialized value for a process is the u64 index inside the resources array.
-        // The resources array will contain the new resource index.
-        let index = u64::from_le_bytes(data.try_into().unwrap());
-        let proc = Process::from(resources[index as usize]);
-        (8, proc)
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("an u64 index")
     }
 
-    #[allow(clippy::wrong_self_convention)]
-    unsafe fn to_bincode(self, dest: &mut Vec<u8>) {
-        let index = message::add_process(self.id);
-        dest.extend(index.to_le_bytes());
-        // By adding the process to the message it will be removed from our resources.
-        // Dropping it would cause a trap.
-        forget(self);
+    fn visit_u64<E>(self, index: u64) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        let id = unsafe { host_api::message::take_process(index) };
+        Ok(Process::from(id))
     }
 }
 
-impl<T: Message> Process<T> {
+impl<'de, T: Serialize + DeserializeOwned> Deserialize<'de> for Process<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Process<T>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_u64(ProcessVisitor {
+            _phantom: PhantomData {},
+        })
+    }
+}
+
+impl<T: Serialize + DeserializeOwned> Process<T> {
     pub(crate) fn from(id: u64) -> Self {
         Process {
             id,
@@ -65,29 +85,29 @@ impl<T: Message> Process<T> {
         }
     }
 
+    /// Send message to process.
     pub fn send(&self, value: T) {
-        // Create new message
-        unsafe { message::create() };
-        let mut buffer = Vec::new();
-        unsafe { value.to_bincode(&mut buffer) };
-        // Set sending buffer
-        unsafe { message::set_buffer(buffer.as_ptr(), buffer.len()) };
-        // During bincode serialization resources will add themself to the message
-        // Send it
-        unsafe { message::send(self.id) };
+        self.send_(None, value)
     }
 
-    #[allow(clippy::result_unit_err)]
-    pub fn join(&self) -> Result<(), ()> {
-        match unsafe { process::join(self.id) } {
-            0 => Ok(()),
-            _ => Err(()),
-        }
+    fn send_(&self, tag: Option<i64>, value: T) {
+        let tag = match tag {
+            Some(tag) => tag,
+            None => 0,
+        };
+        // Create new message
+        unsafe { message::create_data(tag, 0) };
+        // During serialization resources will add themself to the message
+        rmp_serde::encode::write(&mut MessageRw {}, &value).unwrap();
+        // Send it
+        unsafe { message::send(self.id) };
     }
 }
 
 /// Returns a handle to the current process.
-pub fn this<T: Message, U: TransformMailbox<T>>(mailbox: U) -> (Process<T>, U) {
+pub fn this<T: Serialize + DeserializeOwned, U: TransformMailbox<T>>(
+    mailbox: U,
+) -> (Process<T>, U) {
     let id = unsafe { process::this() };
     (Process::from(id), mailbox)
 }
@@ -96,7 +116,9 @@ pub fn this<T: Message, U: TransformMailbox<T>>(mailbox: U) -> (Process<T>, U) {
 ///
 /// - `function` is the starting point of the new process. The new process doesn't share
 ///   memory with its parent, because of this the function can't capture anything from parents.
-pub fn spawn<T: Message>(function: fn(Mailbox<T>)) -> Result<Process<T>, LunaticError> {
+pub fn spawn<T: Serialize + DeserializeOwned>(
+    function: fn(Mailbox<T>),
+) -> Result<Process<T>, LunaticError> {
     // LinkMailbox<T> & Mailbox<T> are marker types and it's safe to cast to Mailbox<T> here if we
     //  set the `link` argument to `false`.
     let function = unsafe { transmute(function) };
@@ -112,11 +134,11 @@ pub fn spawn_link<T, P, M>(
     function: fn(Mailbox<T>),
 ) -> Result<(Process<T>, LinkMailbox<P>), LunaticError>
 where
-    T: Message,
-    P: Message,
+    T: Serialize + DeserializeOwned,
+    P: Serialize + DeserializeOwned,
     M: TransformMailbox<P>,
 {
-    let mailbox = mailbox.catch_child_panic();
+    let mailbox = mailbox.catch_link_panic();
     let proc = spawn_(None, true, Context::<(), _>::Without(function))?;
     Ok((proc, mailbox))
 }
@@ -132,11 +154,11 @@ pub fn spawn_link_unwrap<T, P, M>(
     function: fn(Mailbox<T>),
 ) -> Result<(Process<T>, Mailbox<P>), LunaticError>
 where
-    T: Message,
-    P: Message,
+    T: Serialize + DeserializeOwned,
+    P: Serialize + DeserializeOwned,
     M: TransformMailbox<P>,
 {
-    let mailbox = mailbox.panic_if_child_panics();
+    let mailbox = mailbox.panic_if_link_panics();
     let proc = spawn_(None, true, Context::<(), _>::Without(function))?;
     Ok((proc, mailbox))
 }
@@ -144,12 +166,12 @@ where
 /// Spawns a new process from a function and context.
 ///
 /// - `context` is  data that we want to pass to the newly spawned process. It needs to impl.
-///    the [`Message`] trait.
+///    the [`Serialize + DeserializeOwned`] trait.
 ///
 /// - `function` is the starting point of the new process. The new process doesn't share
 ///   memory with its parent, because of this the function can't capture anything from parents.
 ///   The first argument of this function is going to be the received `context`.
-pub fn spawn_with<C: Message, T: Message>(
+pub fn spawn_with<C: Serialize + DeserializeOwned, T: Serialize + DeserializeOwned>(
     context: C,
     function: fn(C, Mailbox<T>),
 ) -> Result<Process<T>, LunaticError> {
@@ -162,7 +184,7 @@ pub fn spawn_with<C: Message, T: Message>(
 /// Spawns a new process from a function and context, and links it to the parent.
 ///
 /// - `context` is  data that we want to pass to the newly spawned process. It needs to impl.
-///    the [`Message`] trait.
+///    the [`Serialize + DeserializeOwned`] trait.
 ///
 /// - `function` is the starting point of the new process. The new process doesn't share
 ///   memory with its parent, because of this the function can't capture anything from parents.
@@ -173,12 +195,12 @@ pub fn spawn_link_with<C, T, P, M>(
     function: fn(C, Mailbox<T>),
 ) -> Result<(Process<T>, LinkMailbox<P>), LunaticError>
 where
-    C: Message,
-    T: Message,
-    P: Message,
+    C: Serialize + DeserializeOwned,
+    T: Serialize + DeserializeOwned,
+    P: Serialize + DeserializeOwned,
     M: TransformMailbox<P>,
 {
-    let mailbox = mailbox.catch_child_panic();
+    let mailbox = mailbox.catch_link_panic();
     let proc = spawn_(None, true, Context::With(function, context))?;
     Ok((proc, mailbox))
 }
@@ -186,7 +208,7 @@ where
 /// Spawns a new process from a function and context, and links it to the parent.
 ///
 /// - `context` is  data that we want to pass to the newly spawned process. It needs to impl.
-///    the [`Message`] trait.
+///    the [`Serialize + DeserializeOwned`] trait.
 ///
 /// - `function` is the starting point of the new process. The new process doesn't share
 ///   memory with its parent, because of this the function can't capture anything from parents.
@@ -199,23 +221,23 @@ pub fn spawn_link_unwrap_with<C, T, P, M>(
     function: fn(C, Mailbox<T>),
 ) -> Result<(Process<T>, Mailbox<P>), LunaticError>
 where
-    C: Message,
-    T: Message,
-    P: Message,
+    C: Serialize + DeserializeOwned,
+    T: Serialize + DeserializeOwned,
+    P: Serialize + DeserializeOwned,
     M: TransformMailbox<P>,
 {
-    let mailbox = mailbox.panic_if_child_panics();
+    let mailbox = mailbox.panic_if_link_panics();
     let proc = spawn_(None, true, Context::With(function, context))?;
     Ok((proc, mailbox))
 }
 
-pub(crate) enum Context<C: Message, T: Message> {
+pub(crate) enum Context<C: Serialize + DeserializeOwned, T: Serialize + DeserializeOwned> {
     With(fn(C, Mailbox<T>), C),
     Without(fn(Mailbox<T>)),
 }
 
 // If `module_id` is None it will use the current module & environment.
-pub(crate) fn spawn_<C: Message, T: Message>(
+pub(crate) fn spawn_<C: Serialize + DeserializeOwned, T: Serialize + DeserializeOwned>(
     module_id: Option<u64>,
     link: bool,
     context: Context<C, T>,
@@ -288,14 +310,16 @@ pub fn sleep(milliseconds: u64) {
 }
 
 // Type helper
-fn type_helper_wrapper<T: Message>(function: usize) {
+fn type_helper_wrapper<T: Serialize + DeserializeOwned>(function: usize) {
     let mailbox = Mailbox::new();
     let function: fn(Mailbox<T>) = unsafe { transmute(function) };
     function(mailbox);
 }
 
 // Type helper with context
-fn type_helper_wrapper_context<C: Message, T: Message>(function: usize) {
+fn type_helper_wrapper_context<C: Serialize + DeserializeOwned, T: Serialize + DeserializeOwned>(
+    function: usize,
+) {
     let context = Mailbox::new().receive();
     let mailbox = Mailbox::new();
     let function: fn(C, Mailbox<T>) = unsafe { transmute(function) };
