@@ -125,6 +125,8 @@ pub mod process {
         pub fn sleep_ms(millis: u64);
         pub fn die_when_link_dies(trap: u32);
         pub fn this() -> u64;
+        pub fn id(process_id: u64, uuid: *mut u128);
+        pub fn this_env() -> u64;
         pub fn link(tag: i64, process_id: u64);
         pub fn unlink(process_id: u64);
         pub fn register(

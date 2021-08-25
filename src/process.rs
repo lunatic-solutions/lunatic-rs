@@ -1,10 +1,16 @@
-use std::{cell::UnsafeCell, marker::PhantomData, mem::transmute};
+use std::{
+    cell::UnsafeCell,
+    fmt::{self, Debug},
+    marker::PhantomData,
+    mem::transmute,
+};
 
 use crate::{
     environment::{params_to_vec, Param},
     error::LunaticError,
     host_api::{self, message, process},
     mailbox::{LinkMailbox, Mailbox, MessageRw, TransformMailbox},
+    Environment,
 };
 
 use serde::{
@@ -21,13 +27,20 @@ use serde::{
 /// ### Safety:
 /// It's not safe to use mutable `static` variables to share data between processes, because each
 /// of them is going to see a separate heap and a unique `static` variable.
-#[derive(Debug)]
 pub struct Process<T: Serialize + DeserializeOwned> {
     id: u64,
     // If the process handle is serialized it will be removed from our resources, so we can't call
     // `drop_process()` anymore on it.
     consumed: UnsafeCell<bool>,
     _phantom: PhantomData<T>,
+}
+
+impl<T: Serialize + DeserializeOwned> Debug for Process<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut uuid: u128 = 0;
+        unsafe { host_api::process::id(self.id, &mut uuid as *mut u128) };
+        f.debug_struct("Process").field("uuid", &uuid).finish()
+    }
 }
 
 impl<T: Serialize + DeserializeOwned> Clone for Process<T> {
@@ -121,6 +134,12 @@ pub fn this<T: Serialize + DeserializeOwned, U: TransformMailbox<T>>(
 ) -> (Process<T>, U) {
     let id = unsafe { process::this() };
     (Process::from(id), mailbox)
+}
+
+/// Returns a handle to the current environment.
+pub fn this_env() -> Environment {
+    let id = unsafe { process::this_env() };
+    Environment::from(id)
 }
 
 /// Spawns a new process from a function.

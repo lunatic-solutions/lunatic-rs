@@ -69,6 +69,10 @@ impl Drop for Environment {
 }
 
 impl Environment {
+    pub(crate) fn from(id: u64) -> Self {
+        Environment { id }
+    }
+
     /// Create a new environment from a configurationS
     pub fn new(config: Config) -> Result<Self, LunaticError> {
         let mut env_or_error_id = 0;
