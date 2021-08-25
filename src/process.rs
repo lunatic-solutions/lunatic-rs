@@ -131,7 +131,7 @@ pub fn spawn<T: Serialize + DeserializeOwned>(
     function: fn(Mailbox<T>),
 ) -> Result<Process<T>, LunaticError> {
     // LinkMailbox<T> & Mailbox<T> are marker types and it's safe to cast to Mailbox<T> here if we
-    //  set the `link` argument to `false`.
+    // set the `link` argument to `false`.
     let function = unsafe { transmute(function) };
     spawn_(None, false, Context::<(), _>::Without(function))
 }

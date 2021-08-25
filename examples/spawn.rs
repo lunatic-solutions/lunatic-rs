@@ -9,5 +9,5 @@ fn main(m: Mailbox<()>) {
     })
     .unwrap();
     // Wait for child to finish
-    m.receive()
+    m.receive();
 }

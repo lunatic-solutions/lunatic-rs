@@ -1,3 +1,8 @@
+// TODO: All of the examples here are also inside of the ./examples folder because rustdoc doesn't
+//       work with the target wasm32-wasi (https://github.com/rust-lang/cargo/issues/7040) at the
+//       moment, but we still want to make sure this code compiles. This duplication is hard to
+//       keep in sync and as soon as this issue is closed we should remove the duplicates.
+
 /*!
 Helper library for building Rust applications that run on [lunatic][1].
 
@@ -11,12 +16,19 @@ Processes can be spawned from just a function:
 ```
 use lunatic::{process, Mailbox};
 
-process::spawn(|_: Mailbox<()>| {
-    println!("Hi! I'm a process.");
-})
-.unwrap()
-.join()
-.unwrap();
+#[lunatic::main]
+fn main(m: Mailbox<()>) {
+    let (this, m) = process::this(m);
+    process::spawn_with(this, |parent, _: Mailbox<()>| {
+        println!("Hi! I'm a process.");
+        // Notify parent that we are done.
+        parent.send(());
+    })
+    .unwrap();
+    // Wait for child to finish. If this line was missing the main process could shut down before
+    // the child prints anything. If the main process finishes, all others are killed.
+    m.receive();
+}
 ```
 
 One important characteristic of processes is that they are sandboxed. Each of them gets a separate
@@ -31,8 +43,6 @@ process::spawn_with(proc.to_string(), |proc, _: Mailbox<()>| {
     // and can't access the memory of the parent process.
     println!("Hello {}!", proc);
 })
-.unwrap()
-.join()
 .unwrap();
 ```
 
@@ -50,7 +60,6 @@ let proc = process::spawn(|mailbox| {
 .unwrap();
 
 proc.send("World!".to_string());
-proc.join().unwrap();
 ```
 Most types should automatically implement the [`Message`] trait, but for custom types a
 `#[derive(lunatic::derive::Message)]` helper can be used.
@@ -71,15 +80,11 @@ the `panic_if_link_panics()` function.
 ```
 use lunatic::{process, Mailbox};
 
-fn main() {
-    process::spawn(|mailbox: Mailbox<()>| {
-        let (_child, mailbox) = process::spawn_link(mailbox, child).unwrap();
-        // Wait on message
-        assert_eq!(mailbox.receive().is_err(), true);
-    })
-    .unwrap()
-    .join()
-    .unwrap();
+#[lunatic::main]
+fn main(mailbox: Mailbox<()>) {
+    let (_child, mailbox) = process::spawn_link(mailbox, child).unwrap();
+    // Wait on message
+    assert!(mailbox.receive().is_err());
 }
 
 fn child(_: Mailbox<()>) {
@@ -102,40 +107,34 @@ An `Environment` is configured through a [`Config`].
 ```
 use lunatic::{Config, Environment, Mailbox};
 
-// Create a new environment where processes can use maximum 17 Wasm pages of
-// memory (17 * 64KB) & 1 gallon of instructions (~=100k CPU cycles).
-let config = Config::new(17, Some(1));
-// Allow only syscalls under the "wasi_snapshot_preview1::environ*" namespace
-config.allow_namespace("wasi_snapshot_preview1::environ");
-let env = Environment::new(config).unwrap();
-let module = env.add_this_module().unwrap();
+#[lunatic::main]
+fn main(m: Mailbox<()>) {
+    // Create a new environment where processes can use maximum 17 Wasm pages of
+    // memory (17 * 64KB) & 1 gallon of instructions (~=100k CPU cycles).
+    let mut config = Config::new(1_200_000, Some(1));
+    // Allow only syscalls under the "wasi_snapshot_preview1::environ*" namespace
+    config.allow_namespace("wasi_snapshot_preview1::environ");
+    let mut env = Environment::new(config).unwrap();
+    let module = env.add_this_module().unwrap();
 
-// This process will fail because it can't uses syscalls for std i/o
-let proc = module
-    .spawn(|_: Mailbox<()>| {
-        println!("Hi from different env");
-    })
-    .unwrap()
-    .join();
-assert_eq!(proc.is_err(), true);
+    // This process will fail because it can't uses syscalls for std i/o
+    let (_, m) = module
+        .spawn_link(m, |_: Mailbox<()>| println!("Hi from different env"))
+        .unwrap();
+    assert!(m.receive().is_err());
 
-// This process will fail because it uses too much memory
-let proc = module
-    .spawn(|_: Mailbox<()>| {
-        vec![0; 15_000];
-    })
-    .unwrap()
-    .join();
-assert_eq!(proc.is_err(), true);
+    // This process will fail because it uses too much memory
+    let (_, m) = module
+        .spawn_link(m, |_: Mailbox<()>| {
+            vec![0; 150_000];
+        })
+        .unwrap();
+    assert!(m.receive().is_err());
 
-// This process will fail because it uses too much compute
-let proc = module
-    .spawn(|_: Mailbox<()>| loop {
-        let _ = 1 + 1;
-    })
-    .unwrap()
-    .join();
-assert_eq!(proc.is_err(), true);
+    // This process will fail because it uses too much compute
+    let (_, m) = module.spawn_link(m, |_: Mailbox<()>| loop {}).unwrap();
+    assert!(m.receive().is_err());
+}
 ```
 
 ## Loading other WebAssembly modules
