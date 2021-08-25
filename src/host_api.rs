@@ -1,3 +1,5 @@
+// TODO: Move out into separate crate (lunatic-bindings?) & auto generate from lunatic's source?
+
 pub mod error {
     #[link(wasm_import_module = "lunatic::error")]
     extern "C" {
@@ -102,7 +104,7 @@ pub mod process {
         pub fn add_this_module(env_id: u64, id: *mut u64) -> u32;
         pub fn drop_module(mod_id: u64);
         pub fn spawn(
-            link: u32,
+            link: i64,
             module_id: u64,
             function: *const u8,
             function_len: usize,
@@ -111,7 +113,7 @@ pub mod process {
             id: *mut u64,
         ) -> u32;
         pub fn inherit_spawn(
-            link: u32,
+            link: i64,
             function: *const u8,
             function_len: usize,
             params: *const u8,

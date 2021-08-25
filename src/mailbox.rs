@@ -9,12 +9,17 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::host_api::{message, process};
 
 /// Mailbox for processes that are not linked, or linked and set to trap on notify signals.
+#[derive(Debug)]
 pub struct Mailbox<T: Serialize + DeserializeOwned> {
     _phantom: PhantomData<T>,
 }
 
 impl<T: Serialize + DeserializeOwned> Mailbox<T> {
-    pub(crate) fn new() -> Self {
+    /// Create a mailbox with a specific type.
+    ///
+    /// It's not safe to mix different types of mailboxes inside one process. This function should
+    /// never be used directly.
+    pub unsafe fn new() -> Self {
         Self {
             _phantom: PhantomData {},
         }
@@ -56,6 +61,7 @@ impl<T: Serialize + DeserializeOwned> TransformMailbox<T> for Mailbox<T> {
 /// Mailbox for linked processes.
 ///
 /// When a process is linked to others it will also receive messages if one of the others dies.
+#[derive(Debug)]
 pub struct LinkMailbox<T: Serialize + DeserializeOwned> {
     _phantom: PhantomData<T>,
 }
@@ -99,11 +105,12 @@ impl<T: Serialize + DeserializeOwned> TransformMailbox<T> for LinkMailbox<T> {
     }
     fn panic_if_link_panics(self) -> Mailbox<T> {
         unsafe { process::die_when_link_dies(1) };
-        Mailbox::new()
+        unsafe { Mailbox::new() }
     }
 }
 
 /// A Signal that was turned into a message.
+#[derive(Debug, Clone, Copy)]
 pub struct Signal {}
 
 pub trait TransformMailbox<T: Serialize + DeserializeOwned> {

@@ -2,7 +2,7 @@
 name = "lunatic"
 version = "0.5.2"
 edition = "2018"
-authors = ["Bernard Kolobara <me@kolobara.com>"]
+authors = ["Bernard Kolobara <bernard@lunatic.solutions>"]
 description = "This library contains higher level wrappers for low level Lunatic syscalls."
 license = "Apache-2.0/MIT"
 readme = "Readme.md"
@@ -14,3 +14,9 @@ anyhow = "1.0"
 thiserror = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 rmp-serde = "0.15"
+lunatic-macros = { version = "0.6", path = "./lunatic-macros" }
+
+[workspace]
+members = [
+  "lunatic-macros"
+]

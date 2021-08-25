@@ -34,12 +34,12 @@ impl Config {
     /// prefix (e.g. `lunatic::error::`) matching all functions inside of the namespace.
     ///
     /// An empty string ("") is considered a prefix of **all** namespaces.
-    pub fn allow_namespace(&self, namespace: &str) {
+    pub fn allow_namespace(&mut self, namespace: &str) {
         unsafe { host_api::process::allow_namespace(self.id, namespace.as_ptr(), namespace.len()) };
     }
 
     /// Add a WebAssembly module as a plugin to this configuration.
-    pub fn add_plugin(&self, plugin: &[u8]) -> Result<(), LunaticError> {
+    pub fn add_plugin(&mut self, plugin: &[u8]) -> Result<(), LunaticError> {
         let mut error_id = 0;
         let result = unsafe {
             host_api::process::add_plugin(
@@ -85,7 +85,7 @@ impl Environment {
     }
 
     /// Add a WebAssembly module to the environment.
-    pub fn add_module(&self, module: &[u8]) -> Result<Module, LunaticError> {
+    pub fn add_module(&mut self, module: &[u8]) -> Result<Module, LunaticError> {
         let mut module_or_error_id = 0;
         let result = unsafe {
             host_api::process::add_module(
@@ -105,7 +105,7 @@ impl Environment {
     }
 
     /// Add the module that is being currently executed to the environment.
-    pub fn add_this_module(&self) -> Result<ThisModule, LunaticError> {
+    pub fn add_this_module(&mut self) -> Result<ThisModule, LunaticError> {
         let mut module_or_error_id = 0;
         let result = unsafe {
             host_api::process::add_this_module(self.id, &mut module_or_error_id as *mut u64)

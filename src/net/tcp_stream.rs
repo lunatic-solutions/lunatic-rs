@@ -1,4 +1,5 @@
 use std::{
+    cell::UnsafeCell,
     io::{Error, ErrorKind, IoSlice, Read, Result, Write},
     net::SocketAddr,
     time::Duration,
@@ -29,11 +30,17 @@ pub struct TcpStream {
     id: u64,
     read_timeout: u32,  // ms
     write_timeout: u32, // ms
+    // If the TCP stream is serialized it will be removed from our resources, so we can't call
+    // `drop_tcp_stream()` anymore on it.
+    consumed: UnsafeCell<bool>,
 }
 
 impl Drop for TcpStream {
     fn drop(&mut self) {
-        unsafe { host_api::networking::drop_tcp_stream(self.id) };
+        // Only drop stream if it's not already consumed
+        if unsafe { !*self.consumed.get() } {
+            unsafe { host_api::networking::drop_tcp_stream(self.id) };
+        }
     }
 }
 
@@ -44,6 +51,7 @@ impl Clone for TcpStream {
             id,
             read_timeout: self.read_timeout,
             write_timeout: self.write_timeout,
+            consumed: UnsafeCell::new(false),
         }
     }
 }
@@ -53,6 +61,8 @@ impl Serialize for TcpStream {
     where
         S: Serializer,
     {
+        // Mark process as consumed
+        unsafe { *self.consumed.get() = true };
         // TODO: Timeout info is not serialized
         let index = unsafe { host_api::message::push_tcp_stream(self.id) };
         serializer.serialize_u64(index)
@@ -90,6 +100,7 @@ impl TcpStream {
             id,
             read_timeout: 0,
             write_timeout: 0,
+            consumed: UnsafeCell::new(false),
         }
     }
 

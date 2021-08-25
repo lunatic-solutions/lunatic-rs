@@ -179,3 +179,6 @@ pub mod process;
 pub use environment::{Config, Environment, Module, ThisModule};
 pub use error::LunaticError;
 pub use mailbox::{LinkMailbox, Mailbox, Signal};
+
+pub use lunatic_macros::main;
+pub use lunatic_macros::test;

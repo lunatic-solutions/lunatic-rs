@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, mem::transmute};
+use std::{cell::UnsafeCell, marker::PhantomData, mem::transmute};
 
 use crate::{
     environment::{params_to_vec, Param},
@@ -15,13 +15,18 @@ use serde::{
 /// A sandboxed computation.
 ///
 /// Processes are fundamental building blocks of Lunatic applications. Each of them has their own
-/// memory space. The only way for processes to interact is trough [`Serialize + DeserializeOwned`] passing.
+/// memory space. The only way for processes to interact is trough [`Serialize + DeserializeOwned`]
+/// passing.
 ///
 /// ### Safety:
 /// It's not safe to use mutable `static` variables to share data between processes, because each
 /// of them is going to see a separate heap and a unique `static` variable.
+#[derive(Debug)]
 pub struct Process<T: Serialize + DeserializeOwned> {
     id: u64,
+    // If the process handle is serialized it will be removed from our resources, so we can't call
+    // `drop_process()` anymore on it.
+    consumed: UnsafeCell<bool>,
     _phantom: PhantomData<T>,
 }
 
@@ -34,7 +39,10 @@ impl<T: Serialize + DeserializeOwned> Clone for Process<T> {
 
 impl<T: Serialize + DeserializeOwned> Drop for Process<T> {
     fn drop(&mut self) {
-        unsafe { process::drop_process(self.id) };
+        // Only drop process if it's not already consumed
+        if unsafe { !*self.consumed.get() } {
+            unsafe { process::drop_process(self.id) };
+        }
     }
 }
 impl<T: Serialize + DeserializeOwned> Serialize for Process<T> {
@@ -42,7 +50,9 @@ impl<T: Serialize + DeserializeOwned> Serialize for Process<T> {
     where
         S: Serializer,
     {
-        // TODO: Timeout info is not serialized
+        // Mark process as consumed
+        unsafe { *self.consumed.get() = true };
+
         let index = unsafe { host_api::message::push_process(self.id) };
         serializer.serialize_u64(index)
     }
@@ -81,6 +91,7 @@ impl<T: Serialize + DeserializeOwned> Process<T> {
     pub(crate) fn from(id: u64) -> Self {
         Process {
             id,
+            consumed: UnsafeCell::new(false),
             _phantom: PhantomData,
         }
     }
@@ -287,6 +298,7 @@ pub(crate) fn spawn_<C: Serialize + DeserializeOwned, T: Serialize + Deserialize
             Context::With(_, context) => {
                 let self_ = Process {
                     id,
+                    consumed: UnsafeCell::new(false),
                     _phantom: PhantomData,
                 };
                 self_.send(context);
@@ -296,6 +308,7 @@ pub(crate) fn spawn_<C: Serialize + DeserializeOwned, T: Serialize + Deserialize
             }
             Context::Without(_) => Ok(Process {
                 id,
+                consumed: UnsafeCell::new(false),
                 _phantom: PhantomData,
             }),
         }
@@ -311,7 +324,7 @@ pub fn sleep(milliseconds: u64) {
 
 // Type helper
 fn type_helper_wrapper<T: Serialize + DeserializeOwned>(function: usize) {
-    let mailbox = Mailbox::new();
+    let mailbox = unsafe { Mailbox::new() };
     let function: fn(Mailbox<T>) = unsafe { transmute(function) };
     function(mailbox);
 }
@@ -320,8 +333,8 @@ fn type_helper_wrapper<T: Serialize + DeserializeOwned>(function: usize) {
 fn type_helper_wrapper_context<C: Serialize + DeserializeOwned, T: Serialize + DeserializeOwned>(
     function: usize,
 ) {
-    let context = Mailbox::new().receive();
-    let mailbox = Mailbox::new();
+    let context = unsafe { Mailbox::new() }.receive();
+    let mailbox = unsafe { Mailbox::new() };
     let function: fn(C, Mailbox<T>) = unsafe { transmute(function) };
     function(context, mailbox);
 }
