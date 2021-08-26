@@ -174,8 +174,9 @@ mod host_api;
 mod mailbox;
 pub mod net;
 pub mod process;
+mod tag;
 
-pub use environment::{Config, Environment, Module, ThisModule};
+pub use environment::{lookup, Config, Environment, Module, ThisModule};
 pub use error::LunaticError;
 pub use mailbox::{LinkMailbox, Mailbox, Signal};
 

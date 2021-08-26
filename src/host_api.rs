@@ -15,8 +15,10 @@ pub mod message {
         pub fn create_data(tag: i64, capacity: u64);
         pub fn write_data(data: *const u8, data_len: usize) -> usize;
         pub fn read_data(data: *mut u8, data_len: usize) -> usize;
+        #[allow(dead_code)]
         pub fn seek_data(position: u64);
         pub fn get_tag() -> i64;
+        #[allow(dead_code)]
         pub fn data_size() -> u64;
         pub fn push_process(process_id: u64) -> u64;
         pub fn take_process(index: u64) -> u64;
@@ -125,7 +127,7 @@ pub mod process {
         pub fn sleep_ms(millis: u64);
         pub fn die_when_link_dies(trap: u32);
         pub fn this() -> u64;
-        pub fn id(process_id: u64, uuid: *mut u128);
+        pub fn id(process_id: u64, uuid: *mut [u8; 16]);
         pub fn this_env() -> u64;
         pub fn link(tag: i64, process_id: u64);
         pub fn unlink(process_id: u64);
@@ -136,7 +138,7 @@ pub mod process {
             version_len: usize,
             env_id: u64,
             process_id: u64,
-        );
+        ) -> u32;
         pub fn unregister(
             name: *const u8,
             name_len: usize,

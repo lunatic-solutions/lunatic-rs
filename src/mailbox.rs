@@ -4,9 +4,13 @@ use std::{
     time::Duration,
 };
 
+use rmp_serde::decode;
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::host_api::{message, process};
+use crate::{
+    host_api::{message, process},
+    tag::Tag,
+};
 
 /// Mailbox for processes that are not linked, or linked and set to trap on notify signals.
 #[derive(Debug)]
@@ -28,11 +32,11 @@ impl<T: Serialize + DeserializeOwned> Mailbox<T> {
     /// Gets next message from process' mailbox.
     ///
     /// If the mailbox is empty, this function will block until a new message arrives.
-    pub fn receive(&self) -> T {
+    pub fn receive(&self) -> Result<T, decode::Error> {
         self.receive_(None, None)
     }
 
-    fn receive_(&self, tag: Option<i64>, timeout: Option<Duration>) -> T {
+    fn receive_(&self, tag: Option<i64>, timeout: Option<Duration>) -> Result<T, decode::Error> {
         let tag = match tag {
             Some(tag) => tag,
             None => 0,
@@ -44,7 +48,7 @@ impl<T: Serialize + DeserializeOwned> Mailbox<T> {
         let message_type = unsafe { message::receive(tag, timeout_ms) };
         // Mailbox can't receive Signal messages.
         assert_eq!(message_type, 0);
-        rmp_serde::from_read(MessageRw {}).unwrap()
+        rmp_serde::from_read(MessageRw {})
     }
 }
 
@@ -76,11 +80,11 @@ impl<T: Serialize + DeserializeOwned> LinkMailbox<T> {
     /// Gets next message from process' mailbox.
     ///
     /// If the mailbox is empty, this function will block until a new message arrives.
-    pub fn receive(&self) -> Result<T, Signal> {
+    pub fn receive(&self) -> Message<T> {
         self.receive_(None, None)
     }
 
-    fn receive_(&self, tag: Option<i64>, timeout: Option<Duration>) -> Result<T, Signal> {
+    fn receive_(&self, tag: Option<i64>, timeout: Option<Duration>) -> Message<T> {
         let tag = match tag {
             Some(tag) => tag,
             None => 0,
@@ -92,10 +96,11 @@ impl<T: Serialize + DeserializeOwned> LinkMailbox<T> {
         let message_type = unsafe { message::receive(tag, timeout_ms) };
 
         if message_type == 1 {
-            return Err(Signal {});
+            let tag = unsafe { message::get_tag() };
+            return Message::Signal(Tag(tag));
         }
 
-        Ok(rmp_serde::from_read(MessageRw {}).unwrap())
+        Message::Normal(rmp_serde::from_read(MessageRw {}))
     }
 }
 
@@ -106,6 +111,32 @@ impl<T: Serialize + DeserializeOwned> TransformMailbox<T> for LinkMailbox<T> {
     fn panic_if_link_panics(self) -> Mailbox<T> {
         unsafe { process::die_when_link_dies(1) };
         unsafe { Mailbox::new() }
+    }
+}
+
+/// Returned from [`LinkMailbox::receive`] to indicate if the received message was a signal or a
+/// normal message.
+#[derive(Debug)]
+pub enum Message<T> {
+    Normal(Result<T, decode::Error>),
+    Signal(Tag),
+}
+
+impl<T> Message<T> {
+    /// Returns true if received message is a signal.
+    pub fn is_signal(&self) -> bool {
+        match self {
+            Message::Normal(_) => false,
+            Message::Signal(_) => true,
+        }
+    }
+
+    /// Returns the message if it's a normal one or panics if not.
+    pub fn normal_or_unwrap(self) -> Result<T, decode::Error> {
+        match self {
+            Message::Normal(message) => message,
+            Message::Signal(_) => panic!("Message is of type Signal"),
+        }
     }
 }
 

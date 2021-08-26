@@ -28,7 +28,7 @@ use serde::{
 /// It's not safe to use mutable `static` variables to share data between processes, because each
 /// of them is going to see a separate heap and a unique `static` variable.
 pub struct Process<T: Serialize + DeserializeOwned> {
-    id: u64,
+    pub(crate) id: u64,
     // If the process handle is serialized it will be removed from our resources, so we can't call
     // `drop_process()` anymore on it.
     consumed: UnsafeCell<bool>,
@@ -37,9 +37,11 @@ pub struct Process<T: Serialize + DeserializeOwned> {
 
 impl<T: Serialize + DeserializeOwned> Debug for Process<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut uuid: u128 = 0;
-        unsafe { host_api::process::id(self.id, &mut uuid as *mut u128) };
-        f.debug_struct("Process").field("uuid", &uuid).finish()
+        let mut uuid: [u8; 16] = [0; 16];
+        unsafe { host_api::process::id(self.id, &mut uuid as *mut [u8; 16]) };
+        f.debug_struct("Process")
+            .field("uuid", &u128::from_le_bytes(uuid))
+            .finish()
     }
 }
 
@@ -125,6 +127,16 @@ impl<T: Serialize + DeserializeOwned> Process<T> {
         rmp_serde::encode::write(&mut MessageRw {}, &value).unwrap();
         // Send it
         unsafe { message::send(self.id) };
+    }
+
+    /// Links the current process with another one.
+    pub fn link(&self) {
+        unsafe { process::link(0, self.id) };
+    }
+
+    /// Unlinks the current process from another one.
+    pub fn unlink(&self) {
+        unsafe { process::unlink(self.id) };
     }
 }
 
@@ -352,7 +364,7 @@ fn type_helper_wrapper<T: Serialize + DeserializeOwned>(function: usize) {
 fn type_helper_wrapper_context<C: Serialize + DeserializeOwned, T: Serialize + DeserializeOwned>(
     function: usize,
 ) {
-    let context = unsafe { Mailbox::new() }.receive();
+    let context = unsafe { Mailbox::new() }.receive().unwrap();
     let mailbox = unsafe { Mailbox::new() };
     let function: fn(C, Mailbox<T>) = unsafe { transmute(function) };
     function(context, mailbox);

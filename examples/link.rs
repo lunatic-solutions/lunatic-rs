@@ -4,7 +4,7 @@ use lunatic::{process, Mailbox};
 fn main(mailbox: Mailbox<()>) {
     let (_child, mailbox) = process::spawn_link(mailbox, child).unwrap();
     // Wait on message or death
-    assert_eq!(mailbox.receive().is_err(), true);
+    assert!(mailbox.receive().is_signal());
 }
 
 fn child(_: Mailbox<()>) {

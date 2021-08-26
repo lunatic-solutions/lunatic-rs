@@ -1,6 +1,7 @@
-use std::u128;
+use std::{fmt::Display, u128};
 
 use serde::{de::DeserializeOwned, Serialize};
+use thiserror::Error;
 
 use crate::{
     error::LunaticError,
@@ -54,6 +55,19 @@ impl Config {
         } else {
             Err(LunaticError::from(error_id))
         }
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum RegistryError {
+    IncorrectSemver,
+    IncorrectQuery,
+    NotFound,
+}
+
+impl Display for RegistryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 
@@ -121,6 +135,78 @@ impl Environment {
         } else {
             Err(LunaticError::from(module_or_error_id))
         }
+    }
+
+    /// Register a process under a specific name & version in the environment.
+    ///
+    /// The version must be in a correct semver format. If a process was registered under the same
+    /// name and exactly same version, it will be overwritten.
+    pub fn register<T: Serialize + DeserializeOwned>(
+        &self,
+        name: &str,
+        version: &str,
+        process: Process<T>,
+    ) -> Result<(), RegistryError> {
+        match unsafe {
+            host_api::process::register(
+                name.as_ptr(),
+                name.len(),
+                version.as_ptr(),
+                version.len(),
+                self.id,
+                process.id,
+            )
+        } {
+            0 => Ok(()),
+            1 => Err(RegistryError::IncorrectSemver),
+            _ => unreachable!(),
+        }
+    }
+
+    /// Unregister a process from the environment
+    pub fn unregister<T: Serialize + DeserializeOwned>(
+        &self,
+        name: &str,
+        version: &str,
+    ) -> Result<(), RegistryError> {
+        match unsafe {
+            host_api::process::unregister(
+                name.as_ptr(),
+                name.len(),
+                version.as_ptr(),
+                version.len(),
+                self.id,
+            )
+        } {
+            0 => Ok(()),
+            1 => Err(RegistryError::IncorrectSemver),
+            2 => Err(RegistryError::NotFound),
+            _ => unreachable!(),
+        }
+    }
+}
+
+/// Returns a process that was registered inside the environment that the caller belongs to.
+///
+/// The query can be be an exact version or follow semver query rules (e.g. "^1.1").
+pub fn lookup<T: Serialize + DeserializeOwned>(
+    name: &str,
+    query: &str,
+) -> Result<Option<Process<T>>, RegistryError> {
+    let mut process_id: u64 = 0;
+    match unsafe {
+        host_api::process::lookup(
+            name.as_ptr(),
+            name.len(),
+            query.as_ptr(),
+            query.len(),
+            &mut process_id as *mut u64,
+        )
+    } {
+        0 => Ok(Some(Process::from(process_id))),
+        1 => Err(RegistryError::IncorrectSemver),
+        2 => Ok(None),
+        _ => unreachable!(),
     }
 }
 

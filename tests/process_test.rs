@@ -9,7 +9,7 @@ use lunatic::{
 fn spawn_link(m: Mailbox<()>) {
     let (_child, m) = process::spawn_link(m, |_: Mailbox<()>| panic!()).unwrap();
     // The child failure is captured as a message
-    assert_eq!(m.receive().is_err(), true);
+    assert!(m.receive().is_signal());
 }
 
 #[lunatic::test]
@@ -24,10 +24,10 @@ fn memory_limit(m: Mailbox<u64>) {
     let (_, m) = module
         .spawn_link_with(m, (this.clone(), 100), allocate)
         .unwrap();
-    assert_eq!(100, m.receive().unwrap());
+    assert_eq!(100, m.receive().normal_or_unwrap().unwrap());
     // Allocating ~1Mb (150k * 8 bytes) will fail as Rust reserves some extra space for the shadow stack.
     let (_, m) = module.spawn_link_with(m, (this, 150000), allocate).unwrap();
-    assert!(m.receive().is_err());
+    assert!(m.receive().is_signal());
 }
 
 fn allocate((parent, input): (Process<u64>, usize), _: Mailbox<()>) {
@@ -47,10 +47,10 @@ fn compute_limit(m: Mailbox<u64>) {
     let (_, m) = module
         .spawn_link_with(m, (this.clone(), 12), fibonacci)
         .unwrap();
-    assert_eq!(144, m.receive().unwrap());
+    assert_eq!(144, m.receive().normal_or_unwrap().unwrap());
     // Calculating fibonacci of 10_000 fails
     let (_, m) = module.spawn_link_with(m, (this, 10000), fibonacci).unwrap();
-    assert!(m.receive().is_err());
+    assert!(m.receive().is_signal());
 }
 
 fn fibonacci((parent, input): (Process<u64>, u64), _: Mailbox<()>) {

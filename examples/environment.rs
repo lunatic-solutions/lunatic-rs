@@ -14,7 +14,7 @@ fn main(m: Mailbox<()>) {
     let (_, m) = module
         .spawn_link(m, |_: Mailbox<()>| println!("Hi from different env"))
         .unwrap();
-    assert!(m.receive().is_err());
+    assert!(m.receive().is_signal());
 
     // This process will fail because it uses too much memory
     let (_, m) = module
@@ -22,9 +22,9 @@ fn main(m: Mailbox<()>) {
             vec![0; 150_000];
         })
         .unwrap();
-    assert!(m.receive().is_err());
+    assert!(m.receive().is_signal());
 
     // This process will fail because it uses too much compute
     let (_, m) = module.spawn_link(m, |_: Mailbox<()>| loop {}).unwrap();
-    assert!(m.receive().is_err());
+    assert!(m.receive().is_signal());
 }

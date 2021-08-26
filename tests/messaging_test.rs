@@ -10,7 +10,7 @@ fn message_integer_test(m: Mailbox<u64>) {
         parent.send(127);
     })
     .unwrap();
-    assert_eq!(m.receive(), 127);
+    assert_eq!(m.receive().unwrap(), 127);
 }
 
 #[lunatic::test]
@@ -20,7 +20,7 @@ fn message_vector_test(m: Mailbox<Vec<i32>>) {
         parent.send(vec![1, 2, 3, 4, 5]);
     })
     .unwrap();
-    let sum: i32 = m.receive().iter().sum();
+    let sum: i32 = m.receive().unwrap().iter().sum();
     assert_eq!(sum, 15);
 }
 
@@ -51,7 +51,7 @@ fn message_custom_type_test(m: Mailbox<X>) {
         enb: E::B("A longer string #$".to_string()),
         enc: E::C,
     };
-    assert_eq!(m.receive(), expected);
+    assert_eq!(m.receive().unwrap(), expected);
 }
 
 #[lunatic::test]
