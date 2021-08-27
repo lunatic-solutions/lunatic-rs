@@ -18,8 +18,20 @@ pub struct Mailbox<T: Serialize + DeserializeOwned> {
     _phantom: PhantomData<T>,
 }
 
+impl<T: Serialize + DeserializeOwned> Clone for Mailbox<T> {
+    fn clone(&self) -> Self {
+        Self {
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<T: Serialize + DeserializeOwned> Copy for Mailbox<T> {}
+
 impl<T: Serialize + DeserializeOwned> Mailbox<T> {
     /// Create a mailbox with a specific type.
+    ///
+    /// ### Safety
     ///
     /// It's not safe to mix different types of mailboxes inside one process. This function should
     /// never be used directly.
@@ -36,11 +48,15 @@ impl<T: Serialize + DeserializeOwned> Mailbox<T> {
         self.receive_(None, None)
     }
 
+    /// Gets a message with a specific tag from the mailbox.
+    ///
+    /// If the mailbox is empty, this function will block until a new message arrives.
+    pub fn tag_receive(&self, tag: Tag) -> Result<T, decode::Error> {
+        self.receive_(Some(tag.0), None)
+    }
+
     fn receive_(&self, tag: Option<i64>, timeout: Option<Duration>) -> Result<T, decode::Error> {
-        let tag = match tag {
-            Some(tag) => tag,
-            None => 0,
-        };
+        let tag = tag.unwrap_or(0);
         let timeout_ms = match timeout {
             Some(timeout) => timeout.as_millis() as u32,
             None => 0,
@@ -70,6 +86,16 @@ pub struct LinkMailbox<T: Serialize + DeserializeOwned> {
     _phantom: PhantomData<T>,
 }
 
+impl<T: Serialize + DeserializeOwned> Clone for LinkMailbox<T> {
+    fn clone(&self) -> Self {
+        Self {
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<T: Serialize + DeserializeOwned> Copy for LinkMailbox<T> {}
+
 impl<T: Serialize + DeserializeOwned> LinkMailbox<T> {
     pub(crate) fn new() -> Self {
         Self {
@@ -85,10 +111,7 @@ impl<T: Serialize + DeserializeOwned> LinkMailbox<T> {
     }
 
     fn receive_(&self, tag: Option<i64>, timeout: Option<Duration>) -> Message<T> {
-        let tag = match tag {
-            Some(tag) => tag,
-            None => 0,
-        };
+        let tag = tag.unwrap_or(0);
         let timeout_ms = match timeout {
             Some(timeout) => timeout.as_millis() as u32,
             None => 0,
@@ -144,7 +167,7 @@ impl<T> Message<T> {
 #[derive(Debug, Clone, Copy)]
 pub struct Signal {}
 
-pub trait TransformMailbox<T: Serialize + DeserializeOwned> {
+pub trait TransformMailbox<T: Serialize + DeserializeOwned>: Copy {
     fn catch_link_panic(self) -> LinkMailbox<T>;
     fn panic_if_link_panics(self) -> Mailbox<T>;
 }

@@ -2,7 +2,7 @@ use lunatic::{process, Mailbox};
 
 #[lunatic::main]
 fn main(m: Mailbox<()>) {
-    let (this, m) = process::this(m);
+    let this = process::this(m);
     let proc = process::spawn_with(this, |parent, mailbox| {
         let message = mailbox.receive().unwrap();
         println!("Hello {}", message);

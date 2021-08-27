@@ -1,11 +1,11 @@
 use lunatic::{
     process::{self, Process},
-    Mailbox,
+    Mailbox, Request,
 };
 
 #[lunatic::test]
-fn message_integer_test(m: Mailbox<u64>) {
-    let (this, m) = process::this(m);
+fn message_integer(m: Mailbox<u64>) {
+    let this = process::this(m);
     let _child = process::spawn_with(this, |parent, _: Mailbox<()>| {
         parent.send(127);
     })
@@ -14,8 +14,8 @@ fn message_integer_test(m: Mailbox<u64>) {
 }
 
 #[lunatic::test]
-fn message_vector_test(m: Mailbox<Vec<i32>>) {
-    let (this, m) = process::this(m);
+fn message_vector(m: Mailbox<Vec<i32>>) {
+    let this = process::this(m);
     let _child = process::spawn_with(this, |parent, _: Mailbox<()>| {
         parent.send(vec![1, 2, 3, 4, 5]);
     })
@@ -25,8 +25,8 @@ fn message_vector_test(m: Mailbox<Vec<i32>>) {
 }
 
 #[lunatic::test]
-fn message_custom_type_test(m: Mailbox<X>) {
-    let (this, m) = process::this(m);
+fn message_custom_type(m: Mailbox<X>) {
+    let this = process::this(m);
     let _child = process::spawn_with(this, |parent, _: Mailbox<()>| {
         let x = X {
             y: Y {
@@ -55,8 +55,8 @@ fn message_custom_type_test(m: Mailbox<X>) {
 }
 
 #[lunatic::test]
-fn message_resource_test(m: Mailbox<Proc>) {
-    let (this, m) = process::this(m);
+fn message_resource(m: Mailbox<Proc>) {
+    let this = process::this(m);
     let _child = process::spawn_with(this, |parent, _: Mailbox<()>| {
         let empty_proc = process::spawn(|_: Mailbox<i32>| {}).unwrap();
         parent.send(Proc(empty_proc));
@@ -68,6 +68,31 @@ fn message_resource_test(m: Mailbox<Proc>) {
     let _ = m.receive();
     // Receive second
     let _ = m.receive();
+}
+
+#[lunatic::test]
+fn request_replay(m: Mailbox<u64>) {
+    // Spawn a server that fills our mailbox with u64 messages.
+    let this = process::this(m);
+    process::spawn_with(this, |parent, _: Mailbox<()>| loop {
+        parent.send(1337);
+    })
+    .unwrap();
+    // Spawn another process that can replay to us with an i32 message.
+    let add_server = process::spawn(|mailbox: Mailbox<Request<(i32, i32), i32>>| loop {
+        let request = mailbox.receive().unwrap();
+        let (a, b) = *request.data();
+        request.replay(a + b);
+    })
+    .unwrap();
+    // Ignore all messages in the mailbox and make specific requests to the `add_server`.
+    for _ in 0..1_000 {
+        assert_eq!(add_server.request((1, 1)).unwrap(), 2);
+        assert_eq!(add_server.request((1, 2)).unwrap(), 3);
+        assert_eq!(add_server.request((8, 8)).unwrap(), 16);
+        assert_eq!(add_server.request((16, 16)).unwrap(), 32);
+        assert_eq!(add_server.request((128, -128)).unwrap(), 0);
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

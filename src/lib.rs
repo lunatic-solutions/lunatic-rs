@@ -174,11 +174,13 @@ mod host_api;
 mod mailbox;
 pub mod net;
 pub mod process;
+mod request;
 mod tag;
 
 pub use environment::{lookup, Config, Environment, Module, ThisModule};
 pub use error::LunaticError;
 pub use mailbox::{LinkMailbox, Mailbox, Signal};
+pub use request::Request;
 
 pub use lunatic_macros::main;
 pub use lunatic_macros::test;

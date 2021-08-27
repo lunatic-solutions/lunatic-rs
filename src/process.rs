@@ -10,9 +10,12 @@ use crate::{
     error::LunaticError,
     host_api::{self, message, process},
     mailbox::{LinkMailbox, Mailbox, MessageRw, TransformMailbox},
+    request::Request,
+    tag::Tag,
     Environment,
 };
 
+use rmp_serde::decode;
 use serde::{
     de::{self, DeserializeOwned, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
@@ -116,11 +119,13 @@ impl<T: Serialize + DeserializeOwned> Process<T> {
         self.send_(None, value)
     }
 
+    /// Tag a message and send it to a process.
+    pub(crate) fn tag_send(&self, tag: Tag, value: T) {
+        self.send_(Some(tag.0), value)
+    }
+
     fn send_(&self, tag: Option<i64>, value: T) {
-        let tag = match tag {
-            Some(tag) => tag,
-            None => 0,
-        };
+        let tag = tag.unwrap_or(0);
         // Create new message
         unsafe { message::create_data(tag, 0) };
         // During serialization resources will add themself to the message
@@ -140,12 +145,32 @@ impl<T: Serialize + DeserializeOwned> Process<T> {
     }
 }
 
+impl<T, U> Process<Request<T, U>>
+where
+    T: Serialize + DeserializeOwned,
+    U: Serialize + DeserializeOwned,
+{
+    pub fn request(&self, message: T) -> Result<U, decode::Error> {
+        // The response can be an arbitrary type and doesn't need to match the the current one.
+        let one_time_mailbox = unsafe { Mailbox::<U>::new() };
+        let sender_process = this(one_time_mailbox);
+        let tag = Tag::new();
+        let request = Request::new(message, tag, sender_process);
+        // Create new message
+        unsafe { message::create_data(tag.0, 0) };
+        // During serialization resources will add themself to the message
+        rmp_serde::encode::write(&mut MessageRw {}, &request).unwrap();
+        // Send it and wait for an replay
+        unsafe { message::send_receive_skip_search(self.id, 0) };
+        // Read the message out from the scratch buffer
+        rmp_serde::from_read(MessageRw {})
+    }
+}
+
 /// Returns a handle to the current process.
-pub fn this<T: Serialize + DeserializeOwned, U: TransformMailbox<T>>(
-    mailbox: U,
-) -> (Process<T>, U) {
+pub fn this<T: Serialize + DeserializeOwned, U: TransformMailbox<T>>(_mailbox: U) -> Process<T> {
     let id = unsafe { process::this() };
-    (Process::from(id), mailbox)
+    Process::from(id)
 }
 
 /// Returns a handle to the current environment.
