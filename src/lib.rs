@@ -20,7 +20,7 @@ use lunatic::{process, Mailbox};
 #[lunatic::main]
 fn main(m: Mailbox<()>) {
     // Get reference to itself.
-    let this = process::this(m);
+    let this = process::this(&m);
     // Pass the reference to the child process.
     process::spawn_with(this, |parent, _: Mailbox<()>| {
         println!("Hi! I'm a process.");

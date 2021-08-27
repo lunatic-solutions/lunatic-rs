@@ -5,7 +5,7 @@ use lunatic::{
 
 #[lunatic::test]
 fn message_integer(m: Mailbox<u64>) {
-    let this = process::this(m);
+    let this = process::this(&m);
     let _child = process::spawn_with(this, |parent, _: Mailbox<()>| {
         parent.send(127);
     })
@@ -15,7 +15,7 @@ fn message_integer(m: Mailbox<u64>) {
 
 #[lunatic::test]
 fn message_vector(m: Mailbox<Vec<i32>>) {
-    let this = process::this(m);
+    let this = process::this(&m);
     let _child = process::spawn_with(this, |parent, _: Mailbox<()>| {
         parent.send(vec![1, 2, 3, 4, 5]);
     })
@@ -26,7 +26,7 @@ fn message_vector(m: Mailbox<Vec<i32>>) {
 
 #[lunatic::test]
 fn message_custom_type(m: Mailbox<X>) {
-    let this = process::this(m);
+    let this = process::this(&m);
     let _child = process::spawn_with(this, |parent, _: Mailbox<()>| {
         let x = X {
             y: Y {
@@ -56,7 +56,7 @@ fn message_custom_type(m: Mailbox<X>) {
 
 #[lunatic::test]
 fn message_resource(m: Mailbox<Proc>) {
-    let this = process::this(m);
+    let this = process::this(&m);
     let _child = process::spawn_with(this, |parent, _: Mailbox<()>| {
         let empty_proc = process::spawn(|_: Mailbox<i32>| {}).unwrap();
         parent.send(Proc(empty_proc));
@@ -73,7 +73,7 @@ fn message_resource(m: Mailbox<Proc>) {
 #[lunatic::test]
 fn request_replay(m: Mailbox<u64>) {
     // Spawn a server that fills our mailbox with u64 messages.
-    let this = process::this(m);
+    let this = process::this(&m);
     process::spawn_with(this, |parent, _: Mailbox<()>| loop {
         parent.send(1337);
     })

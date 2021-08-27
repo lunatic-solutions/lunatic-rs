@@ -32,7 +32,7 @@ use lunatic::{process, Mailbox};
 #[lunatic::main]
 fn main(m: Mailbox<()>) {
     // Get handle to itself.
-    let this = process::this(m);
+    let this = process::this(&m);
     process::spawn_with(this, |parent, _: Mailbox<()>| {
         // This closure gets a new heap and stack to
         // execute on, and can't access the memory of

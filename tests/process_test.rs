@@ -7,9 +7,9 @@ use lunatic::{
 
 #[lunatic::test]
 fn spawn_link(m: Mailbox<()>) {
-    let (_child, m) = process::spawn_link(m, |_: Mailbox<()>| panic!()).unwrap();
+    let (_child, link_mailbox) = process::spawn_link(m, |_: Mailbox<()>| panic!()).unwrap();
     // The child failure is captured as a message
-    assert!(m.receive().is_signal());
+    assert!(link_mailbox.receive().is_signal());
 }
 
 #[lunatic::test]
@@ -19,7 +19,7 @@ fn memory_limit(m: Mailbox<u64>) {
     config.allow_namespace("wasi_snapshot_preview1::");
     let mut env = Environment::new(config).unwrap();
     let module = env.add_this_module().unwrap();
-    let this = process::this(m);
+    let this = process::this(&m);
     // Allocating 100 bytes will work
     let (_, m) = module
         .spawn_link_with(m, (this.clone(), 100), allocate)
@@ -42,7 +42,7 @@ fn compute_limit(m: Mailbox<u64>) {
     config.allow_namespace("wasi_snapshot_preview1::");
     let mut env = Environment::new(config).unwrap();
     let module = env.add_this_module().unwrap();
-    let this = process::this(m);
+    let this = process::this(&m);
     // Calculating fibonacci of 1 succeeds
     let (_, m) = module
         .spawn_link_with(m, (this.clone(), 12), fibonacci)

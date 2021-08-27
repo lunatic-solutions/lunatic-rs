@@ -153,7 +153,7 @@ where
     pub fn request(&self, message: T) -> Result<U, decode::Error> {
         // The response can be an arbitrary type and doesn't need to match the the current one.
         let one_time_mailbox = unsafe { Mailbox::<U>::new() };
-        let sender_process = this(one_time_mailbox);
+        let sender_process = this(&one_time_mailbox);
         let tag = Tag::new();
         let request = Request::new(message, tag, sender_process);
         // Create new message
@@ -168,7 +168,7 @@ where
 }
 
 /// Returns a handle to the current process.
-pub fn this<T: Serialize + DeserializeOwned, U: TransformMailbox<T>>(_mailbox: U) -> Process<T> {
+pub fn this<T: Serialize + DeserializeOwned, U: TransformMailbox<T>>(_mailbox: &U) -> Process<T> {
     let id = unsafe { process::this() };
     Process::from(id)
 }

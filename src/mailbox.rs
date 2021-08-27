@@ -18,16 +18,6 @@ pub struct Mailbox<T: Serialize + DeserializeOwned> {
     _phantom: PhantomData<T>,
 }
 
-impl<T: Serialize + DeserializeOwned> Clone for Mailbox<T> {
-    fn clone(&self) -> Self {
-        Self {
-            _phantom: PhantomData,
-        }
-    }
-}
-
-impl<T: Serialize + DeserializeOwned> Copy for Mailbox<T> {}
-
 impl<T: Serialize + DeserializeOwned> Mailbox<T> {
     /// Create a mailbox with a specific type.
     ///
@@ -85,16 +75,6 @@ impl<T: Serialize + DeserializeOwned> TransformMailbox<T> for Mailbox<T> {
 pub struct LinkMailbox<T: Serialize + DeserializeOwned> {
     _phantom: PhantomData<T>,
 }
-
-impl<T: Serialize + DeserializeOwned> Clone for LinkMailbox<T> {
-    fn clone(&self) -> Self {
-        Self {
-            _phantom: PhantomData,
-        }
-    }
-}
-
-impl<T: Serialize + DeserializeOwned> Copy for LinkMailbox<T> {}
 
 impl<T: Serialize + DeserializeOwned> LinkMailbox<T> {
     pub(crate) fn new() -> Self {
@@ -167,7 +147,7 @@ impl<T> Message<T> {
 #[derive(Debug, Clone, Copy)]
 pub struct Signal {}
 
-pub trait TransformMailbox<T: Serialize + DeserializeOwned>: Copy {
+pub trait TransformMailbox<T: Serialize + DeserializeOwned> {
     fn catch_link_panic(self) -> LinkMailbox<T>;
     fn panic_if_link_panics(self) -> Mailbox<T>;
 }
