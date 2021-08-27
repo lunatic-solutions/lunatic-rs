@@ -12,7 +12,7 @@ jobs:
         uses: actions/checkout@v1
       - name: "Install lunatic"
         run: |
-          wget https://github.com/lunatic-solutions/lunatic/releases/download/v0.5.0/lunatic-linux-amd64.tar.gz
+          wget https://github.com/lunatic-solutions/lunatic/releases/download/v0.6.0/lunatic-linux-amd64.tar.gz
           tar -xf lunatic-linux-amd64.tar.gz
           echo $PWD >> $GITHUB_PATH
       - name: Install rust
