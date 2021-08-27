@@ -26,18 +26,22 @@ Rust :)
 Spawning a new process is as simple as passing a function to it.
 
 ```rust
+
 use lunatic::{process, Mailbox};
 
-fn main() {
-    process::spawn(|_: Mailbox<()>| {
+#[lunatic::main]
+fn main(m: Mailbox<()>) {
+    // Get handle to itself.
+    let this = process::this(m);
+    process::spawn_with(this, |parent, _: Mailbox<()>| {
         // This closure gets a new heap and stack to
         // execute on, and can't access the memory of
         // the parent process.
         println!("Hi! I'm a process.");
     })
-    .unwrap()
-    .join()
     .unwrap();
+    // Wait for child to finish.
+    let _ignore = m.receive();
 }
 ```
 
@@ -46,48 +50,42 @@ Limit resources and syscalls for process by defining an environment of execution
 ```rust
 use lunatic::{Config, Environment, Mailbox};
 
-fn main() {
+#[lunatic::main]
+fn main(m: Mailbox<()>) {
     // Create a new environment where processes can use
     // maximum 17 Wasm pages of memory (17 * 64KB) and one
     // unit of compute (~=100k CPU cycles).
-    let config = Config::new(17, Some(1));
+    let mut config = Config::new(1_200_000, Some(1));
     // Allow only syscalls under the
     // "wasi_snapshot_preview1::environ*" namespace
-    config
-        .allow_namespace("wasi_snapshot_preview1::environ");
-    let env = Environment::new(config).unwrap();
+    config.allow_namespace("wasi_snapshot_preview1::environ");
+    let mut env = Environment::new(config).unwrap();
     let module = env.add_this_module().unwrap();
 
     // This process will fail because it can't uses syscalls
     // for std i/o
-    let proc = module
-        .spawn(|_: Mailbox<()>| {
-            println!("Hi from a different env");
+    let (_, m) = module
+        .spawn_link(m, |_: Mailbox<()>| {
+            println!("Hi from different env");
         })
-        .unwrap()
-        .join();
-    assert_eq!(proc.is_err(), true);
+        .unwrap();
+    assert!(m.receive().is_signal());
 
     // This process will fail because it uses too much memory
-    let proc = module
-        .spawn(|_: Mailbox<()>| {
-            vec![0; 15_000];
+    let (_, m) = module
+        .spawn_link(m, |_: Mailbox<()>| {
+            vec![0; 150_000];
         })
-        .unwrap()
-        .join();
-    assert_eq!(proc.is_err(), true);
+        .unwrap();
+    assert!(m.receive().is_signal());
 
     // This process will fail because it uses too much
     // compute
-    let proc = module
-        .spawn(|_: Mailbox<()>| loop {
-            let _ = 1 + 1;
-        })
-        .unwrap()
-        .join();
-    assert_eq!(proc.is_err(), true);
+    let (_, m) = module.spawn_link(m, |_: Mailbox<()>|
+        loop {}
+    ).unwrap();
+    assert!(m.receive().is_signal());
 }
-
 ```
 
 TCP echo server:

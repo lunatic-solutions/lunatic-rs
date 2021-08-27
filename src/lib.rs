@@ -1,7 +1,8 @@
 // TODO: All of the examples here are also inside of the ./examples folder because rustdoc doesn't
 //       work with the target wasm32-wasi (https://github.com/rust-lang/cargo/issues/7040) at the
 //       moment, but we still want to make sure this code compiles. This duplication is hard to
-//       keep in sync and as soon as this issue is closed we should remove the duplicates.
+//       keep in sync and as soon as this issue is closed we should remove the duplicates and rely
+//       just on the docs for examples.
 
 /*!
 Helper library for building Rust applications that run on [lunatic][1].
@@ -18,7 +19,9 @@ use lunatic::{process, Mailbox};
 
 #[lunatic::main]
 fn main(m: Mailbox<()>) {
-    let (this, m) = process::this(m);
+    // Get reference to itself.
+    let this = process::this(m);
+    // Pass the reference to the child process.
     process::spawn_with(this, |parent, _: Mailbox<()>| {
         println!("Hi! I'm a process.");
         // Notify parent that we are done.
@@ -48,7 +51,7 @@ process::spawn_with(proc.to_string(), |proc, _: Mailbox<()>| {
 
 ## Messaging
 
-Processes can exchange information with each other through [messages](crate::Message):
+Processes can exchange information with each other through messages:
 
 ```
 use lunatic::process;
@@ -61,12 +64,44 @@ let proc = process::spawn(|mailbox| {
 
 proc.send("World!".to_string());
 ```
-Most types should automatically implement the [`Message`] trait, but for custom types a
-`#[derive(lunatic::derive::Message)]` helper can be used.
+Everything that implements the **[`Serialize`](serde::Serialize)** and
+**[`Deserialize`](serde::Deserialize)** traits can be sent as a message to another process.
 
 Each process gets a [`Mailbox`] as an argument to the entry function. Mailboxes can be used to
 [`receive`](Mailbox::receive()) messages. If there are no messages in the mailbox the process
 will block on [`receive`](Mailbox::receive()) until a message arrives.
+
+## Request/Replay architecture
+
+It's common in lunatic to have processes that act as servers, they receive requests and send back
+replays. Such an architecture can be achieved if the client process sends a reference to itself as
+part of the message. The server then will be able to send the response back to the correct client.
+Because this is such a common construct, this library provides a helper type [`Request`] that
+automatically captures a reference to the sender
+
+```
+use lunatic::{process, Mailbox, Request};
+
+#[lunatic::main]
+fn main(_: Mailbox<()>) {
+    // Spawn a process that gets two numbers as a request and can replay to the sender with the sum
+    // of the numbers.
+    let add_server = process::spawn(|mailbox: Mailbox<Request<(i32, i32), i32>>| loop {
+        let request = mailbox.receive().unwrap();
+        let (a, b) = *request.data();
+        request.replay(a + b);
+    })
+    .unwrap();
+    // Make specific requests to the `add_server` & ignore all messages in the mailbox that are not
+    // responses to the request.
+    assert_eq!(add_server.request((1, 1)).unwrap(), 2);
+    assert_eq!(add_server.request((1, 2)).unwrap(), 3);
+}
+```
+
+It's important to notice here that the response can be a different type (`i32`) from the mailbox
+type (`()`). This is safe, because the call to the `request` function will block until we get back
+a response and handle it right away, so that the different type never ends up in the mailbox.
 
 ## Linking
 
@@ -82,9 +117,9 @@ use lunatic::{process, Mailbox};
 
 #[lunatic::main]
 fn main(mailbox: Mailbox<()>) {
-    let (_child, mailbox) = process::spawn_link(mailbox, child).unwrap();
+    let (_child, link_mailbox) = process::spawn_link(mailbox, child).unwrap();
     // Wait on message
-    assert!(mailbox.receive().is_err());
+    assert!(link_mailbox.receive().is_err());
 }
 
 fn child(_: Mailbox<()>) {
@@ -110,7 +145,7 @@ use lunatic::{Config, Environment, Mailbox};
 #[lunatic::main]
 fn main(m: Mailbox<()>) {
     // Create a new environment where processes can use maximum 17 Wasm pages of
-    // memory (17 * 64KB) & 1 gallon of instructions (~=100k CPU cycles).
+    // memory (17 * 64KB) & 1 compute unit of instructions (~=100k CPU cycles).
     let mut config = Config::new(1_200_000, Some(1));
     // Allow only syscalls under the "wasi_snapshot_preview1::environ*" namespace
     config.allow_namespace("wasi_snapshot_preview1::environ");
@@ -121,7 +156,7 @@ fn main(m: Mailbox<()>) {
     let (_, m) = module
         .spawn_link(m, |_: Mailbox<()>| println!("Hi from different env"))
         .unwrap();
-    assert!(m.receive().is_err());
+    assert!(m.receive().is_signal());
 
     // This process will fail because it uses too much memory
     let (_, m) = module
@@ -129,11 +164,11 @@ fn main(m: Mailbox<()>) {
             vec![0; 150_000];
         })
         .unwrap();
-    assert!(m.receive().is_err());
+    assert!(m.receive().is_signal());
 
     // This process will fail because it uses too much compute
     let (_, m) = module.spawn_link(m, |_: Mailbox<()>| loop {}).unwrap();
-    assert!(m.receive().is_err());
+    assert!(m.receive().is_signal());
 }
 ```
 

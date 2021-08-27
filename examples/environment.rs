@@ -3,7 +3,7 @@ use lunatic::{Config, Environment, Mailbox};
 #[lunatic::main]
 fn main(m: Mailbox<()>) {
     // Create a new environment where processes can use maximum 17 Wasm pages of
-    // memory (17 * 64KB) & 1 gallon of instructions (~=100k CPU cycles).
+    // memory (17 * 64KB) & 1 compute unit of instructions (~=100k CPU cycles).
     let mut config = Config::new(1_200_000, Some(1));
     // Allow only syscalls under the "wasi_snapshot_preview1::environ*" namespace
     config.allow_namespace("wasi_snapshot_preview1::environ");
