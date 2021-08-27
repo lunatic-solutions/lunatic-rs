@@ -4,6 +4,7 @@
 //       keep in sync and as soon as this issue is closed we should remove the duplicates and rely
 //       just on the docs for examples.
 
+#![allow(clippy::needless_doctest_main)]
 /*!
 Helper library for building Rust applications that run on [lunatic][1].
 
@@ -28,8 +29,8 @@ fn main(m: Mailbox<()>) {
         parent.send(());
     })
     .unwrap();
-    // Wait for child to finish. If this line was missing the main process could shut down before
-    // the child prints anything. If the main process finishes, all others are killed.
+    // Wait for child to finish. If this line was missing the main process could shut down
+    // before the child prints anything. If the main process finishes, all others are killed.
     m.receive();
 }
 ```
@@ -84,16 +85,16 @@ use lunatic::{process, Mailbox, Request};
 
 #[lunatic::main]
 fn main(_: Mailbox<()>) {
-    // Spawn a process that gets two numbers as a request and can replay to the sender with the sum
-    // of the numbers.
+    // Spawn a process that gets two numbers as a request and can replay to the sender with
+    // the sum of the numbers.
     let add_server = process::spawn(|mailbox: Mailbox<Request<(i32, i32), i32>>| loop {
         let request = mailbox.receive().unwrap();
         let (a, b) = *request.data();
         request.replay(a + b);
     })
     .unwrap();
-    // Make specific requests to the `add_server` & ignore all messages in the mailbox that are not
-    // responses to the request.
+    // Make specific requests to the `add_server` & ignore all messages in the mailbox that
+    // are not responses to the request.
     assert_eq!(add_server.request((1, 1)).unwrap(), 2);
     assert_eq!(add_server.request((1, 2)).unwrap(), 3);
 }
