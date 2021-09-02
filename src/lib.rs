@@ -72,10 +72,10 @@ Each process gets a [`Mailbox`] as an argument to the entry function. Mailboxes 
 [`receive`](Mailbox::receive()) messages. If there are no messages in the mailbox the process
 will block on [`receive`](Mailbox::receive()) until a message arrives.
 
-## Request/Replay architecture
+## Request/Reply architecture
 
 It's common in lunatic to have processes that act as servers, they receive requests and send back
-replays. Such an architecture can be achieved if the client process sends a reference to itself as
+replys. Such an architecture can be achieved if the client process sends a reference to itself as
 part of the message. The server then will be able to send the response back to the correct client.
 Because this is such a common construct, this library provides a helper type [`Request`] that
 automatically captures a reference to the sender
@@ -85,12 +85,12 @@ use lunatic::{process, Mailbox, Request};
 
 #[lunatic::main]
 fn main(_: Mailbox<()>) {
-    // Spawn a process that gets two numbers as a request and can replay to the sender with
+    // Spawn a process that gets two numbers as a request and can reply to the sender with
     // the sum of the numbers.
     let add_server = process::spawn(|mailbox: Mailbox<Request<(i32, i32), i32>>| loop {
         let request = mailbox.receive().unwrap();
         let (a, b) = *request.data();
-        request.replay(a + b);
+        request.reply(a + b);
     })
     .unwrap();
     // Make specific requests to the `add_server` & ignore all messages in the mailbox that

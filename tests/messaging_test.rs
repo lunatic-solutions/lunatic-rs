@@ -71,18 +71,18 @@ fn message_resource(m: Mailbox<Proc>) {
 }
 
 #[lunatic::test]
-fn request_replay(m: Mailbox<u64>) {
+fn request_reply(m: Mailbox<u64>) {
     // Spawn a server that fills our mailbox with u64 messages.
     let this = process::this(&m);
     process::spawn_with(this, |parent, _: Mailbox<()>| loop {
         parent.send(1337);
     })
     .unwrap();
-    // Spawn another process that can replay to us with an i32 message.
+    // Spawn another process that can reply to us with an i32 message.
     let add_server = process::spawn(|mailbox: Mailbox<Request<(i32, i32), i32>>| loop {
         let request = mailbox.receive().unwrap();
         let (a, b) = *request.data();
-        request.replay(a + b);
+        request.reply(a + b);
     })
     .unwrap();
     // Ignore all messages in the mailbox and make specific requests to the `add_server`.

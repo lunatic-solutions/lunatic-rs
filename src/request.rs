@@ -28,8 +28,8 @@ where
         }
     }
 
-    /// Replay to a request.
-    pub fn replay(self, message: U) {
+    /// Reply to a request.
+    pub fn reply(self, message: U) {
         self.sender_process.tag_send(self.tag, message);
     }
 

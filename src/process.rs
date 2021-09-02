@@ -160,7 +160,7 @@ where
         unsafe { message::create_data(tag.0, 0) };
         // During serialization resources will add themself to the message
         rmp_serde::encode::write(&mut MessageRw {}, &request).unwrap();
-        // Send it and wait for an replay
+        // Send it and wait for an reply
         unsafe { message::send_receive_skip_search(self.id, 0) };
         // Read the message out from the scratch buffer
         rmp_serde::from_read(MessageRw {})
