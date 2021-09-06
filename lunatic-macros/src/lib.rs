@@ -54,13 +54,34 @@ fn parse(input: syn::ItemFn, is_test: bool) -> Result<TokenStream, syn::Error> {
     let name = input.sig.ident;
     let arguments = input.sig.inputs;
     let block = input.block;
-    let body = quote! {
-        fn #name() {
-            fn ______hidden(#arguments) {
-                #block
+    let body = if is_test {
+        quote! {
+            fn #name() {
+                let __this__mailbox =  unsafe { lunatic::Mailbox::new() };
+                let __this__process = lunatic::process::this(&__this__mailbox);
+                fn __with__mailbox(__parent__process: lunatic::process::Process<()>, #arguments) {
+                    #block
+                    // Notify parent when process finishes.
+                    __parent__process.send(());
+                }
+                // Run tests in a child process to not share mailboxes between parents.
+                let (_, __this__linked__mailbox)
+                    = lunatic::process::spawn_link_with(__this__mailbox, __this__process, __with__mailbox).unwrap();
+                // If child failed, fail parent too.
+                match __this__linked__mailbox.receive() {
+                    lunatic::Message::Normal(_) => (),
+                    _ => panic!("Child process failed"),
+                }
             }
-            unsafe { ______hidden(lunatic::Mailbox::new()) }
-            ;
+        }
+    } else {
+        quote! {
+            fn #name() {
+                fn __with_mailbox(#arguments) {
+                    #block
+                }
+                unsafe { __with_mailbox(lunatic::Mailbox::new()) };
+            }
         }
     };
 
