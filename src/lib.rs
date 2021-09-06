@@ -215,7 +215,7 @@ mod tag;
 
 pub use environment::{lookup, Config, Environment, Module, ThisModule};
 pub use error::LunaticError;
-pub use mailbox::{LinkMailbox, Mailbox, Signal};
+pub use mailbox::{LinkMailbox, Mailbox, Message, ReceiveError, Signal};
 pub use request::Request;
 
 pub use lunatic_macros::main;

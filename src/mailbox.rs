@@ -6,11 +6,15 @@ use std::{
 
 use rmp_serde::decode;
 use serde::{de::DeserializeOwned, Serialize};
+use thiserror::Error;
 
 use crate::{
     host_api::{message, process},
     tag::Tag,
 };
+
+const SIGNAL: u32 = 1;
+const TIMEOUT: u32 = 9027;
 
 /// Mailbox for processes that are not linked, or linked and set to trap on notify signals.
 #[derive(Debug)]
@@ -34,27 +38,48 @@ impl<T: Serialize + DeserializeOwned> Mailbox<T> {
     /// Gets next message from process' mailbox.
     ///
     /// If the mailbox is empty, this function will block until a new message arrives.
-    pub fn receive(&self) -> Result<T, decode::Error> {
+    pub fn receive(&self) -> Result<T, ReceiveError> {
         self.receive_(None, None)
+    }
+
+    /// Same as [`receive`], but only waits for the duration of timeout for the message.
+    pub fn receive_timeout(&self, timeout: Duration) -> Result<T, ReceiveError> {
+        self.receive_(None, Some(timeout))
     }
 
     /// Gets a message with a specific tag from the mailbox.
     ///
     /// If the mailbox is empty, this function will block until a new message arrives.
-    pub fn tag_receive(&self, tag: Tag) -> Result<T, decode::Error> {
+    pub fn tag_receive(&self, tag: Tag) -> Result<T, ReceiveError> {
         self.receive_(Some(tag.0), None)
     }
 
-    fn receive_(&self, tag: Option<i64>, timeout: Option<Duration>) -> Result<T, decode::Error> {
+    /// Same as [`tag_receive`], but only waits for the duration of timeout for the tagged message.
+    pub fn tag_receive_timeout(&self, tag: Tag, timeout: Duration) -> Result<T, ReceiveError> {
+        self.receive_(Some(tag.0), Some(timeout))
+    }
+
+    fn receive_(&self, tag: Option<i64>, timeout: Option<Duration>) -> Result<T, ReceiveError> {
         let tag = tag.unwrap_or(0);
         let timeout_ms = match timeout {
-            Some(timeout) => timeout.as_millis() as u32,
+            // If waiting time is smaller than 1ms, round it up to 1ms.
+            Some(timeout) => match timeout.as_millis() {
+                0 => 1,
+                other => other as u32,
+            },
             None => 0,
         };
         let message_type = unsafe { message::receive(tag, timeout_ms) };
         // Mailbox can't receive Signal messages.
-        assert_eq!(message_type, 0);
-        rmp_serde::from_read(MessageRw {})
+        assert_ne!(message_type, SIGNAL);
+        // In case of timeout, return error.
+        if message_type == TIMEOUT {
+            return Err(ReceiveError::Timeout);
+        }
+        match rmp_serde::from_read(MessageRw {}) {
+            Ok(result) => Ok(result),
+            Err(decode_error) => Err(ReceiveError::DeserializationFailed(decode_error)),
+        }
     }
 }
 
@@ -90,20 +115,49 @@ impl<T: Serialize + DeserializeOwned> LinkMailbox<T> {
         self.receive_(None, None)
     }
 
+    /// Same as [`receive`], but only waits for the duration of timeout for the message.
+    pub fn receive_timeout(&self, timeout: Duration) -> Message<T> {
+        self.receive_(None, Some(timeout))
+    }
+
+    /// Gets a message with a specific tag from the mailbox.
+    ///
+    /// If the mailbox is empty, this function will block until a new message arrives.
+    pub fn tag_receive(&self, tag: Tag) -> Message<T> {
+        self.receive_(Some(tag.0), None)
+    }
+
+    /// Same as [`tag_receive`], but only waits for the duration of timeout for the tagged message.
+    pub fn tag_receive_timeout(&self, tag: Tag, timeout: Duration) -> Message<T> {
+        self.receive_(Some(tag.0), Some(timeout))
+    }
+
     fn receive_(&self, tag: Option<i64>, timeout: Option<Duration>) -> Message<T> {
         let tag = tag.unwrap_or(0);
         let timeout_ms = match timeout {
-            Some(timeout) => timeout.as_millis() as u32,
+            // If waiting time is smaller than 1ms, round it up to 1ms.
+            Some(timeout) => match timeout.as_millis() {
+                0 => 1,
+                other => other as u32,
+            },
             None => 0,
         };
         let message_type = unsafe { message::receive(tag, timeout_ms) };
 
-        if message_type == 1 {
+        if message_type == SIGNAL {
             let tag = unsafe { message::get_tag() };
             return Message::Signal(Tag(tag));
         }
+        // In case of timeout, return error.
+        else if message_type == TIMEOUT {
+            return Message::Normal(Err(ReceiveError::Timeout));
+        }
 
-        Message::Normal(rmp_serde::from_read(MessageRw {}))
+        let message = match rmp_serde::from_read(MessageRw {}) {
+            Ok(result) => Ok(result),
+            Err(decode_error) => Err(ReceiveError::DeserializationFailed(decode_error)),
+        };
+        Message::Normal(message)
     }
 }
 
@@ -117,11 +171,20 @@ impl<T: Serialize + DeserializeOwned> TransformMailbox<T> for LinkMailbox<T> {
     }
 }
 
+/// Represents an error while receiving a message.
+#[derive(Error, Debug)]
+pub enum ReceiveError {
+    #[error("Deserialization failed")]
+    DeserializationFailed(#[from] decode::Error),
+    #[error("Timed out while waiting for message")]
+    Timeout,
+}
+
 /// Returned from [`LinkMailbox::receive`] to indicate if the received message was a signal or a
 /// normal message.
 #[derive(Debug)]
 pub enum Message<T> {
-    Normal(Result<T, decode::Error>),
+    Normal(Result<T, ReceiveError>),
     Signal(Tag),
 }
 
@@ -135,7 +198,7 @@ impl<T> Message<T> {
     }
 
     /// Returns the message if it's a normal one or panics if not.
-    pub fn normal_or_unwrap(self) -> Result<T, decode::Error> {
+    pub fn normal_or_unwrap(self) -> Result<T, ReceiveError> {
         match self {
             Message::Normal(message) => message,
             Message::Signal(_) => panic!("Message is of type Signal"),

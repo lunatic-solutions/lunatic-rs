@@ -1,6 +1,8 @@
+use std::time::Duration;
+
 use lunatic::{
     process::{self, Process},
-    Mailbox, Request,
+    Mailbox, ReceiveError, Request,
 };
 
 #[lunatic::test]
@@ -93,6 +95,15 @@ fn request_reply(m: Mailbox<u64>) {
         assert_eq!(add_server.request((16, 16)).unwrap(), 32);
         assert_eq!(add_server.request((128, -128)).unwrap(), 0);
     }
+}
+
+#[lunatic::test]
+fn timeout(m: Mailbox<u64>) {
+    let result = m.receive_timeout(Duration::new(0, 1000));
+    match result {
+        Err(ReceiveError::Timeout) => (), // success
+        _ => unreachable!(),
+    };
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

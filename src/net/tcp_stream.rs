@@ -153,7 +153,11 @@ impl TcpStream {
         let mut id = 0;
         for addr in addr.to_socket_addrs()? {
             let timeout_ms = match timeout {
-                Some(timeout) => timeout.as_millis() as u32,
+                // If waiting time is smaller than 1ms, round it up to 1ms.
+                Some(timeout) => match timeout.as_millis() {
+                    0 => 1,
+                    other => other as u32,
+                },
                 None => 0,
             };
             let result = match addr {
