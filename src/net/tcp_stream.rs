@@ -104,6 +104,26 @@ impl TcpStream {
         }
     }
 
+    /// Sets the read timeout.
+    ///
+    /// If the value specified is `None`, then read calls will block indefinitely.
+    pub fn set_read_timeout(&mut self, duration: Option<Duration>) {
+        match duration {
+            None => self.read_timeout = 0,
+            Some(duration) => self.read_timeout = duration.as_millis() as u32,
+        }
+    }
+
+    /// Sets the write timeout.
+    ///
+    /// If the value specified is `None`, then write calls will block indefinitely.
+    pub fn set_write_timeout(&mut self, duration: Option<Duration>) {
+        match duration {
+            None => self.write_timeout = 0,
+            Some(duration) => self.write_timeout = duration.as_millis() as u32,
+        }
+    }
+
     /// Creates a TCP connection to the specified address.
     ///
     /// This method will create a new TCP socket and attempt to connect it to the provided `addr`,
