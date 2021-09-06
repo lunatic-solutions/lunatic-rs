@@ -65,7 +65,7 @@ fn parse(input: syn::ItemFn, is_test: bool) -> Result<TokenStream, syn::Error> {
                     __parent__process.send(());
                 }
                 // Run tests in a child process to not share mailboxes between parents.
-                let (_, __this__linked__mailbox)
+                let (_, _, __this__linked__mailbox)
                     = lunatic::process::spawn_link_with(__this__mailbox, __this__process, __with__mailbox).unwrap();
                 // If child failed, fail parent too.
                 match __this__linked__mailbox.receive() {

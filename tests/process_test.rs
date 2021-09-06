@@ -1,13 +1,14 @@
+use core::panic;
 use std::{num::Wrapping, ops::Add};
 
 use lunatic::{
     process::{self, Process},
-    Config, Environment, Mailbox,
+    Config, Environment, Mailbox, Message,
 };
 
 #[lunatic::test]
 fn spawn_link(m: Mailbox<()>) {
-    let (_child, link_mailbox) = process::spawn_link(m, |_: Mailbox<()>| panic!()).unwrap();
+    let (_child, _, link_mailbox) = process::spawn_link(m, |_: Mailbox<()>| panic!()).unwrap();
     // The child failure is captured as a message
     assert!(link_mailbox.receive().is_signal());
 }
@@ -21,12 +22,12 @@ fn memory_limit(m: Mailbox<u64>) {
     let module = env.add_this_module().unwrap();
     let this = process::this(&m);
     // Allocating 100 bytes will work
-    let (_, m) = module
+    let (_, _, m) = module
         .spawn_link_with(m, (this.clone(), 100), allocate)
         .unwrap();
     assert_eq!(100, m.receive().normal_or_unwrap().unwrap());
     // Allocating ~1Mb (150k * 8 bytes) will fail as Rust reserves some extra space for the shadow stack.
-    let (_, m) = module.spawn_link_with(m, (this, 150000), allocate).unwrap();
+    let (_, _, m) = module.spawn_link_with(m, (this, 150000), allocate).unwrap();
     assert!(m.receive().is_signal());
 }
 
@@ -44,12 +45,12 @@ fn compute_limit(m: Mailbox<u64>) {
     let module = env.add_this_module().unwrap();
     let this = process::this(&m);
     // Calculating fibonacci of 1 succeeds
-    let (_, m) = module
+    let (_, _, m) = module
         .spawn_link_with(m, (this.clone(), 12), fibonacci)
         .unwrap();
     assert_eq!(144, m.receive().normal_or_unwrap().unwrap());
     // Calculating fibonacci of 10_000 fails
-    let (_, m) = module.spawn_link_with(m, (this, 10000), fibonacci).unwrap();
+    let (_, _, m) = module.spawn_link_with(m, (this, 10000), fibonacci).unwrap();
     assert!(m.receive().is_signal());
 }
 
@@ -68,4 +69,41 @@ fn fibonacci((parent, input): (Process<u64>, u64), _: Mailbox<()>) {
         curr = sum;
     }
     parent.send(sum.0);
+}
+
+#[lunatic::test]
+fn link_with_tags(m: Mailbox<u64>) {
+    let (child1, tag1, m) = process::spawn_link(m, fail_on_message).unwrap();
+    let (child2, tag2, m) = process::spawn_link(m, fail_on_message).unwrap();
+    let (child3, tag3, m) = process::spawn_link(m, fail_on_message).unwrap();
+    let (child4, tag4, m) = process::spawn_link(m, fail_on_message).unwrap();
+
+    child2.send(());
+    match m.receive() {
+        Message::Signal(tag) => assert_eq!(tag, tag2),
+        _ => panic!("Wrong tag"),
+    }
+
+    child4.send(());
+    match m.receive() {
+        Message::Signal(tag) => assert_eq!(tag, tag4),
+        _ => panic!("Wrong tag"),
+    }
+
+    child3.send(());
+    match m.receive() {
+        Message::Signal(tag) => assert_eq!(tag, tag3),
+        _ => panic!("Wrong tag"),
+    }
+
+    child1.send(());
+    match m.receive() {
+        Message::Signal(tag) => assert_eq!(tag, tag1),
+        _ => panic!("Wrong tag"),
+    }
+}
+
+fn fail_on_message(mailbox: Mailbox<()>) {
+    let _ = mailbox.receive();
+    panic!("I'm failing")
 }

@@ -135,8 +135,10 @@ impl<T: Serialize + DeserializeOwned> Process<T> {
     }
 
     /// Links the current process with another one.
-    pub fn link(&self) {
-        unsafe { process::link(0, self.id) };
+    pub fn link(&self) -> Tag {
+        let tag = Tag::new();
+        unsafe { process::link(tag.0, self.id) };
+        tag
     }
 
     /// Unlinks the current process from another one.
@@ -189,7 +191,7 @@ pub fn spawn<T: Serialize + DeserializeOwned>(
     // LinkMailbox<T> & Mailbox<T> are marker types and it's safe to cast to Mailbox<T> here if we
     // set the `link` argument to `false`.
     let function = unsafe { transmute(function) };
-    spawn_(None, false, Context::<(), _>::Without(function))
+    spawn_(None, None, Context::<(), _>::Without(function))
 }
 
 /// Spawns a new process from a function and links it to the parent.
@@ -199,15 +201,16 @@ pub fn spawn<T: Serialize + DeserializeOwned>(
 pub fn spawn_link<T, P, M>(
     mailbox: M,
     function: fn(Mailbox<T>),
-) -> Result<(Process<T>, LinkMailbox<P>), LunaticError>
+) -> Result<(Process<T>, Tag, LinkMailbox<P>), LunaticError>
 where
     T: Serialize + DeserializeOwned,
     P: Serialize + DeserializeOwned,
     M: TransformMailbox<P>,
 {
     let mailbox = mailbox.catch_link_panic();
-    let proc = spawn_(None, true, Context::<(), _>::Without(function))?;
-    Ok((proc, mailbox))
+    let tag = Tag::new();
+    let proc = spawn_(None, Some(tag), Context::<(), _>::Without(function))?;
+    Ok((proc, tag, mailbox))
 }
 
 /// Spawns a new process from a function and links it to the parent.
@@ -226,7 +229,7 @@ where
     M: TransformMailbox<P>,
 {
     let mailbox = mailbox.panic_if_link_panics();
-    let proc = spawn_(None, true, Context::<(), _>::Without(function))?;
+    let proc = spawn_(None, Some(Tag::new()), Context::<(), _>::Without(function))?;
     Ok((proc, mailbox))
 }
 
@@ -245,7 +248,7 @@ pub fn spawn_with<C: Serialize + DeserializeOwned, T: Serialize + DeserializeOwn
     // LinkMailbox<T> & Mailbox<T> are marker types and it's safe to cast to Mailbox<T> here if we
     //  set the `link` argument to `false`.
     let function = unsafe { transmute(function) };
-    spawn_(None, false, Context::With(function, context))
+    spawn_(None, None, Context::With(function, context))
 }
 
 /// Spawns a new process from a function and context, and links it to the parent.
@@ -260,7 +263,7 @@ pub fn spawn_link_with<C, T, P, M>(
     mailbox: M,
     context: C,
     function: fn(C, Mailbox<T>),
-) -> Result<(Process<T>, LinkMailbox<P>), LunaticError>
+) -> Result<(Process<T>, Tag, LinkMailbox<P>), LunaticError>
 where
     C: Serialize + DeserializeOwned,
     T: Serialize + DeserializeOwned,
@@ -268,8 +271,9 @@ where
     M: TransformMailbox<P>,
 {
     let mailbox = mailbox.catch_link_panic();
-    let proc = spawn_(None, true, Context::With(function, context))?;
-    Ok((proc, mailbox))
+    let tag = Tag::new();
+    let proc = spawn_(None, Some(tag), Context::With(function, context))?;
+    Ok((proc, tag, mailbox))
 }
 
 /// Spawns a new process from a function and context, and links it to the parent.
@@ -294,7 +298,7 @@ where
     M: TransformMailbox<P>,
 {
     let mailbox = mailbox.panic_if_link_panics();
-    let proc = spawn_(None, true, Context::With(function, context))?;
+    let proc = spawn_(None, Some(Tag::new()), Context::With(function, context))?;
     Ok((proc, mailbox))
 }
 
@@ -306,7 +310,7 @@ pub(crate) enum Context<C: Serialize + DeserializeOwned, T: Serialize + Deserial
 // If `module_id` is None it will use the current module & environment.
 pub(crate) fn spawn_<C: Serialize + DeserializeOwned, T: Serialize + DeserializeOwned>(
     module_id: Option<u64>,
-    link: bool,
+    link: Option<Tag>,
     context: Context<C, T>,
 ) -> Result<Process<T>, LunaticError> {
     // Spawning a new process from  the same module is a delicate undertaking.
@@ -327,10 +331,14 @@ pub(crate) fn spawn_<C: Serialize + DeserializeOwned, T: Serialize + Deserialize
     let params = params_to_vec(&[Param::I32(type_helper as i32), Param::I32(func as i32)]);
     let mut id = 0;
     let func = "_lunatic_spawn_by_index";
+    let link = match link {
+        Some(tag) => tag.0,
+        None => 0,
+    };
     let result = unsafe {
         match module_id {
             Some(module_id) => host_api::process::spawn(
-                if link { 1 } else { 0 },
+                link,
                 module_id,
                 func.as_ptr(),
                 func.len(),
@@ -339,7 +347,7 @@ pub(crate) fn spawn_<C: Serialize + DeserializeOwned, T: Serialize + Deserialize
                 &mut id,
             ),
             None => host_api::process::inherit_spawn(
-                if link { 1 } else { 0 },
+                link,
                 func.as_ptr(),
                 func.len(),
                 params.as_ptr(),

@@ -8,6 +8,7 @@ use crate::{
     host_api,
     mailbox::{LinkMailbox, Mailbox, TransformMailbox},
     process::{spawn_, Context, Process},
+    tag::Tag,
 };
 
 /// Environment configuration
@@ -317,7 +318,7 @@ impl ThisModule {
         // LinkMailbox<T> & Mailbox<T> are marker types and it's safe to cast to Mailbox<T> here if we
         //  set the `link` argument to `false`.
         let function = unsafe { std::mem::transmute(function) };
-        spawn_(Some(self.id), false, Context::<(), _>::Without(function))
+        spawn_(Some(self.id), None, Context::<(), _>::Without(function))
     }
 
     /// Spawns a new process from a function and links it to the parent.
@@ -328,15 +329,20 @@ impl ThisModule {
         &self,
         mailbox: M,
         function: fn(Mailbox<T>),
-    ) -> Result<(Process<T>, LinkMailbox<P>), LunaticError>
+    ) -> Result<(Process<T>, Tag, LinkMailbox<P>), LunaticError>
     where
         T: Serialize + DeserializeOwned,
         P: Serialize + DeserializeOwned,
         M: TransformMailbox<P>,
     {
         let mailbox = mailbox.catch_link_panic();
-        let proc = spawn_(Some(self.id), true, Context::<(), _>::Without(function))?;
-        Ok((proc, mailbox))
+        let tag = Tag::new();
+        let proc = spawn_(
+            Some(self.id),
+            Some(tag),
+            Context::<(), _>::Without(function),
+        )?;
+        Ok((proc, tag, mailbox))
     }
 
     /// Spawns a new process from a function and links it to the parent.
@@ -356,7 +362,11 @@ impl ThisModule {
         M: TransformMailbox<P>,
     {
         let mailbox = mailbox.panic_if_link_panics();
-        let proc = spawn_(Some(self.id), true, Context::<(), _>::Without(function))?;
+        let proc = spawn_(
+            Some(self.id),
+            Some(Tag::new()),
+            Context::<(), _>::Without(function),
+        )?;
         Ok((proc, mailbox))
     }
 
@@ -376,7 +386,7 @@ impl ThisModule {
         // LinkMailbox<T> & Mailbox<T> are marker types and it's safe to cast to Mailbox<T> here if we
         //  set the `link` argument to `false`.
         let function = unsafe { std::mem::transmute(function) };
-        spawn_(Some(self.id), false, Context::With(function, context))
+        spawn_(Some(self.id), None, Context::With(function, context))
     }
 
     /// Spawns a new process from a function and context, and links it to the parent.
@@ -392,7 +402,7 @@ impl ThisModule {
         mailbox: M,
         context: C,
         function: fn(C, Mailbox<T>),
-    ) -> Result<(Process<T>, LinkMailbox<P>), LunaticError>
+    ) -> Result<(Process<T>, Tag, LinkMailbox<P>), LunaticError>
     where
         C: Serialize + DeserializeOwned,
         T: Serialize + DeserializeOwned,
@@ -400,8 +410,9 @@ impl ThisModule {
         M: TransformMailbox<P>,
     {
         let mailbox = mailbox.catch_link_panic();
-        let proc = spawn_(Some(self.id), true, Context::With(function, context))?;
-        Ok((proc, mailbox))
+        let tag = Tag::new();
+        let proc = spawn_(Some(self.id), Some(tag), Context::With(function, context))?;
+        Ok((proc, tag, mailbox))
     }
 
     /// Spawns a new process from a function and context, and links it to the parent.
@@ -427,7 +438,11 @@ impl ThisModule {
         M: TransformMailbox<P>,
     {
         let mailbox = mailbox.panic_if_link_panics();
-        let proc = spawn_(Some(self.id), true, Context::With(function, context))?;
+        let proc = spawn_(
+            Some(self.id),
+            Some(Tag::new()),
+            Context::With(function, context),
+        )?;
         Ok((proc, mailbox))
     }
 }
