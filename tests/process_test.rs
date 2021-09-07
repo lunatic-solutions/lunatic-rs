@@ -1,5 +1,4 @@
-use core::panic;
-use std::{num::Wrapping, ops::Add};
+use std::{num::Wrapping, ops::Add, process::exit};
 
 use lunatic::{
     process::{self, Process},
@@ -8,7 +7,7 @@ use lunatic::{
 
 #[lunatic::test]
 fn spawn_link(m: Mailbox<()>) {
-    let (_child, _, link_mailbox) = process::spawn_link(m, |_: Mailbox<()>| panic!()).unwrap();
+    let (_child, _, link_mailbox) = process::spawn_link(m, |_: Mailbox<()>| exit(1)).unwrap();
     // The child failure is captured as a message
     assert!(link_mailbox.receive().is_signal());
 }
@@ -81,29 +80,29 @@ fn link_with_tags(m: Mailbox<u64>) {
     child2.send(());
     match m.receive() {
         Message::Signal(tag) => assert_eq!(tag, tag2),
-        _ => panic!("Wrong tag"),
+        _ => exit(1),
     }
 
     child4.send(());
     match m.receive() {
         Message::Signal(tag) => assert_eq!(tag, tag4),
-        _ => panic!("Wrong tag"),
+        _ => exit(1),
     }
 
     child3.send(());
     match m.receive() {
         Message::Signal(tag) => assert_eq!(tag, tag3),
-        _ => panic!("Wrong tag"),
+        _ => exit(1),
     }
 
     child1.send(());
     match m.receive() {
         Message::Signal(tag) => assert_eq!(tag, tag1),
-        _ => panic!("Wrong tag"),
+        _ => exit(1),
     }
 }
 
 fn fail_on_message(mailbox: Mailbox<()>) {
     let _ = mailbox.receive();
-    panic!("I'm failing")
+    exit(1);
 }

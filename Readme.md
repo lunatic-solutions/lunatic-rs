@@ -166,6 +166,15 @@ If a process dies, either because an unsupported syscall was called or a `Kill` 
 there is not going to be any output in the terminal. To get more insight set the `RUST_LOG`
 environment variable to `lunatic=debug`. E.g. `RUST_LOG=lunatic=debug cargo run`.
 
+### Testing
+
+Lunatic provides a macro `#[lunatic::test]` to turn your tests into processes. Check out the
+`tests` folder for examples.
+
+If you want to forward some flags to the tests, you will need to use double `--`, the first
+tells cargo to forward the flags to lunatic, the second tells lunatic to forward the flags to the
+test. E.g. `cargo test -- -- --nocaputre`
+
 ### Supported Features
 
 Some features are directly supported through Rust's standard library, like filesystem access

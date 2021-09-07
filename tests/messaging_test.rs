@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{process::exit, time::Duration};
 
 use lunatic::{
     process::{self, Process},
@@ -62,7 +62,7 @@ fn message_resource(m: Mailbox<Proc>) {
     let _child = process::spawn_with(this, |parent, _: Mailbox<()>| {
         let empty_proc = process::spawn(|_: Mailbox<i32>| {}).unwrap();
         parent.send(Proc(empty_proc));
-        let panic_proc = process::spawn(|_: Mailbox<i32>| panic!()).unwrap();
+        let panic_proc = process::spawn(|_: Mailbox<i32>| exit(1)).unwrap();
         parent.send(Proc(panic_proc));
     })
     .unwrap();

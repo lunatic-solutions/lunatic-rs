@@ -56,7 +56,7 @@ fn parse(input: syn::ItemFn, is_test: bool) -> Result<TokenStream, syn::Error> {
     let block = input.block;
     let body = if is_test {
         quote! {
-            fn #name() {
+            fn #name() -> Result<(), ()> {
                 let __this__mailbox =  unsafe { lunatic::Mailbox::new() };
                 let __this__process = lunatic::process::this(&__this__mailbox);
                 fn __with__mailbox(__parent__process: lunatic::process::Process<()>, #arguments) {
@@ -67,10 +67,10 @@ fn parse(input: syn::ItemFn, is_test: bool) -> Result<TokenStream, syn::Error> {
                 // Run tests in a child process to not share mailboxes between parents.
                 let (_, _, __this__linked__mailbox)
                     = lunatic::process::spawn_link_with(__this__mailbox, __this__process, __with__mailbox).unwrap();
-                // If child failed, fail parent too.
+                // If child failed return `Err(())` to fail test.
                 match __this__linked__mailbox.receive() {
-                    lunatic::Message::Normal(_) => (),
-                    _ => panic!("Child process failed"),
+                    lunatic::Message::Normal(_) => Ok(()),
+                    _ => Err(()),
                 }
             }
         }
