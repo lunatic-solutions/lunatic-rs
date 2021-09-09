@@ -114,6 +114,12 @@ impl<T: Serialize + DeserializeOwned> Process<T> {
         }
     }
 
+    pub fn id(&self) -> u128 {
+        let mut uuid: [u8; 16] = [0; 16];
+        unsafe { host_api::process::id(self.id, &mut uuid as *mut [u8; 16]) };
+        u128::from_le_bytes(uuid)
+    }
+
     /// Send message to process.
     pub fn send(&self, value: T) {
         self.send_(None, value)
@@ -121,7 +127,7 @@ impl<T: Serialize + DeserializeOwned> Process<T> {
 
     /// Tag a message and send it to a process.
     pub(crate) fn tag_send(&self, tag: Tag, value: T) {
-        self.send_(Some(tag.0), value)
+        self.send_(Some(tag.id()), value)
     }
 
     fn send_(&self, tag: Option<i64>, value: T) {
@@ -137,7 +143,7 @@ impl<T: Serialize + DeserializeOwned> Process<T> {
     /// Links the current process with another one.
     pub fn link(&self) -> Tag {
         let tag = Tag::new();
-        unsafe { process::link(tag.0, self.id) };
+        unsafe { process::link(tag.id(), self.id) };
         tag
     }
 
@@ -159,7 +165,7 @@ where
         let tag = Tag::new();
         let request = Request::new(message, tag, sender_process);
         // Create new message
-        unsafe { message::create_data(tag.0, 0) };
+        unsafe { message::create_data(tag.id(), 0) };
         // During serialization resources will add themself to the message
         rmp_serde::encode::write(&mut MessageRw {}, &request).unwrap();
         // Send it and wait for an reply
@@ -332,7 +338,7 @@ pub(crate) fn spawn_<C: Serialize + DeserializeOwned, T: Serialize + Deserialize
     let mut id = 0;
     let func = "_lunatic_spawn_by_index";
     let link = match link {
-        Some(tag) => tag.0,
+        Some(tag) => tag.id(),
         None => 0,
     };
     let result = unsafe {

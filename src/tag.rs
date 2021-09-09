@@ -1,6 +1,16 @@
 // Represents a message tag.
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
-pub struct Tag(pub(crate) i64);
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub struct Tag(i64);
+
+impl Tag {
+    pub(crate) fn from(id: i64) -> Tag {
+        Tag(id)
+    }
+
+    pub fn id(&self) -> i64 {
+        self.0
+    }
+}
 
 static mut COUNTER: i64 = 0;
 

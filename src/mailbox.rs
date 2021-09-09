@@ -51,12 +51,12 @@ impl<T: Serialize + DeserializeOwned> Mailbox<T> {
     ///
     /// If the mailbox is empty, this function will block until a new message arrives.
     pub fn tag_receive(&self, tag: Tag) -> Result<T, ReceiveError> {
-        self.receive_(Some(tag.0), None)
+        self.receive_(Some(tag.id()), None)
     }
 
     /// Same as [`tag_receive`], but only waits for the duration of timeout for the tagged message.
     pub fn tag_receive_timeout(&self, tag: Tag, timeout: Duration) -> Result<T, ReceiveError> {
-        self.receive_(Some(tag.0), Some(timeout))
+        self.receive_(Some(tag.id()), Some(timeout))
     }
 
     fn receive_(&self, tag: Option<i64>, timeout: Option<Duration>) -> Result<T, ReceiveError> {
@@ -124,12 +124,12 @@ impl<T: Serialize + DeserializeOwned> LinkMailbox<T> {
     ///
     /// If the mailbox is empty, this function will block until a new message arrives.
     pub fn tag_receive(&self, tag: Tag) -> Message<T> {
-        self.receive_(Some(tag.0), None)
+        self.receive_(Some(tag.id()), None)
     }
 
     /// Same as [`tag_receive`], but only waits for the duration of timeout for the tagged message.
     pub fn tag_receive_timeout(&self, tag: Tag, timeout: Duration) -> Message<T> {
-        self.receive_(Some(tag.0), Some(timeout))
+        self.receive_(Some(tag.id()), Some(timeout))
     }
 
     fn receive_(&self, tag: Option<i64>, timeout: Option<Duration>) -> Message<T> {
@@ -146,7 +146,7 @@ impl<T: Serialize + DeserializeOwned> LinkMailbox<T> {
 
         if message_type == SIGNAL {
             let tag = unsafe { message::get_tag() };
-            return Message::Signal(Tag(tag));
+            return Message::Signal(Tag::from(tag));
         }
         // In case of timeout, return error.
         else if message_type == TIMEOUT {

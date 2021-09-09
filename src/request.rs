@@ -42,4 +42,9 @@ where
     pub fn data_mut(&mut self) -> &mut T {
         &mut self.message
     }
+
+    /// Get a reference to the sender process.
+    pub fn sender(&self) -> &Process<U> {
+        &self.sender_process
+    }
 }
