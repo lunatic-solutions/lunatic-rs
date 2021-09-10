@@ -366,15 +366,15 @@ pub(crate) fn spawn_<C: Serialize + DeserializeOwned, T: Serialize + Deserialize
         match context {
             // If context exists, send it as first message to the new process
             Context::With(_, context) => {
-                let self_ = Process {
+                let child = Process {
                     id,
                     consumed: UnsafeCell::new(false),
                     _phantom: PhantomData,
                 };
-                self_.send(context);
+                child.send(context);
                 // Processes can only receive one type of messages, but to pass in the context we pretend
                 // for the first message that our process is receiving messages of type `C`.
-                Ok(unsafe { transmute(self_) })
+                Ok(unsafe { transmute(child) })
             }
             Context::Without(_) => Ok(Process {
                 id,
