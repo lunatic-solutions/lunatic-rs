@@ -47,6 +47,15 @@ impl<T: Serialize + DeserializeOwned> Mailbox<T> {
         self.receive_(None, Some(timeout))
     }
 
+    /// Gets next message from process' mailbox & its tag.
+    ///
+    /// If the mailbox is empty, this function will block until a new message arrives.
+    pub fn receive_with_tag(&self) -> Result<(T, Tag), ReceiveError> {
+        let message = self.receive_(None, None)?;
+        let tag = unsafe { message::get_tag() };
+        Ok((message, Tag::from(tag)))
+    }
+
     /// Gets a message with a specific tag from the mailbox.
     ///
     /// If the mailbox is empty, this function will block until a new message arrives.

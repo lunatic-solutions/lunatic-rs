@@ -3,6 +3,7 @@ use std::{
     fmt::{self, Debug},
     marker::PhantomData,
     mem::transmute,
+    time::Duration,
 };
 
 use crate::{
@@ -36,6 +37,16 @@ pub struct Process<T: Serialize + DeserializeOwned> {
     // `drop_process()` anymore on it.
     consumed: UnsafeCell<bool>,
     _phantom: PhantomData<T>,
+}
+
+impl<T: Serialize + DeserializeOwned> PartialEq for Process<T> {
+    fn eq(&self, other: &Self) -> bool {
+        let mut uuid_self: [u8; 16] = [0; 16];
+        unsafe { host_api::process::id(self.id, &mut uuid_self as *mut [u8; 16]) };
+        let mut uuid_other: [u8; 16] = [0; 16];
+        unsafe { host_api::process::id(other.id, &mut uuid_other as *mut [u8; 16]) };
+        uuid_self == uuid_other
+    }
 }
 
 impl<T: Serialize + DeserializeOwned> Debug for Process<T> {
@@ -121,21 +132,21 @@ impl<T: Serialize + DeserializeOwned> Process<T> {
     }
 
     /// Send message to process.
-    pub fn send(&self, value: T) {
-        self.send_(None, value)
+    pub fn send(&self, message: T) {
+        self.send_(None, message)
     }
 
     /// Tag a message and send it to a process.
-    pub(crate) fn tag_send(&self, tag: Tag, value: T) {
-        self.send_(Some(tag.id()), value)
+    pub fn tag_send(&self, tag: Tag, message: T) {
+        self.send_(Some(tag.id()), message)
     }
 
-    fn send_(&self, tag: Option<i64>, value: T) {
+    fn send_(&self, tag: Option<i64>, message: T) {
         let tag = tag.unwrap_or(0);
         // Create new message
         unsafe { message::create_data(tag, 0) };
         // During serialization resources will add themself to the message
-        rmp_serde::encode::write(&mut MessageRw {}, &value).unwrap();
+        rmp_serde::encode::write(&mut MessageRw {}, &message).unwrap();
         // Send it
         unsafe { message::send(self.id) };
     }
@@ -159,6 +170,22 @@ where
     U: Serialize + DeserializeOwned,
 {
     pub fn request(&self, message: T) -> Result<U, decode::Error> {
+        self.request_(message, None)
+    }
+
+    pub fn request_timeout(&self, message: T, timeout: Duration) -> Result<U, decode::Error> {
+        self.request_(message, Some(timeout))
+    }
+
+    fn request_(&self, message: T, timeout: Option<Duration>) -> Result<U, decode::Error> {
+        let timeout_ms = match timeout {
+            // If waiting time is smaller than 1ms, round it up to 1ms.
+            Some(timeout) => match timeout.as_millis() {
+                0 => 1,
+                other => other as u32,
+            },
+            None => 0,
+        };
         // The response can be an arbitrary type and doesn't need to match the the current one.
         let one_time_mailbox = unsafe { Mailbox::<U>::new() };
         let sender_process = this(&one_time_mailbox);
@@ -169,7 +196,7 @@ where
         // During serialization resources will add themself to the message
         rmp_serde::encode::write(&mut MessageRw {}, &request).unwrap();
         // Send it and wait for an reply
-        unsafe { message::send_receive_skip_search(self.id, 0) };
+        unsafe { message::send_receive_skip_search(self.id, timeout_ms) };
         // Read the message out from the scratch buffer
         rmp_serde::from_read(MessageRw {})
     }

@@ -16,7 +16,7 @@ static mut COUNTER: i64 = 0;
 
 impl Tag {
     // Returns a unique tag inside of the process.
-    pub(crate) fn new() -> Tag {
+    pub fn new() -> Tag {
         unsafe {
             COUNTER += 1;
             Tag(COUNTER)
