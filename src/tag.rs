@@ -24,6 +24,12 @@ impl Tag {
     }
 }
 
+impl Default for Tag {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Tag;
