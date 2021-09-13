@@ -38,10 +38,11 @@ fn main(m: Mailbox<()>) {
         // execute on, and can't access the memory of
         // the parent process.
         println!("Hi! I'm a process.");
+        parent.send(());
     })
     .unwrap();
     // Wait for child to finish.
-    let _ignore = m.receive();
+    let _ = m.receive();
 }
 ```
 
