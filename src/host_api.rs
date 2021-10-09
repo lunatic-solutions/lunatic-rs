@@ -89,6 +89,7 @@ pub mod process {
         pub fn create_config(max_memory: u64, max_fuel: u64) -> u64;
         pub fn drop_config(config_id: u64);
         pub fn allow_namespace(config_id: u64, name: *const u8, name_len: usize);
+        pub fn preopen_dir(config_id: u64, dir: *const u8, dir_len: usize, id: *mut u64) -> u32;
         pub fn add_plugin(
             config_id: u64,
             plugin_data: *const u8,
