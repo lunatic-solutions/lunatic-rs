@@ -40,6 +40,25 @@ impl Config {
         unsafe { host_api::process::allow_namespace(self.id, namespace.as_ptr(), namespace.len()) };
     }
 
+    /// Grant access to the given host directory.
+    /// Returns error if host does not have access to directory.
+    pub fn preopen_dir(&mut self, dir: &str) -> Result<(), LunaticError> {
+        let mut error_id = 0;
+        let result = unsafe {
+            host_api::process::preopen_dir(
+                self.id,
+                dir.as_ptr(),
+                dir.len(),
+                &mut error_id as *mut u64,
+            )
+        };
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(LunaticError::from(error_id))
+        }
+    }
+
     /// Add a WebAssembly module as a plugin to this configuration.
     pub fn add_plugin(&mut self, plugin: &[u8]) -> Result<(), LunaticError> {
         let mut error_id = 0;
