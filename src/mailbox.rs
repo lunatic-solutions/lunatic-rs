@@ -59,17 +59,19 @@ impl<T: Serialize + DeserializeOwned> Mailbox<T> {
     /// Gets a message with a specific tag from the mailbox.
     ///
     /// If the mailbox is empty, this function will block until a new message arrives.
-    pub fn tag_receive(&self, tag: Tag) -> Result<T, ReceiveError> {
-        self.receive_(Some(tag.id()), None)
+    pub fn tag_receive(&self, tags: &[Tag]) -> Result<T, ReceiveError> {
+        let tags: Vec<i64> = tags.iter().map(|tag| tag.id()).collect();
+        self.receive_(Some(&tags), None)
     }
 
     /// Same as [`tag_receive`], but only waits for the duration of timeout for the tagged message.
-    pub fn tag_receive_timeout(&self, tag: Tag, timeout: Duration) -> Result<T, ReceiveError> {
-        self.receive_(Some(tag.id()), Some(timeout))
+    pub fn tag_receive_timeout(&self, tags: &[Tag], timeout: Duration) -> Result<T, ReceiveError> {
+        let tags: Vec<i64> = tags.iter().map(|tag| tag.id()).collect();
+        self.receive_(Some(&tags), Some(timeout))
     }
 
-    fn receive_(&self, tag: Option<i64>, timeout: Option<Duration>) -> Result<T, ReceiveError> {
-        let tag = tag.unwrap_or(0);
+    fn receive_(&self, tags: Option<&[i64]>, timeout: Option<Duration>) -> Result<T, ReceiveError> {
+        let tags = if let Some(tags) = tags { tags } else { &[] };
         let timeout_ms = match timeout {
             // If waiting time is smaller than 1ms, round it up to 1ms.
             Some(timeout) => match timeout.as_millis() {
@@ -78,7 +80,7 @@ impl<T: Serialize + DeserializeOwned> Mailbox<T> {
             },
             None => 0,
         };
-        let message_type = unsafe { message::receive(tag, timeout_ms) };
+        let message_type = unsafe { message::receive(tags.as_ptr(), tags.len(), timeout_ms) };
         // Mailbox can't receive Signal messages.
         assert_ne!(message_type, SIGNAL);
         // In case of timeout, return error.
@@ -132,17 +134,19 @@ impl<T: Serialize + DeserializeOwned> LinkMailbox<T> {
     /// Gets a message with a specific tag from the mailbox.
     ///
     /// If the mailbox is empty, this function will block until a new message arrives.
-    pub fn tag_receive(&self, tag: Tag) -> Message<T> {
-        self.receive_(Some(tag.id()), None)
+    pub fn tag_receive(&self, tags: &[Tag]) -> Message<T> {
+        let tags: Vec<i64> = tags.iter().map(|tag| tag.id()).collect();
+        self.receive_(Some(&tags), None)
     }
 
     /// Same as [`tag_receive`], but only waits for the duration of timeout for the tagged message.
-    pub fn tag_receive_timeout(&self, tag: Tag, timeout: Duration) -> Message<T> {
-        self.receive_(Some(tag.id()), Some(timeout))
+    pub fn tag_receive_timeout(&self, tags: &[Tag], timeout: Duration) -> Message<T> {
+        let tags: Vec<i64> = tags.iter().map(|tag| tag.id()).collect();
+        self.receive_(Some(&tags), Some(timeout))
     }
 
-    fn receive_(&self, tag: Option<i64>, timeout: Option<Duration>) -> Message<T> {
-        let tag = tag.unwrap_or(0);
+    fn receive_(&self, tags: Option<&[i64]>, timeout: Option<Duration>) -> Message<T> {
+        let tags = if let Some(tags) = tags { tags } else { &[] };
         let timeout_ms = match timeout {
             // If waiting time is smaller than 1ms, round it up to 1ms.
             Some(timeout) => match timeout.as_millis() {
@@ -151,7 +155,7 @@ impl<T: Serialize + DeserializeOwned> LinkMailbox<T> {
             },
             None => 0,
         };
-        let message_type = unsafe { message::receive(tag, timeout_ms) };
+        let message_type = unsafe { message::receive(tags.as_ptr(), tags.len(), timeout_ms) };
 
         if message_type == SIGNAL {
             let tag = unsafe { message::get_tag() };
