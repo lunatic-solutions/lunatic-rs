@@ -16,13 +16,31 @@ use crate::{
 const SIGNAL: u32 = 1;
 const TIMEOUT: u32 = 9027;
 
+pub trait Msg: Serialize + DeserializeOwned {
+    fn prepare_draft(&self);
+    fn from_message_buffer() -> Result<Self, ()>;
+}
+
+// Dummy impl. It should really serialize itself into draft buffer
+// or create itself from a reading buffer
+impl<T: Serialize + DeserializeOwned> Msg for T {
+    fn prepare_draft(&self) {
+        // TODO
+    }
+
+    fn from_message_buffer() -> Result<Self, ()> {
+        // TODO
+        Err(())
+    }
+}
+
 /// Mailbox for processes that are not linked, or linked and set to trap on notify signals.
 #[derive(Debug)]
-pub struct Mailbox<T: Serialize + DeserializeOwned> {
+pub struct Mailbox<T: Msg> {
     _phantom: PhantomData<T>,
 }
 
-impl<T: Serialize + DeserializeOwned> Mailbox<T> {
+impl<T: Msg> Mailbox<T> {
     /// Create a mailbox with a specific type.
     ///
     /// ### Safety
@@ -94,7 +112,7 @@ impl<T: Serialize + DeserializeOwned> Mailbox<T> {
     }
 }
 
-impl<T: Serialize + DeserializeOwned> TransformMailbox<T> for Mailbox<T> {
+impl<T: Msg> TransformMailbox<T> for Mailbox<T> {
     fn catch_link_panic(self) -> LinkMailbox<T> {
         unsafe { process::die_when_link_dies(0) };
         LinkMailbox::new()
@@ -108,11 +126,11 @@ impl<T: Serialize + DeserializeOwned> TransformMailbox<T> for Mailbox<T> {
 ///
 /// When a process is linked to others it will also receive messages if one of the others dies.
 #[derive(Debug)]
-pub struct LinkMailbox<T: Serialize + DeserializeOwned> {
+pub struct LinkMailbox<T: Msg> {
     _phantom: PhantomData<T>,
 }
 
-impl<T: Serialize + DeserializeOwned> LinkMailbox<T> {
+impl<T: Msg> LinkMailbox<T> {
     pub(crate) fn new() -> Self {
         Self {
             _phantom: PhantomData {},
@@ -174,7 +192,7 @@ impl<T: Serialize + DeserializeOwned> LinkMailbox<T> {
     }
 }
 
-impl<T: Serialize + DeserializeOwned> TransformMailbox<T> for LinkMailbox<T> {
+impl<T: Msg> TransformMailbox<T> for LinkMailbox<T> {
     fn catch_link_panic(self) -> LinkMailbox<T> {
         self
     }
@@ -223,7 +241,7 @@ impl<T> Message<T> {
 #[derive(Debug, Clone, Copy)]
 pub struct Signal {}
 
-pub trait TransformMailbox<T: Serialize + DeserializeOwned> {
+pub trait TransformMailbox<T: Msg> {
     fn catch_link_panic(self) -> LinkMailbox<T>;
     fn panic_if_link_panics(self) -> Mailbox<T>;
 }

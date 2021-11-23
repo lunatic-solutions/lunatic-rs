@@ -1,13 +1,13 @@
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use crate::{process::Process, tag::Tag};
+use crate::{mailbox::Msg, process::Process, tag::Tag};
 
 #[derive(Serialize, Deserialize)]
-#[serde(bound(deserialize = "T: Deserialize<'de>"))]
+#[serde(bound(deserialize = "T: DeserializeOwned"))]
 pub struct Request<T, U>
 where
-    T: Serialize,
-    U: Serialize + DeserializeOwned,
+    T: Msg,
+    U: Msg,
 {
     message: T,
     tag: Tag,
@@ -16,8 +16,8 @@ where
 
 impl<T, U> Request<T, U>
 where
-    T: Serialize + DeserializeOwned,
-    U: Serialize + DeserializeOwned,
+    T: Msg,
+    U: Msg,
 {
     /// Create a new request
     pub(crate) fn new(message: T, tag: Tag, sender_process: Process<U>) -> Self {

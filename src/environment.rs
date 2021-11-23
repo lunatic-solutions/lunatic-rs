@@ -1,12 +1,11 @@
 use std::{fmt::Display, u128};
 
-use serde::{de::DeserializeOwned, Serialize};
 use thiserror::Error;
 
 use crate::{
     error::LunaticError,
     host_api,
-    mailbox::{LinkMailbox, Mailbox, TransformMailbox},
+    mailbox::{LinkMailbox, Mailbox, Msg, TransformMailbox},
     process::{spawn_, Context, Process},
     tag::Tag,
 };
@@ -161,7 +160,7 @@ impl Environment {
     ///
     /// The version must be in a correct semver format. If a process was registered under the same
     /// name and exactly same version, it will be overwritten.
-    pub fn register<T: Serialize + DeserializeOwned>(
+    pub fn register<T: Msg>(
         &self,
         name: &str,
         version: &str,
@@ -184,11 +183,7 @@ impl Environment {
     }
 
     /// Unregister a process from the environment
-    pub fn unregister<T: Serialize + DeserializeOwned>(
-        &self,
-        name: &str,
-        version: &str,
-    ) -> Result<(), RegistryError> {
+    pub fn unregister<T: Msg>(&self, name: &str, version: &str) -> Result<(), RegistryError> {
         match unsafe {
             host_api::process::unregister(
                 name.as_ptr(),
@@ -209,10 +204,7 @@ impl Environment {
 /// Returns a process that was registered inside the environment that the caller belongs to.
 ///
 /// The query can be be an exact version or follow semver query rules (e.g. "^1.1").
-pub fn lookup<T: Serialize + DeserializeOwned>(
-    name: &str,
-    query: &str,
-) -> Result<Option<Process<T>>, RegistryError> {
+pub fn lookup<T: Msg>(name: &str, query: &str) -> Result<Option<Process<T>>, RegistryError> {
     let mut process_id: u64 = 0;
     match unsafe {
         host_api::process::lookup(
@@ -249,7 +241,7 @@ impl Drop for Module {
 impl Module {
     /// Spawn a new process and use `function` as the entry point. If the function takes arguments
     /// the passed in `params` need to exactly match their types.
-    pub fn spawn<T: Serialize + DeserializeOwned>(
+    pub fn spawn<T: Msg>(
         &self,
         function: &str,
         params: &[Param],
@@ -283,8 +275,8 @@ impl Module {
         params: &[Param],
     ) -> Result<(Process<T>, LinkMailbox<P>), LunaticError>
     where
-        T: Serialize + DeserializeOwned,
-        P: Serialize + DeserializeOwned,
+        T: Msg,
+        P: Msg,
         M: TransformMailbox<P>,
     {
         let mailbox = mailbox.catch_link_panic();
@@ -330,10 +322,7 @@ impl ThisModule {
     ///
     /// - `function` is the starting point of the new process. The new process doesn't share
     ///   memory with its parent, because of this the function can't capture anything from parents.
-    pub fn spawn<T: Serialize + DeserializeOwned>(
-        &self,
-        function: fn(Mailbox<T>),
-    ) -> Result<Process<T>, LunaticError> {
+    pub fn spawn<T: Msg>(&self, function: fn(Mailbox<T>)) -> Result<Process<T>, LunaticError> {
         // LinkMailbox<T> & Mailbox<T> are marker types and it's safe to cast to Mailbox<T> here if we
         //  set the `link` argument to `false`.
         let function = unsafe { std::mem::transmute(function) };
@@ -350,8 +339,8 @@ impl ThisModule {
         function: fn(Mailbox<T>),
     ) -> Result<(Process<T>, Tag, LinkMailbox<P>), LunaticError>
     where
-        T: Serialize + DeserializeOwned,
-        P: Serialize + DeserializeOwned,
+        T: Msg,
+        P: Msg,
         M: TransformMailbox<P>,
     {
         let mailbox = mailbox.catch_link_panic();
@@ -376,8 +365,8 @@ impl ThisModule {
         function: fn(Mailbox<T>),
     ) -> Result<(Process<T>, Mailbox<P>), LunaticError>
     where
-        T: Serialize + DeserializeOwned,
-        P: Serialize + DeserializeOwned,
+        T: Msg,
+        P: Msg,
         M: TransformMailbox<P>,
     {
         let mailbox = mailbox.panic_if_link_panics();
@@ -392,12 +381,12 @@ impl ThisModule {
     /// Spawns a new process from a function and context.
     ///
     /// - `context` is  data that we want to pass to the newly spawned process. It needs to impl.
-    ///    the [`Serialize + DeserializeOwned`] trait.
+    ///    the [`mailbox::Msg`] trait.
     ///
     /// - `function` is the starting point of the new process. The new process doesn't share
     ///   memory with its parent, because of this the function can't capture anything from parents.
     ///   The first argument of this function is going to be the received `context`.
-    pub fn spawn_with<C: Serialize + DeserializeOwned, T: Serialize + DeserializeOwned>(
+    pub fn spawn_with<C: Msg, T: Msg>(
         &self,
         context: C,
         function: fn(C, Mailbox<T>),
@@ -411,7 +400,7 @@ impl ThisModule {
     /// Spawns a new process from a function and context, and links it to the parent.
     ///
     /// - `context` is  data that we want to pass to the newly spawned process. It needs to impl.
-    ///    the [`Serialize + DeserializeOwned`] trait.
+    ///    the [`mailbox::Msg`] trait.
     ///
     /// - `function` is the starting point of the new process. The new process doesn't share
     ///   memory with its parent, because of this the function can't capture anything from parents.
@@ -423,9 +412,9 @@ impl ThisModule {
         function: fn(C, Mailbox<T>),
     ) -> Result<(Process<T>, Tag, LinkMailbox<P>), LunaticError>
     where
-        C: Serialize + DeserializeOwned,
-        T: Serialize + DeserializeOwned,
-        P: Serialize + DeserializeOwned,
+        C: Msg,
+        T: Msg,
+        P: Msg,
         M: TransformMailbox<P>,
     {
         let mailbox = mailbox.catch_link_panic();
@@ -437,7 +426,7 @@ impl ThisModule {
     /// Spawns a new process from a function and context, and links it to the parent.
     ///
     /// - `context` is  data that we want to pass to the newly spawned process. It needs to impl.
-    ///    the [`Serialize + DeserializeOwned`] trait.
+    ///    the [`mailbox::Msg`] trait.
     ///
     /// - `function` is the starting point of the new process. The new process doesn't share
     ///   memory with its parent, because of this the function can't capture anything from parents.
@@ -451,9 +440,9 @@ impl ThisModule {
         function: fn(C, Mailbox<T>),
     ) -> Result<(Process<T>, Mailbox<P>), LunaticError>
     where
-        C: Serialize + DeserializeOwned,
-        T: Serialize + DeserializeOwned,
-        P: Serialize + DeserializeOwned,
+        C: Msg,
+        T: Msg,
+        P: Msg,
         M: TransformMailbox<P>,
     {
         let mailbox = mailbox.panic_if_link_panics();
