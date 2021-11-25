@@ -16,21 +16,48 @@ use crate::{
 const SIGNAL: u32 = 1;
 const TIMEOUT: u32 = 9027;
 
-pub trait Msg: Serialize + DeserializeOwned {
+pub trait Msg: Sized {
     fn prepare_draft(&self);
-    fn from_message_buffer() -> Result<Self, ()>;
+    fn from_message_buffer() -> Result<Self, ReceiveError>;
 }
 
-// Dummy impl. It should really serialize itself into draft buffer
-// or create itself from a reading buffer
-impl<T: Serialize + DeserializeOwned> Msg for T {
+pub trait MessagePackMsg {}
+
+// TODO Just some quick impls to make tests pass. Think more about primitive types
+// TODO we can implement a simpler serialization for primitive types with bytes representation
+impl MessagePackMsg for u8 {}
+impl MessagePackMsg for u16 {}
+impl MessagePackMsg for i16 {}
+impl MessagePackMsg for u32 {}
+impl MessagePackMsg for i32 {}
+impl MessagePackMsg for u64 {}
+impl MessagePackMsg for i64 {}
+impl MessagePackMsg for usize {}
+impl MessagePackMsg for bool {}
+impl MessagePackMsg for Vec<i32> {}
+impl MessagePackMsg for String {}
+impl<A: MessagePackMsg, B: MessagePackMsg> MessagePackMsg for (A, B) {}
+
+impl Msg for () {
     fn prepare_draft(&self) {
-        // TODO
+        // do nothing
     }
 
-    fn from_message_buffer() -> Result<Self, ()> {
-        // TODO
-        Err(())
+    fn from_message_buffer() -> Result<Self, ReceiveError> {
+        Ok(())
+    }
+}
+
+impl<T: Serialize + DeserializeOwned + MessagePackMsg> Msg for T {
+    fn prepare_draft(&self) {
+        rmp_serde::encode::write(&mut MessageRw {}, &self).unwrap();
+    }
+
+    fn from_message_buffer() -> Result<Self, ReceiveError> {
+        match rmp_serde::from_read(MessageRw {}) {
+            Ok(result) => Ok(result),
+            Err(decode_error) => Err(ReceiveError::DeserializationFailed(decode_error)),
+        }
     }
 }
 
@@ -105,10 +132,12 @@ impl<T: Msg> Mailbox<T> {
         if message_type == TIMEOUT {
             return Err(ReceiveError::Timeout);
         }
-        match rmp_serde::from_read(MessageRw {}) {
-            Ok(result) => Ok(result),
-            Err(decode_error) => Err(ReceiveError::DeserializationFailed(decode_error)),
-        }
+
+        T::from_message_buffer()
+        //match rmp_serde::from_read(MessageRw {}) {
+        //    Ok(result) => Ok(result),
+        //    Err(decode_error) => Err(ReceiveError::DeserializationFailed(decode_error)),
+        //}
     }
 }
 
@@ -184,11 +213,7 @@ impl<T: Msg> LinkMailbox<T> {
             return Message::Normal(Err(ReceiveError::Timeout));
         }
 
-        let message = match rmp_serde::from_read(MessageRw {}) {
-            Ok(result) => Ok(result),
-            Err(decode_error) => Err(ReceiveError::DeserializationFailed(decode_error)),
-        };
-        Message::Normal(message)
+        Message::Normal(T::from_message_buffer())
     }
 }
 

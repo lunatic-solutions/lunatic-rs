@@ -1,9 +1,11 @@
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use crate::{
+    host_api::{self},
+    mailbox::Msg,
+    process::Process,
+    tag::Tag,
+    ReceiveError,
+};
 
-use crate::{mailbox::Msg, process::Process, tag::Tag};
-
-#[derive(Serialize, Deserialize)]
-#[serde(bound(deserialize = "T: DeserializeOwned"))]
 pub struct Request<T, U>
 where
     T: Msg,
@@ -12,6 +14,31 @@ where
     message: T,
     tag: Tag,
     sender_process: Process<U>,
+}
+
+impl<T, U> Msg for Request<T, U>
+where
+    T: Msg,
+    U: Msg,
+{
+    fn prepare_draft(&self) {
+        unsafe {
+            host_api::message::create_data(self.tag.id(), 0);
+            host_api::message::push_process(self.sender_process.id);
+        };
+        self.message.prepare_draft();
+    }
+
+    fn from_message_buffer() -> Result<Self, ReceiveError> {
+        let sender_process = Process::from(unsafe { host_api::message::take_process(0) });
+        let tag = Tag::from(unsafe { host_api::message::get_tag() });
+        let message = T::from_message_buffer()?;
+        Ok(Request {
+            message,
+            tag,
+            sender_process,
+        })
+    }
 }
 
 impl<T, U> Request<T, U>

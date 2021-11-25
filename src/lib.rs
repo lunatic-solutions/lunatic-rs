@@ -215,7 +215,9 @@ mod tag;
 
 pub use environment::{lookup, Config, Environment, Module, Param, ThisModule};
 pub use error::LunaticError;
-pub use mailbox::{LinkMailbox, Mailbox, Message, ReceiveError, Signal, TransformMailbox};
+pub use mailbox::{
+    LinkMailbox, Mailbox, Message, MessagePackMsg, ReceiveError, Signal, TransformMailbox,
+};
 pub use request::Request;
 pub use tag::Tag;
 

@@ -9,18 +9,18 @@ use std::{
 use crate::{
     environment::{params_to_vec, Param},
     error::LunaticError,
-    host_api::{self, message, process},
-    mailbox::{LinkMailbox, Mailbox, MessageRw, Msg, TransformMailbox},
+    host_api::{
+        self,
+        message::{self, create_data, push_process, take_process},
+        process,
+    },
+    mailbox::{LinkMailbox, Mailbox, Msg, TransformMailbox},
     request::Request,
     tag::Tag,
     Environment,
 };
 
 use rmp_serde::decode;
-use serde::{
-    de::{self, Visitor},
-    Deserialize, Deserializer, Serialize, Serializer,
-};
 
 /// A sandboxed computation.
 ///
@@ -36,6 +36,35 @@ pub struct Process<T: Msg> {
     // `drop_process()` anymore on it.
     consumed: UnsafeCell<bool>,
     _phantom: PhantomData<T>,
+}
+
+impl<T: Msg> Msg for Process<T> {
+    fn prepare_draft(&self) {
+        unsafe {
+            create_data(0, 0);
+            push_process(self.id);
+        };
+    }
+
+    fn from_message_buffer() -> Result<Self, crate::ReceiveError> {
+        Ok(Process::from(unsafe { take_process(0) }))
+    }
+}
+
+// TODO Maybe more natural would be (Msg, Process). Also useful (Msg, Vec<Process>)
+impl<T: Msg, M: Msg> Msg for (Process<T>, M) {
+    fn prepare_draft(&self) {
+        unsafe {
+            create_data(0, 0);
+            push_process(self.0.id);
+        };
+        self.0.prepare_draft();
+    }
+
+    fn from_message_buffer() -> Result<Self, crate::ReceiveError> {
+        let process = Process::from(unsafe { take_process(0) });
+        Ok((process, M::from_message_buffer()?))
+    }
 }
 
 impl<T: Msg> PartialEq for Process<T> {
@@ -73,47 +102,6 @@ impl<T: Msg> Drop for Process<T> {
         }
     }
 }
-impl<T: Msg> Serialize for Process<T> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        // Mark process as consumed
-        unsafe { *self.consumed.get() = true };
-
-        let index = unsafe { host_api::message::push_process(self.id) };
-        serializer.serialize_u64(index)
-    }
-}
-struct ProcessVisitor<T> {
-    _phantom: PhantomData<T>,
-}
-impl<'de, T: Msg> Visitor<'de> for ProcessVisitor<T> {
-    type Value = Process<T>;
-
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("an u64 index")
-    }
-
-    fn visit_u64<E>(self, index: u64) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        let id = unsafe { host_api::message::take_process(index) };
-        Ok(Process::from(id))
-    }
-}
-
-impl<'de, T: Msg> Deserialize<'de> for Process<T> {
-    fn deserialize<D>(deserializer: D) -> Result<Process<T>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_u64(ProcessVisitor {
-            _phantom: PhantomData {},
-        })
-    }
-}
 
 impl<T: Msg> Process<T> {
     pub(crate) fn from(id: u64) -> Self {
@@ -145,7 +133,8 @@ impl<T: Msg> Process<T> {
         // Create new message
         unsafe { message::create_data(tag, 0) };
         // During serialization resources will add themself to the message
-        rmp_serde::encode::write(&mut MessageRw {}, &message).unwrap();
+        //rmp_serde::encode::write(&mut MessageRw {}, &message).unwrap();
+        message.prepare_draft();
         // Send it
         unsafe { message::send(self.id) };
     }
@@ -193,11 +182,12 @@ where
         // Create new message
         unsafe { message::create_data(tag.id(), 0) };
         // During serialization resources will add themself to the message
-        rmp_serde::encode::write(&mut MessageRw {}, &request).unwrap();
+        request.prepare_draft();
+        //rmp_serde::encode::write(&mut MessageRw {}, &request).unwrap();
         // Send it and wait for an reply
         unsafe { message::send_receive_skip_search(self.id, timeout_ms) };
         // Read the message out from the scratch buffer
-        rmp_serde::from_read(MessageRw {})
+        U::from_message_buffer().map_err(|_| decode::Error::OutOfRange) // TODO no decode::Error
     }
 }
 
