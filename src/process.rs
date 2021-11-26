@@ -11,7 +11,7 @@ use crate::{
     error::LunaticError,
     host_api::{
         self,
-        message::{self, create_data, push_process, take_process},
+        message::{self, push_process, take_process},
         process,
     },
     mailbox::{LinkMailbox, Mailbox, Msg, TransformMailbox},
@@ -34,14 +34,14 @@ pub struct Process<T: Msg> {
     pub(crate) id: u64,
     // If the process handle is serialized it will be removed from our resources, so we can't call
     // `drop_process()` anymore on it.
-    consumed: UnsafeCell<bool>,
+    pub(crate) consumed: UnsafeCell<bool>,
     _phantom: PhantomData<T>,
 }
 
 impl<T: Msg> Msg for Process<T> {
     fn prepare_draft(&self) {
         unsafe {
-            create_data(0, 0);
+            *self.consumed.get() = true;
             push_process(self.id);
         };
     }
@@ -55,10 +55,10 @@ impl<T: Msg> Msg for Process<T> {
 impl<T: Msg, M: Msg> Msg for (Process<T>, M) {
     fn prepare_draft(&self) {
         unsafe {
-            create_data(0, 0);
+            *self.0.consumed.get() = true;
             push_process(self.0.id);
         };
-        self.0.prepare_draft();
+        self.1.prepare_draft();
     }
 
     fn from_message_buffer() -> Result<Self, crate::ReceiveError> {
@@ -133,7 +133,6 @@ impl<T: Msg> Process<T> {
         // Create new message
         unsafe { message::create_data(tag, 0) };
         // During serialization resources will add themself to the message
-        //rmp_serde::encode::write(&mut MessageRw {}, &message).unwrap();
         message.prepare_draft();
         // Send it
         unsafe { message::send(self.id) };

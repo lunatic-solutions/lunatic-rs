@@ -9,7 +9,7 @@ use crate::{
     error::LunaticError,
     host_api::{
         self,
-        message::{create_data, push_tcp_stream, take_tcp_stream},
+        message::{push_tcp_stream, take_tcp_stream},
     },
     mailbox::Msg,
 };
@@ -40,7 +40,6 @@ pub struct TcpStream {
 impl Msg for TcpStream {
     fn prepare_draft(&self) {
         unsafe {
-            create_data(0, 0);
             push_tcp_stream(self.id);
         };
     }

@@ -23,7 +23,7 @@ where
 {
     fn prepare_draft(&self) {
         unsafe {
-            host_api::message::create_data(self.tag.id(), 0);
+            *self.sender_process.consumed.get() = true;
             host_api::message::push_process(self.sender_process.id);
         };
         self.message.prepare_draft();
