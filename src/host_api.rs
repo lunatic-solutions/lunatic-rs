@@ -97,6 +97,12 @@ pub mod process {
             id: *mut u64,
         ) -> u32;
         pub fn create_environment(config_id: u64, id: *mut u64) -> u32;
+        pub fn create_remote_environment(
+            config_id: u64,
+            node_name: *const u8,
+            node_name_len: usize,
+            id: *mut u64,
+        ) -> u32;
         pub fn drop_environment(env_id: u64);
         pub fn add_module(
             env_id: u64,

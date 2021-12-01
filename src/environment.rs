@@ -107,11 +107,31 @@ impl Environment {
         Environment { id }
     }
 
-    /// Create a new environment from a configurationS
+    /// Create a new environment from a configuration
     pub fn new(config: Config) -> Result<Self, LunaticError> {
         let mut env_or_error_id = 0;
         let result = unsafe {
             host_api::process::create_environment(config.id, &mut env_or_error_id as *mut u64)
+        };
+        if result == 0 {
+            Ok(Self {
+                id: env_or_error_id,
+            })
+        } else {
+            Err(LunaticError::from(env_or_error_id))
+        }
+    }
+
+    /// Create a new environment on a remote node
+    pub fn new_remote(node_name: &str, config: Config) -> Result<Self, LunaticError> {
+        let mut env_or_error_id = 0;
+        let result = unsafe {
+            host_api::process::create_remote_environment(
+                config.id,
+                node_name.as_ptr(),
+                node_name.len(),
+                &mut env_or_error_id as *mut u64,
+            )
         };
         if result == 0 {
             Ok(Self {
