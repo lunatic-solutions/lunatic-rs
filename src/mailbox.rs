@@ -4,63 +4,17 @@ use std::{
     time::Duration,
 };
 
-use rmp_serde::decode;
-use serde::{de::DeserializeOwned, Serialize};
 use thiserror::Error;
 
 use crate::{
     host_api::{message, process},
+    message::DeserializeError,
     tag::Tag,
+    Msg,
 };
 
 const SIGNAL: u32 = 1;
 const TIMEOUT: u32 = 9027;
-
-pub trait Msg: Sized {
-    fn prepare_draft(&self);
-    fn from_message_buffer() -> Result<Self, ReceiveError>;
-}
-
-pub trait MessagePackMsg {}
-
-// TODO Just some quick impls to make tests pass. Think more about primitive types
-// TODO we can implement a simpler serialization for primitive types with bytes representation
-impl MessagePackMsg for u8 {}
-impl MessagePackMsg for u16 {}
-impl MessagePackMsg for i16 {}
-impl MessagePackMsg for u32 {}
-impl MessagePackMsg for i32 {}
-impl MessagePackMsg for u64 {}
-impl MessagePackMsg for i64 {}
-impl MessagePackMsg for usize {}
-impl MessagePackMsg for bool {}
-impl MessagePackMsg for Vec<i32> {}
-impl MessagePackMsg for String {}
-impl<A: MessagePackMsg, B: MessagePackMsg> MessagePackMsg for (A, B) {}
-
-impl Msg for () {
-    fn prepare_draft(&self) {
-        // do nothing
-    }
-
-    fn from_message_buffer() -> Result<Self, ReceiveError> {
-        Ok(())
-    }
-}
-
-impl<T: Serialize + DeserializeOwned + MessagePackMsg> Msg for T {
-    fn prepare_draft(&self) {
-        rmp_serde::encode::write(&mut MessageRw {}, &self).unwrap();
-    }
-
-    fn from_message_buffer() -> Result<Self, ReceiveError> {
-        match rmp_serde::from_read(MessageRw {}) {
-            Ok(result) => Ok(result),
-            Err(decode_error) => Err(ReceiveError::DeserializationFailed(decode_error)),
-        }
-    }
-}
-
 /// Mailbox for processes that are not linked, or linked and set to trap on notify signals.
 #[derive(Debug)]
 pub struct Mailbox<T: Msg> {
@@ -231,7 +185,7 @@ impl<T: Msg> TransformMailbox<T> for LinkMailbox<T> {
 #[derive(Error, Debug)]
 pub enum ReceiveError {
     #[error("Deserialization failed")]
-    DeserializationFailed(#[from] decode::Error),
+    SerializationError(#[from] DeserializeError),
     #[error("Timed out while waiting for message")]
     Timeout,
 }

@@ -7,11 +7,7 @@ use std::{
 
 use crate::{
     error::LunaticError,
-    host_api::{
-        self,
-        message::{push_tcp_stream, take_tcp_stream},
-    },
-    mailbox::Msg,
+    host_api::{self},
 };
 
 /// A TCP connection.
@@ -35,18 +31,6 @@ pub struct TcpStream {
     // If the TCP stream is serialized it will be removed from our resources, so we can't call
     // `drop_tcp_stream()` anymore on it.
     consumed: UnsafeCell<bool>,
-}
-
-impl Msg for TcpStream {
-    fn prepare_draft(&self) {
-        unsafe {
-            push_tcp_stream(self.id);
-        };
-    }
-
-    fn from_message_buffer() -> std::result::Result<Self, crate::ReceiveError> {
-        Ok(TcpStream::from(unsafe { take_tcp_stream(0) }))
-    }
 }
 
 impl Drop for TcpStream {
@@ -234,5 +218,50 @@ impl Read for TcpStream {
             let lunatic_error = LunaticError::from(nread_or_error_id);
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
+    }
+}
+
+use serde::{
+    de::{self, Visitor},
+    Deserialize, Deserializer, Serialize,
+};
+
+impl Serialize for TcpStream {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // Mark process as consumed
+        unsafe { *self.consumed.get() = true };
+        // TODO: Timeout info is not serialized
+        let index = unsafe { host_api::message::push_tcp_stream(self.id) };
+        serializer.serialize_u64(index)
+    }
+}
+
+struct TcpStreamVisitor;
+
+impl<'de> Visitor<'de> for TcpStreamVisitor {
+    type Value = TcpStream;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("an u64 index")
+    }
+
+    fn visit_u64<E>(self, index: u64) -> std::result::Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        let id = unsafe { host_api::message::take_tcp_stream(index) };
+        Ok(TcpStream::from(id))
+    }
+}
+
+impl<'de> Deserialize<'de> for TcpStream {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<TcpStream, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_u64(TcpStreamVisitor)
     }
 }

@@ -5,9 +5,10 @@ use thiserror::Error;
 use crate::{
     error::LunaticError,
     host_api,
-    mailbox::{LinkMailbox, Mailbox, Msg, TransformMailbox},
+    mailbox::{LinkMailbox, Mailbox, TransformMailbox},
     process::{spawn_, Context, Process},
     tag::Tag,
+    Msg,
 };
 
 /// Environment configuration

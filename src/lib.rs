@@ -208,6 +208,7 @@ mod environment;
 mod error;
 mod host_api;
 mod mailbox;
+pub mod message;
 pub mod net;
 pub mod process;
 mod request;
@@ -215,9 +216,9 @@ mod tag;
 
 pub use environment::{lookup, Config, Environment, Module, Param, ThisModule};
 pub use error::LunaticError;
-pub use mailbox::{
-    LinkMailbox, Mailbox, Message, MessagePackMsg, ReceiveError, Signal, TransformMailbox,
-};
+pub use mailbox::{LinkMailbox, Mailbox, Message, ReceiveError, Signal, TransformMailbox};
+pub use message::Msg;
+
 pub use request::Request;
 pub use tag::Tag;
 

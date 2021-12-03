@@ -106,42 +106,56 @@ fn timeout(m: Mailbox<u64>) {
     };
 }
 
-// TODO message (Process, [Tag])
+#[lunatic::test]
+fn filter_by_tags(m: Mailbox<u64>) {
+    let tags = [
+        (Tag::new(), 0),
+        (Tag::new(), 1),
+        (Tag::new(), 2),
+        (Tag::new(), 3),
+        (Tag::new(), 4),
+        (Tag::new(), 5),
+        (Tag::new(), 6),
+        (Tag::new(), 7),
+    ];
+    let this = process::this(&m);
+    process::spawn_with((this, tags), |(parent, tags), _: Mailbox<()>| {
+        for tag in tags {
+            parent.tag_send(tag.0, tag.1);
+        }
+    })
+    .unwrap();
+
+    let receive_tags = [tags[7].0, tags[1].0, tags[3].0, tags[6].0, tags[5].0];
+    // First tag in the mailbox should be 1.
+    assert_eq!(m.tag_receive(&receive_tags).unwrap(), 1);
+    assert_eq!(m.tag_receive(&receive_tags).unwrap(), 3);
+    assert_eq!(m.tag_receive(&receive_tags).unwrap(), 5);
+    assert_eq!(m.tag_receive(&receive_tags).unwrap(), 6);
+    assert_eq!(m.tag_receive(&receive_tags).unwrap(), 7);
+    // Asking for messages that are not part of the mailbox should timeout.
+    assert!(m
+        .tag_receive_timeout(&receive_tags, Duration::new(0, 100_000)) // 100 us
+        .is_err());
+    // The first next message should be 0
+    assert_eq!(m.receive().unwrap(), 0);
+    assert_eq!(m.receive().unwrap(), 2);
+    assert_eq!(m.receive().unwrap(), 4);
+}
+
+//#[cfg(feature = "serde_messagepack")]
 //#[lunatic::test]
-//fn filter_by_tags(m: Mailbox<u64>) {
-//    let tags = [
-//        (Tag::new(), 0),
-//        (Tag::new(), 1),
-//        (Tag::new(), 2),
-//        (Tag::new(), 3),
-//        (Tag::new(), 4),
-//        (Tag::new(), 5),
-//        (Tag::new(), 6),
-//        (Tag::new(), 7),
-//    ];
+//fn test_different_serialization(m: Mailbox<lunatic::message::MessagePack<X>>) {
+//    use lunatic::message::MessagePack;
+//
 //    let this = process::this(&m);
-//    process::spawn_with((this, tags), |(parent, tags), _: Mailbox<()>| {
-//        for tag in tags {
-//            parent.tag_send(tag.0, tag.1);
-//        }
+//    let _child = process::spawn_with(this, |parent, _: Mailbox<()>| {
+//        let x = X::some_x();
+//        parent.send(MessagePack(x));
 //    })
 //    .unwrap();
-//
-//    let receive_tags = [tags[7].0, tags[1].0, tags[3].0, tags[6].0, tags[5].0];
-//    // First tag in the mailbox should be 1.
-//    assert_eq!(m.tag_receive(&receive_tags).unwrap(), 1);
-//    assert_eq!(m.tag_receive(&receive_tags).unwrap(), 3);
-//    assert_eq!(m.tag_receive(&receive_tags).unwrap(), 5);
-//    assert_eq!(m.tag_receive(&receive_tags).unwrap(), 6);
-//    assert_eq!(m.tag_receive(&receive_tags).unwrap(), 7);
-//    // Asking for messages that are not part of the mailbox should timeout.
-//    assert!(m
-//        .tag_receive_timeout(&receive_tags, Duration::new(0, 100_000)) // 100 us
-//        .is_err());
-//    // The first next message should be 0
-//    assert_eq!(m.receive().unwrap(), 0);
-//    assert_eq!(m.receive().unwrap(), 2);
-//    assert_eq!(m.receive().unwrap(), 4);
+//    let expected = X::some_x();
+//    assert_eq!(m.receive().unwrap().0, expected);
 //}
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
@@ -171,4 +185,21 @@ struct X {
     enc: E,
 }
 
-impl lunatic::MessagePackMsg for X {}
+impl X {
+    pub fn some_x() -> Self {
+        X {
+            y: Y {
+                string: String::from("Hello!"),
+            },
+            m: M { hello: 1337 },
+            v: vec![(1, 1.22), (55555, 3.14)],
+            en: E::A(1, 2),
+            enb: E::B("A longer string #$".to_string()),
+            enc: E::C,
+        }
+    }
+}
+
+impl lunatic::Msg for X {
+    type Serializer = lunatic::message::MessagePack<X>;
+}

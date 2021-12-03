@@ -1,9 +1,8 @@
 use crate::{
     host_api::{self},
-    mailbox::Msg,
+    message::{DeserializeError, Msg, Serializer},
     process::Process,
     tag::Tag,
-    ReceiveError,
 };
 
 pub struct Request<T, U>
@@ -16,23 +15,25 @@ where
     sender_process: Process<U>,
 }
 
-impl<T, U> Msg for Request<T, U>
+impl<T, U> Serializer for Request<T, U>
 where
     T: Msg,
     U: Msg,
 {
-    fn prepare_draft(&self) {
+    type Data = Self;
+
+    fn serialize(data: &Self::Data, _writer: &mut dyn std::io::Write) {
         unsafe {
-            *self.sender_process.consumed.get() = true;
-            host_api::message::push_process(self.sender_process.id);
+            *data.sender_process.consumed.get() = true;
+            host_api::message::push_process(data.sender_process.id);
         };
-        self.message.prepare_draft();
+        data.message.prepare_draft();
     }
 
-    fn from_message_buffer() -> Result<Self, ReceiveError> {
+    fn deserialize(reader: &mut dyn std::io::Read) -> Result<Self::Data, DeserializeError> {
         let sender_process = Process::from(unsafe { host_api::message::take_process(0) });
         let tag = Tag::from(unsafe { host_api::message::get_tag() });
-        let message = T::from_message_buffer()?;
+        let message = T::Serializer::deserialize(reader)?;
         Ok(Request {
             message,
             tag,

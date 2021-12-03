@@ -9,11 +9,18 @@ readme = "Readme.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["serde_messagepack", "serde_json"]
+serde_messagepack = ["rmp-serde"]
+
 [dependencies]
 thiserror = "1.0"
-serde = { version = "1.0", features = ["derive"] }
-rmp-serde = "0.15"
 lunatic-macros = { version = "^0.6.1", path = "./lunatic-macros" }
+
+serde = { version = "1.0", features = ["derive"]}
+rmp-serde = { version = "0.15", optional = true }
+serde_json = { version = "1.0.66", optional = true }
+bincode = "1.3.3"
 
 [workspace]
 members = [
