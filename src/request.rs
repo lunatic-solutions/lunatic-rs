@@ -15,22 +15,20 @@ where
     sender_process: Process<U>,
 }
 
-impl<T, U> Serializer for Request<T, U>
+impl<T, U> Serializer<Self> for Request<T, U>
 where
     T: Msg,
     U: Msg,
 {
-    type Data = Self;
-
-    fn serialize(data: &Self::Data, _writer: &mut dyn std::io::Write) {
+    fn serialize(data: &Self, _writer: &mut dyn std::io::Write) {
         unsafe {
             *data.sender_process.consumed.get() = true;
             host_api::message::push_process(data.sender_process.id);
         };
-        data.message.prepare_draft();
+        data.message.write();
     }
 
-    fn deserialize(reader: &mut dyn std::io::Read) -> Result<Self::Data, DeserializeError> {
+    fn deserialize(reader: &mut dyn std::io::Read) -> Result<Self, DeserializeError> {
         let sender_process = Process::from(unsafe { host_api::message::take_process(0) });
         let tag = Tag::from(unsafe { host_api::message::get_tag() });
         let message = T::Serializer::deserialize(reader)?;

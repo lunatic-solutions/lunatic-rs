@@ -143,20 +143,20 @@ fn filter_by_tags(m: Mailbox<u64>) {
     assert_eq!(m.receive().unwrap(), 4);
 }
 
-//#[cfg(feature = "serde_messagepack")]
-//#[lunatic::test]
-//fn test_different_serialization(m: Mailbox<lunatic::message::MessagePack<X>>) {
-//    use lunatic::message::MessagePack;
-//
-//    let this = process::this(&m);
-//    let _child = process::spawn_with(this, |parent, _: Mailbox<()>| {
-//        let x = X::some_x();
-//        parent.send(MessagePack(x));
-//    })
-//    .unwrap();
-//    let expected = X::some_x();
-//    assert_eq!(m.receive().unwrap().0, expected);
-//}
+#[cfg(feature = "serde_messagepack")]
+#[lunatic::test]
+fn test_msgpack_wrap_serialization(m: Mailbox<lunatic::message::MessagePack<X>>) {
+    use lunatic::message::MessagePack;
+
+    let this = process::this(&m);
+    let _child = process::spawn_with(this, |parent, _: Mailbox<()>| {
+        let x = X::some_x();
+        parent.send(MessagePack(x));
+    })
+    .unwrap();
+    let expected = X::some_x();
+    assert_eq!(m.receive().unwrap().0, expected);
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
 struct Y {

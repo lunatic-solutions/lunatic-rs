@@ -87,7 +87,7 @@ impl<T: Msg> Mailbox<T> {
             return Err(ReceiveError::Timeout);
         }
 
-        T::from_message_buffer()
+        T::read()
         //match rmp_serde::from_read(MessageRw {}) {
         //    Ok(result) => Ok(result),
         //    Err(decode_error) => Err(ReceiveError::DeserializationFailed(decode_error)),
@@ -167,7 +167,7 @@ impl<T: Msg> LinkMailbox<T> {
             return Message::Normal(Err(ReceiveError::Timeout));
         }
 
-        Message::Normal(T::from_message_buffer())
+        Message::Normal(T::read())
     }
 }
 

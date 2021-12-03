@@ -5,14 +5,12 @@ use super::{DeserializeError, Serializer};
 
 pub trait Bincode: serde::Serialize + serde::de::DeserializeOwned {}
 
-impl<T: Bincode> Serializer for T {
-    type Data = Self;
-
-    fn serialize(data: &Self::Data, writer: &mut dyn Write) {
+impl<T: Bincode> Serializer<T> for T {
+    fn serialize(data: &T, writer: &mut dyn Write) {
         bincode::serialize_into(writer, data).unwrap();
     }
 
-    fn deserialize(reader: &mut dyn Read) -> Result<Self::Data, DeserializeError> {
+    fn deserialize(reader: &mut dyn Read) -> Result<T, DeserializeError> {
         bincode::deserialize_from(reader).map_err(|e| e.into())
     }
 }

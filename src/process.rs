@@ -103,7 +103,7 @@ impl<T: Msg> Process<T> {
         // Create new message
         unsafe { message::create_data(tag, 0) };
         // During serialization resources will add themself to the message
-        message.prepare_draft();
+        message.write();
         // Send it
         unsafe { message::send(self.id) };
     }
@@ -151,12 +151,12 @@ where
         // Create new message
         unsafe { message::create_data(tag.id(), 0) };
         // During serialization resources will add themself to the message
-        request.prepare_draft();
+        request.write();
         //rmp_serde::encode::write(&mut MessageRw {}, &request).unwrap();
         // Send it and wait for an reply
         unsafe { message::send_receive_skip_search(self.id, timeout_ms) };
         // Read the message out from the scratch buffer
-        U::from_message_buffer()
+        U::read()
     }
 }
 
