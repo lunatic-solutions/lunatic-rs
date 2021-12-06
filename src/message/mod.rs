@@ -28,17 +28,3 @@ pub use self::serde_json::Json;
 
 #[cfg(feature = "serde_messagepack")]
 pub use serde_messagepack::MessagePack;
-
-// Testing types TODO remove
-
-#[cfg(feature = "serde_messagepack")]
-mod testing {
-    use super::{MessagePack, Msg};
-
-    #[derive(serde::Serialize, serde::Deserialize)]
-    struct X {}
-
-    impl Msg for X {
-        type Serializer = MessagePack<Self>;
-    }
-}
