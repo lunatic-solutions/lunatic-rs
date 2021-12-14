@@ -211,6 +211,7 @@ mod mailbox;
 pub mod net;
 pub mod process;
 mod request;
+pub mod serializer;
 mod tag;
 
 pub use environment::{lookup, Config, Environment, Module, Param, ThisModule};
