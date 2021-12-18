@@ -43,7 +43,7 @@ pub enum DecodeError {
 /// and `serde::Deserialize` traits. We can express this dependency in the following way:
 /// ```no_run
 /// impl<M: serde::Serialize + serde::Deserialize> Serializer<M> for Bincode {
-///     fn encode(&self, message: M) -> Error;
+///     fn encode(message: M) -> Error;
 ///         // `message` is guaranteed to implement the `serde::Serialize`
 ///         // trait and can be encoded here using `Bincode`.
 ///     }
@@ -54,10 +54,10 @@ pub enum DecodeError {
 /// Serializers that can work with the [`Read`](std::io::Read) & [`Write`](std::io::Write) traits
 /// are generally better suited for lunatic's ffi, that works on a streaming basis and can avoid
 /// unnecessary copies. Serializer that require raw access to chunks of mutable memories (e.g.
-/// Prost) are not supported.
+/// Prost) require additional copies between guest and host memories.
 pub trait Serializer<M> {
-    fn encode(&self, message: &M) -> Result<(), EncodeError>;
-    fn decode(&self) -> Result<M, DecodeError>;
+    fn encode(message: &M) -> Result<(), EncodeError>;
+    fn decode() -> Result<M, DecodeError>;
 }
 
 /// The `Bincode` serializer can serialize any message that satisfies the traits:
@@ -68,17 +68,17 @@ pub trait Serializer<M> {
 /// messages are extracted from a stream that lives inside of the VM, has an unknown lifetime and
 /// can't be referenced from the guest. `serde::de::DeserializeOwned` is automatically implemented
 /// for each type that also implements `serde::Deserialize<'de>`.
-struct Bincode {}
+pub struct Bincode {}
 
 impl<M> Serializer<M> for Bincode
 where
     M: serde::Serialize + serde::de::DeserializeOwned,
 {
-    fn encode(&self, message: &M) -> Result<(), EncodeError> {
+    fn encode(message: &M) -> Result<(), EncodeError> {
         bincode::serialize_into(MessageRw {}, message).map_err(|err| err.into())
     }
 
-    fn decode(&self) -> Result<M, DecodeError> {
+    fn decode() -> Result<M, DecodeError> {
         bincode::deserialize_from(MessageRw {}).map_err(|err| err.into())
     }
 }
@@ -89,17 +89,17 @@ where
 ///
 /// Refer to the [`Bincode`] docs for the difference between `serde::de::DeserializeOwned` and
 /// `serde::Deserialize<'de>`.
-struct MessagePack {}
+pub struct MessagePack {}
 
 impl<M> Serializer<M> for MessagePack
 where
     M: serde::Serialize + serde::de::DeserializeOwned,
 {
-    fn encode(&self, message: &M) -> Result<(), EncodeError> {
+    fn encode(message: &M) -> Result<(), EncodeError> {
         rmp_serde::encode::write(&mut MessageRw {}, message).map_err(|err| err.into())
     }
 
-    fn decode(&self) -> Result<M, DecodeError> {
+    fn decode() -> Result<M, DecodeError> {
         rmp_serde::decode::from_read(MessageRw {}).map_err(|err| err.into())
     }
 }
@@ -110,45 +110,45 @@ where
 ///
 /// Refer to the [`Bincode`] docs for the difference between `serde::de::DeserializeOwned` and
 /// `serde::Deserialize<'de>`.
-struct Json {}
+pub struct Json {}
 
 impl<M> Serializer<M> for Json
 where
     M: serde::Serialize + serde::de::DeserializeOwned,
 {
-    fn encode(&self, message: &M) -> Result<(), EncodeError> {
+    fn encode(message: &M) -> Result<(), EncodeError> {
         serde_json::to_writer(MessageRw {}, message).map_err(|err| err.into())
     }
 
-    fn decode(&self) -> Result<M, DecodeError> {
+    fn decode() -> Result<M, DecodeError> {
         serde_json::from_reader(MessageRw {}).map_err(|err| err.into())
     }
 }
 
 /// The `ProtocolBuffers` serializer can serialize any message that satisfies the trait
 /// `protobuf::Message`.
-struct ProtocolBuffers {}
+pub struct ProtocolBuffers {}
 
 impl<M> Serializer<M> for ProtocolBuffers
 where
     M: protobuf::Message,
 {
-    fn encode(&self, message: &M) -> Result<(), EncodeError> {
+    fn encode(message: &M) -> Result<(), EncodeError> {
         message
             .write_to_writer(&mut MessageRw {})
             .map_err(|err| err.into())
     }
 
-    fn decode(&self) -> Result<M, DecodeError> {
+    fn decode() -> Result<M, DecodeError> {
         M::parse_from_reader(&mut MessageRw {}).map_err(|err| err.into())
     }
 }
 
-// A helper struct to read from and write to the message scratch buffer.
-//
-// It simplifies streaming serialization/deserialization directly from the host and avoids copies.
-// Most serde based serializers can work directly with streaming serialization.
-struct MessageRw {}
+/// A helper struct to read from and write to the message scratch buffer.
+///
+/// It simplifies streaming serialization/deserialization directly from the host and avoids copies.
+/// Most serde based serializers can work directly with streaming serialization.
+pub struct MessageRw {}
 
 impl std::io::Read for MessageRw {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
