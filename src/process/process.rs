@@ -5,7 +5,7 @@ use crate::{
     environment::{params_to_vec, Param},
     host_api,
     serializer::{Bincode, Serializer},
-    LunaticError, Mailbox,
+    LunaticError, Mailbox, Tag,
 };
 
 /// A handle to a process that can receive messages of type `M`, serialized by a serializer of type
@@ -42,7 +42,16 @@ where
 
     pub fn send(&self, message: M) {
         // Create new message.
-        unsafe { host_api::message::create_data(0, 0) };
+        unsafe { host_api::message::create_data(1, 0) };
+        // During serialization resources will add themself to the message.
+        S::encode(&message).unwrap();
+        // Send it!
+        unsafe { host_api::message::send(self.id) };
+    }
+
+    pub(crate) fn tag_send(&self, tag: Tag, message: M) {
+        // Create new message.
+        unsafe { host_api::message::create_data(tag.id(), 0) };
         // During serialization resources will add themself to the message.
         S::encode(&message).unwrap();
         // Send it!
@@ -78,7 +87,7 @@ where
 {
     type Handler = fn(capture: C, arg: Mailbox<M, S>);
 
-    fn spawn(captured: C, handler: Self::Handler) -> Result<Process<M, S>, LunaticError>
+    fn spawn(captured: C, handler: Self::Handler) -> Result<Self, LunaticError>
     where
         Self: Sized,
     {

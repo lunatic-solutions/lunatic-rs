@@ -1,6 +1,7 @@
 use crate::{host_api, LunaticError};
 
 mod process;
+mod task;
 
 /// [`IntoProcess`] is a helper trait to generalize over the [`spawn`] function.
 ///
@@ -12,7 +13,7 @@ mod process;
 /// process. It's usually used together in combination with the `Handler` type to define a function
 /// signature that receives the transferred state as an argument.
 pub trait IntoProcess<C> {
-    // The type of the 2nd Handler passed to the [`spawn`] function.
+    // The type of the 2nd argument passed to the [`spawn`] function.
     type Handler;
     // Spawn's a new process and returns a handle to it.
     fn spawn(capture: C, handler: Self::Handler) -> Result<Self, LunaticError>
@@ -42,7 +43,7 @@ where
 /// process. It's usually used together in combination with the `Handler` type to define a function
 /// signature that receives the transferred state as an argument.
 pub trait IntoProcessLink<C> {
-    // The type of the 2nd Handler passed to the [`spawn`] function.
+    // The type of the 2nd argument passed to the [`spawn`] function.
     type Handler;
     // Spawn's a new process and returns a handle to it.
     fn spawn_link(capture: C, handler: Self::Handler) -> Result<Self, LunaticError>
@@ -62,8 +63,9 @@ where
     <T as IntoProcessLink<C>>::spawn_link(capture, handler)
 }
 
-// re-export [`Process`]
+// re-export [`Process`], [`Task`]
 pub use process::Process;
+pub use task::Task;
 
 /// Suspends the current process for `milliseconds`.
 pub fn sleep(milliseconds: u64) {

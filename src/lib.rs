@@ -210,14 +210,14 @@ mod host_api;
 mod mailbox;
 pub mod net;
 pub mod process;
-mod request;
+// mod request;
 pub mod serializer;
 mod tag;
 
-pub use environment::{lookup, Config, Environment, Module, Param, ThisModule};
+// pub use environment::{lookup, Config, Environment, Module, Param, ThisModule};
 pub use error::LunaticError;
-pub use mailbox::{LinkMailbox, Mailbox, Message, ReceiveError, Signal, TransformMailbox};
-pub use request::Request;
+pub use mailbox::{Mailbox, ReceiveError};
+// pub use request::Request;
 pub use tag::Tag;
 
 pub use lunatic_macros::main;

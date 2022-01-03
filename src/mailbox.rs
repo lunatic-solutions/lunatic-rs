@@ -5,6 +5,7 @@ use thiserror::Error;
 use crate::{
     host_api::message,
     serializer::{Bincode, DecodeError, Serializer},
+    Tag,
 };
 
 const SIGNAL: u32 = 1;
@@ -43,7 +44,19 @@ where
     ///
     /// This function will panic if the received message can't be deserialized into `M`.
     pub fn receive(&self) -> M {
-        self.receive_(None, None).unwrap()
+        self.receive_(Some(&[1]), None).unwrap()
+    }
+
+    /// Gets next message from process' mailbox that is tagged with one of the `tags`.
+    ///
+    /// If no such message exists, this function will block until a new message arrives.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the received message can't be deserialized into `M`.
+    pub(crate) fn tag_receive(&self, tags: &[Tag]) -> M {
+        let tags: Vec<i64> = tags.into_iter().map(|tag| tag.id()).collect();
+        self.receive_(Some(&tags), None).unwrap()
     }
 
     /// Same as [`receive`], but only waits for the duration of timeout for the message.
