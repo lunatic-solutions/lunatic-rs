@@ -1,6 +1,7 @@
 use crate::{host_api, LunaticError};
 
 mod process;
+mod server;
 mod task;
 
 /// [`IntoProcess`] is a helper trait to generalize over the [`spawn`] function.
@@ -63,8 +64,9 @@ where
     <T as IntoProcessLink<C>>::spawn_link(capture, handler)
 }
 
-// re-export [`Process`], [`Task`]
+// re-export [`Process`], [`Server`], [`Task`]
 pub use process::Process;
+pub use server::Server;
 pub use task::Task;
 
 /// Suspends the current process for `milliseconds`.

@@ -24,7 +24,6 @@ where
     id: u64,
     // A tag is used to match the return message to the correct task.
     tag: Tag,
-
     serializer_type: PhantomData<(M, S)>,
 }
 
@@ -62,11 +61,11 @@ where
 {
     type Handler = fn(capture: C) -> M;
 
-    fn spawn(captured: C, handler: Self::Handler) -> Result<Task<M, S>, LunaticError>
+    fn spawn(capture: C, handler: Self::Handler) -> Result<Task<M, S>, LunaticError>
     where
         Self: Sized,
     {
-        spawn(false, captured, handler)
+        spawn(false, capture, handler)
     }
 }
 
@@ -76,23 +75,19 @@ where
 {
     type Handler = fn(capture: C) -> M;
 
-    fn spawn_link(captured: C, handler: Self::Handler) -> Result<Task<M, S>, LunaticError>
+    fn spawn_link(capture: C, handler: Self::Handler) -> Result<Task<M, S>, LunaticError>
     where
         Self: Sized,
     {
-        spawn(true, captured, handler)
+        spawn(true, capture, handler)
     }
 }
 
 // `spawn` performs a low level dance that will turn a high level rust function and captured
 // variable into a correct lunatic task.
 //
-// If `module_id` is None it will use the current module & environment, if it's `Some` it will
-// use the current module but spawned inside another environment. Look at [`ThisModule`] for
-// more information about sending the current module to another environment.
-//
 // For more info on how this function works, read the explanation inside super::process::spawn.
-fn spawn<C, M, S>(link: bool, captured: C, entry: fn(C) -> M) -> Result<Task<M, S>, LunaticError>
+fn spawn<C, M, S>(link: bool, capture: C, entry: fn(C) -> M) -> Result<Task<M, S>, LunaticError>
 where
     S: Serializer<(Process<M, S>, Tag, C)> + Serializer<M>,
 {
@@ -129,7 +124,7 @@ where
         let this_id = unsafe { host_api::process::this() };
         let this_proc: Process<M, S> = unsafe { Process::from(this_id) };
         // Send all data to child required
-        child.send((this_proc, tag, captured));
+        child.send((this_proc, tag, capture));
         Ok(child)
     } else {
         Err(LunaticError::from(id))
@@ -141,9 +136,9 @@ fn type_helper_wrapper<C, M, S>(function: usize)
 where
     S: Serializer<(Process<M, S>, Tag, C)> + Serializer<M>,
 {
-    let (parent, tag, captured) = unsafe { Mailbox::<(Process<M, S>, Tag, C), S>::new() }.receive();
+    let (parent, tag, capture) = unsafe { Mailbox::<(Process<M, S>, Tag, C), S>::new() }.receive();
     let function: fn(C) -> M = unsafe { std::mem::transmute(function) };
-    let result = function(captured);
+    let result = function(capture);
     parent.tag_send(tag, result);
 }
 
@@ -179,7 +174,6 @@ mod tests {
 
     #[test]
     fn spawn_test() {
-        println!("Before spawn");
         let child = spawn::<Task<i32>, _>(1, |capture| {
             assert_eq!(capture, 1);
             2
@@ -190,7 +184,6 @@ mod tests {
 
     #[test]
     fn spawn_link_test() {
-        println!("Before link spawn");
         // There is no real way of testing traps for now, at least not until this is resolved:
         // https://github.com/lunatic-solutions/rust-lib/issues/8
         // A manual log output observation is necessary her to check if both processes failed.
