@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{cell::UnsafeCell, marker::PhantomData};
 
 use super::{IntoProcess, IntoProcessLink, Process};
 use crate::{
@@ -15,6 +15,8 @@ where
     S: Serializer<(Process<R, S>, Tag, M)> + Serializer<R>,
 {
     id: u64,
+    // If set to true, the host call `lunatic::process::drop_process` will not be executed on drop.
+    consumed: UnsafeCell<bool>,
     serializer_type: PhantomData<(M, R, S)>,
 }
 
@@ -22,6 +24,15 @@ impl<M, R, S> Server<M, R, S>
 where
     S: Serializer<(Process<R, S>, Tag, M)> + Serializer<R>,
 {
+    /// Construct a process from a raw ID.
+    pub unsafe fn from(id: u64) -> Self {
+        Server {
+            id,
+            consumed: UnsafeCell::new(false),
+            serializer_type: PhantomData,
+        }
+    }
+
     /// Returns a globally unique process ID.
     pub fn id(&self) -> u128 {
         let mut uuid: [u8; 16] = [0; 16];
@@ -54,6 +65,16 @@ where
         S::encode(&message).unwrap();
         // Send it!
         unsafe { host_api::message::send(self.id) };
+    }
+
+    /// Marks the process as consumed.
+    ///
+    /// Consumed processes don't call the `lunatic::process::drop_process` host function when they
+    /// are dropped. This characteristic is useful when implementing serializers for processes.
+    /// Serializers will move the process out of the local state into the message scratch buffer
+    /// and they can't be dropped from the local state anymore.
+    pub unsafe fn consume(&self) {
+        *self.consumed.get() = true;
     }
 }
 
@@ -124,11 +145,13 @@ where
         if std::mem::size_of::<C>() == 0 {
             Ok(Server {
                 id,
+                consumed: UnsafeCell::new(false),
                 serializer_type: PhantomData,
             })
         } else {
             let child = Server::<M, R, S> {
                 id,
+                consumed: UnsafeCell::new(false),
                 serializer_type: PhantomData,
             };
             child.send_init(state);
@@ -183,6 +206,81 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Process").field("uuid", &self.id()).finish()
+    }
+}
+
+impl<M, R, S> Clone for Server<M, R, S>
+where
+    S: Serializer<(Process<R, S>, Tag, M)> + Serializer<R>,
+{
+    fn clone(&self) -> Self {
+        let id = unsafe { host_api::process::clone_process(self.id) };
+        unsafe { Server::from(id) }
+    }
+}
+
+impl<M, R, S> Drop for Server<M, R, S>
+where
+    S: Serializer<(Process<R, S>, Tag, M)> + Serializer<R>,
+{
+    fn drop(&mut self) {
+        // Only drop a process if it's not already consumed.
+        if unsafe { !*self.consumed.get() } {
+            unsafe { host_api::process::drop_process(self.id) };
+        }
+    }
+}
+
+impl<M, R, S> serde::Serialize for Server<M, R, S>
+where
+    S: Serializer<(Process<R, S>, Tag, M)> + Serializer<R>,
+{
+    fn serialize<A>(&self, serializer: A) -> Result<A::Ok, A::Error>
+    where
+        A: serde::Serializer,
+    {
+        // Mark process as consumed.
+        unsafe { self.consume() };
+
+        let index = unsafe { host_api::message::push_process(self.id) };
+        serializer.serialize_u64(index)
+    }
+}
+
+struct ServerVisitor<M, R, S> {
+    _phantom: PhantomData<(M, R, S)>,
+}
+
+impl<'de, M, R, S> serde::de::Visitor<'de> for ServerVisitor<M, R, S>
+where
+    S: Serializer<(Process<R, S>, Tag, M)> + Serializer<R>,
+{
+    type Value = Server<M, R, S>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("an u64 index")
+    }
+
+    fn visit_u64<E>(self, index: u64) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        let id = unsafe { host_api::message::take_process(index) };
+        Ok(unsafe { Server::from(id) })
+    }
+}
+
+impl<'de, M, R, S> serde::de::Deserialize<'de> for Server<M, R, S>
+where
+    S: Serializer<(Process<R, S>, Tag, M)> + Serializer<R>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Server<M, R, S>, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        deserializer.deserialize_u64(ServerVisitor {
+            _phantom: PhantomData {},
+        })
     }
 }
 
