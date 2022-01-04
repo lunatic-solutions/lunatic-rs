@@ -1,5 +1,8 @@
+use std::time::Duration;
+
 use crate::{host_api, LunaticError};
 
+mod gen_server;
 mod process;
 mod server;
 mod task;
@@ -64,12 +67,13 @@ where
     <T as IntoProcessLink<C>>::spawn_link(capture, handler)
 }
 
-// re-export [`Process`], [`Server`], [`Task`]
+/// Suspends the current process for `milliseconds`.
+pub fn sleep(duration: Duration) {
+    unsafe { host_api::process::sleep_ms(duration.as_millis() as u64) };
+}
+
+// re-export [`GenericServer`], [`Process`], [`Server`], [`Task`]
+pub use gen_server::GenericServer;
 pub use process::Process;
 pub use server::Server;
 pub use task::Task;
-
-/// Suspends the current process for `milliseconds`.
-pub fn sleep(milliseconds: u64) {
-    unsafe { host_api::process::sleep_ms(milliseconds) };
-}

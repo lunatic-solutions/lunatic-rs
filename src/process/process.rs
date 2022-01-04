@@ -313,6 +313,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::*;
     use crate::process::{sleep, spawn, spawn_link};
 
@@ -324,7 +326,7 @@ mod tests {
         })
         .unwrap();
         child.send(2);
-        sleep(100);
+        sleep(Duration::from_millis(100));
     }
 
     #[test]
@@ -338,9 +340,9 @@ mod tests {
             })
             .unwrap();
             // This process should fails too before 100ms
-            sleep(100)
+            sleep(Duration::from_millis(100))
         })
         .unwrap();
-        sleep(100);
+        sleep(Duration::from_millis(100));
     }
 }
