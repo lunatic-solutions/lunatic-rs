@@ -20,7 +20,7 @@ pub trait IntoProcess<C> {
     // The type of the 2nd argument passed to the [`spawn`] function.
     type Handler;
     // Spawn's a new process and returns a handle to it.
-    fn spawn(capture: C, handler: Self::Handler) -> Result<Self, LunaticError>
+    fn spawn(module: Option<u64>, capture: C, handler: Self::Handler) -> Result<Self, LunaticError>
     where
         Self: Sized;
 }
@@ -34,7 +34,7 @@ pub fn spawn<T, C>(capture: C, handler: T::Handler) -> Result<T, LunaticError>
 where
     T: IntoProcess<C>,
 {
-    <T as IntoProcess<C>>::spawn(capture, handler)
+    <T as IntoProcess<C>>::spawn(None, capture, handler)
 }
 
 /// [`IntoLinkProcess`] is a helper trait to generalize over the [`spawn_link`] function.
@@ -50,7 +50,11 @@ pub trait IntoProcessLink<C> {
     // The type of the 2nd argument passed to the [`spawn`] function.
     type Handler;
     // Spawn's a new process and returns a handle to it.
-    fn spawn_link(capture: C, handler: Self::Handler) -> Result<Self, LunaticError>
+    fn spawn_link(
+        module: Option<u64>,
+        capture: C,
+        handler: Self::Handler,
+    ) -> Result<Self, LunaticError>
     where
         Self: Sized;
 }
@@ -64,7 +68,7 @@ pub fn spawn_link<T, C>(capture: C, handler: T::Handler) -> Result<T, LunaticErr
 where
     T: IntoProcessLink<C>,
 {
-    <T as IntoProcessLink<C>>::spawn_link(capture, handler)
+    <T as IntoProcessLink<C>>::spawn_link(None, capture, handler)
 }
 
 /// Suspends the current process for `milliseconds`.

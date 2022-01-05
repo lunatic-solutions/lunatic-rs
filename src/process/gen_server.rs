@@ -5,7 +5,7 @@ use crate::{
     environment::{params_to_vec, Param},
     host_api,
     serializer::{Bincode, Serializer},
-    LunaticError, Mailbox, Tag,
+    LunaticError, Mailbox, Resource, Tag,
 };
 
 pub trait HandleMessage<M, S = Bincode>
@@ -77,12 +77,18 @@ where
     }
 }
 
+impl<T> Resource for GenericServer<T> {
+    fn id(&self) -> u64 {
+        self.id
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 enum Sendable {
     Message(i32),
     // The process type can't be carried over as a generic and is set here to `()`, but overwritten
     // at the time of returning with the correct type.
-    Request(i32, Process<()>, Tag),
+    Request(i32, Process<()>),
 }
 
 impl<M, S, T> Request<M, S> for GenericServer<T>
@@ -96,32 +102,34 @@ where
         fn unpacker<TU, MU, SU>(
             this: &mut TU,
             sender: Process<<TU as HandleRequest<MU, SU>>::Result, SU>,
-            tag: Tag,
         ) where
             TU: HandleRequest<MU, SU>,
             SU: Serializer<MU> + Serializer<<TU as HandleRequest<MU, SU>>::Result>,
         {
+            // Get content out of message
             let message: MU = SU::decode().unwrap();
             let result = <TU as HandleRequest<MU, SU>>::handle(this, message);
+            // Get tag out of message
+            let tag = unsafe { host_api::message::get_tag() };
+            let tag = Tag::from(tag);
             sender.tag_send(tag, result);
         }
 
         let tag = Tag::new();
         // Create new message buffer.
-        unsafe { host_api::message::create_data(1, 0) };
+        unsafe { host_api::message::create_data(tag.id(), 0) };
         // Create reference to self
         let this_id = unsafe { host_api::process::this() };
         let this_proc: Process<()> = unsafe { Process::from(this_id) };
         // First encode the handler inside the message buffer.
         let handler = unpacker::<T, M, S> as i32;
-        let handler_message = Sendable::Request(handler, this_proc, tag);
+        let handler_message = Sendable::Request(handler, this_proc);
         Bincode::encode(&handler_message).unwrap();
         // Then the message itself.
         S::encode(&request).unwrap();
-        // Send the message
-        unsafe { host_api::message::send(self.id) };
-        // Wait on response
-        unsafe { Mailbox::<Self::Result, S>::new() }.tag_receive(&[tag])
+        // Send it & wait on a response!
+        unsafe { host_api::message::send_receive_skip_search(self.id, 0) };
+        S::decode().unwrap()
     }
 }
 
@@ -136,7 +144,7 @@ impl<T> GenericServer<T> {
     }
 
     /// Returns a globally unique process ID.
-    pub fn id(&self) -> u128 {
+    pub fn uuid(&self) -> u128 {
         let mut uuid: [u8; 16] = [0; 16];
         unsafe { host_api::process::id(self.id, &mut uuid as *mut [u8; 16]) };
         u128::from_le_bytes(uuid)
@@ -171,11 +179,15 @@ where
 {
     type Handler = fn(state: &mut T);
 
-    fn spawn(state: T, init: Self::Handler) -> Result<GenericServer<T>, LunaticError>
+    fn spawn(
+        module: Option<u64>,
+        state: T,
+        init: Self::Handler,
+    ) -> Result<GenericServer<T>, LunaticError>
     where
         Self: Sized,
     {
-        spawn(false, state, init)
+        spawn(module, false, state, init)
     }
 }
 
@@ -185,11 +197,15 @@ where
 {
     type Handler = fn(state: &mut T);
 
-    fn spawn_link(state: T, init: Self::Handler) -> Result<GenericServer<T>, LunaticError>
+    fn spawn_link(
+        module: Option<u64>,
+        state: T,
+        init: Self::Handler,
+    ) -> Result<GenericServer<T>, LunaticError>
     where
         Self: Sized,
     {
-        spawn(true, state, init)
+        spawn(module, true, state, init)
     }
 }
 
@@ -197,7 +213,12 @@ where
 // correct lunatic server.
 //
 // For more info on how this function works, read the explanation inside super::process::spawn.
-fn spawn<T>(link: bool, state: T, init: fn(state: &mut T)) -> Result<GenericServer<T>, LunaticError>
+fn spawn<T>(
+    module: Option<u64>,
+    link: bool,
+    state: T,
+    init: fn(state: &mut T),
+) -> Result<GenericServer<T>, LunaticError>
 where
     T: serde::Serialize + serde::de::DeserializeOwned,
 {
@@ -214,14 +235,25 @@ where
         false => 0,
     };
     let result = unsafe {
-        host_api::process::inherit_spawn(
-            link,
-            func.as_ptr(),
-            func.len(),
-            params.as_ptr(),
-            params.len(),
-            &mut id,
-        )
+        match module {
+            Some(module_id) => host_api::process::spawn(
+                link,
+                module_id,
+                func.as_ptr(),
+                func.len(),
+                params.as_ptr(),
+                params.len(),
+                &mut id,
+            ),
+            None => host_api::process::inherit_spawn(
+                link,
+                func.as_ptr(),
+                func.len(),
+                params.as_ptr(),
+                params.len(),
+                &mut id,
+            ),
+        }
     };
     if result == 0 {
         // If the captured variable is of size 0, we don't need to send it to another process.
@@ -265,16 +297,16 @@ where
 
     // Run server forever and respond to requests.
     loop {
-        let dispatcher = mailbox.receive();
+        let dispatcher = mailbox.tag_receive(None);
         match dispatcher {
             Sendable::Message(handler) => {
                 let handler: fn(state: &mut T) = unsafe { std::mem::transmute(handler) };
                 handler(&mut state);
             }
-            Sendable::Request(handler, sender, tag) => {
-                let handler: fn(state: &mut T, sender: Process<()>, tag: Tag) =
+            Sendable::Request(handler, sender) => {
+                let handler: fn(state: &mut T, sender: Process<()>) =
                     unsafe { std::mem::transmute(handler) };
-                handler(&mut state, sender, tag);
+                handler(&mut state, sender);
             }
         }
     }

@@ -1,13 +1,11 @@
-use lunatic::{process, Mailbox};
+use lunatic::{spawn, Mailbox, Task};
 
 #[lunatic::main]
-fn main(m: Mailbox<()>) {
-    let this = process::this(&m);
-    process::spawn_with(this, |parent, _: Mailbox<()>| {
+fn main(_: Mailbox<()>) {
+    let child = spawn::<Task<()>, _>((), |_| {
         println!("Hello world from a process!");
-        parent.send(());
     })
     .unwrap();
     // Wait for child to finish
-    let _ignore = m.receive();
+    let _ignore = child.result();
 }

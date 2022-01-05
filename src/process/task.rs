@@ -5,7 +5,7 @@ use crate::{
     environment::{params_to_vec, Param},
     host_api,
     serializer::{Bincode, Serializer},
-    LunaticError, Mailbox, Tag,
+    LunaticError, Mailbox, Resource, Tag,
 };
 
 /// A [`Task`] is a simple process spawned from a function that can capture some input from the
@@ -32,14 +32,14 @@ where
     S: Serializer<M>,
 {
     /// Returns a globally unique process ID.
-    pub fn id(&self) -> u128 {
+    pub fn uuid(&self) -> u128 {
         let mut uuid: [u8; 16] = [0; 16];
         unsafe { host_api::process::id(self.id, &mut uuid as *mut [u8; 16]) };
         u128::from_le_bytes(uuid)
     }
 
     pub fn result(self) -> M {
-        unsafe { Mailbox::<M, S>::new() }.tag_receive(&[self.tag])
+        unsafe { Mailbox::<M, S>::new() }.tag_receive(Some(&[self.tag]))
     }
 
     fn send<C>(&self, message: C)
@@ -55,17 +55,30 @@ where
     }
 }
 
+impl<M, S> Resource for Task<M, S>
+where
+    S: Serializer<M>,
+{
+    fn id(&self) -> u64 {
+        self.id
+    }
+}
+
 impl<C, M, S> IntoProcess<C> for Task<M, S>
 where
     S: Serializer<(Process<M, S>, Tag, C)> + Serializer<M>,
 {
     type Handler = fn(capture: C) -> M;
 
-    fn spawn(capture: C, handler: Self::Handler) -> Result<Task<M, S>, LunaticError>
+    fn spawn(
+        module: Option<u64>,
+        capture: C,
+        handler: Self::Handler,
+    ) -> Result<Task<M, S>, LunaticError>
     where
         Self: Sized,
     {
-        spawn(false, capture, handler)
+        spawn(module, false, capture, handler)
     }
 }
 
@@ -75,11 +88,15 @@ where
 {
     type Handler = fn(capture: C) -> M;
 
-    fn spawn_link(capture: C, handler: Self::Handler) -> Result<Task<M, S>, LunaticError>
+    fn spawn_link(
+        module: Option<u64>,
+        capture: C,
+        handler: Self::Handler,
+    ) -> Result<Task<M, S>, LunaticError>
     where
         Self: Sized,
     {
-        spawn(true, capture, handler)
+        spawn(module, true, capture, handler)
     }
 }
 
@@ -87,7 +104,12 @@ where
 // variable into a correct lunatic task.
 //
 // For more info on how this function works, read the explanation inside super::process::spawn.
-fn spawn<C, M, S>(link: bool, capture: C, entry: fn(C) -> M) -> Result<Task<M, S>, LunaticError>
+fn spawn<C, M, S>(
+    module: Option<u64>,
+    link: bool,
+    capture: C,
+    entry: fn(C) -> M,
+) -> Result<Task<M, S>, LunaticError>
 where
     S: Serializer<(Process<M, S>, Tag, C)> + Serializer<M>,
 {
@@ -104,14 +126,25 @@ where
         false => 0,
     };
     let result = unsafe {
-        host_api::process::inherit_spawn(
-            link,
-            func.as_ptr(),
-            func.len(),
-            params.as_ptr(),
-            params.len(),
-            &mut id,
-        )
+        match module {
+            Some(module_id) => host_api::process::spawn(
+                link,
+                module_id,
+                func.as_ptr(),
+                func.len(),
+                params.as_ptr(),
+                params.len(),
+                &mut id,
+            ),
+            None => host_api::process::inherit_spawn(
+                link,
+                func.as_ptr(),
+                func.len(),
+                params.as_ptr(),
+                params.len(),
+                &mut id,
+            ),
+        }
     };
     if result == 0 {
         let tag = Tag::new();
@@ -164,6 +197,15 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Process").field("uuid", &self.id()).finish()
+    }
+}
+
+impl<M, S> Drop for Task<M, S>
+where
+    S: Serializer<M>,
+{
+    fn drop(&mut self) {
+        unsafe { host_api::process::drop_process(self.id) };
     }
 }
 

@@ -5,10 +5,10 @@
 // > cargo build --example environment_remote
 // > lunatic --node 0.0.0.0:8334 --node-name bar --peer 0.0.0.0:8333 target/wasm32-wasi/debug/examples/environment_remote.wasm
 
-use lunatic::{lookup, process, Config, Environment, Mailbox};
+use lunatic::{lookup, this_process, Config, Environment, Mailbox, Process, Server};
 
 #[lunatic::main]
-fn main(m: Mailbox<i64>) {
+fn main(m: Mailbox<i32>) {
     let mut config = Config::new(0xA00000000, None);
     config.allow_namespace("");
     let mut env = Environment::new_remote("foo", config).unwrap();
@@ -16,19 +16,23 @@ fn main(m: Mailbox<i64>) {
 
     // Register parent in remote environment. In this case the parent could have been passed to the
     // child as part of the spawn context.
-    env.register("parent", "1.0.0", process::this(&m)).unwrap();
+    env.register("parent", "1.0.0", this_process(&m)).unwrap();
 
     // Spawn child
     let child = module
-        .spawn(|mailbox: Mailbox<(i64, i64)>| {
-            let (a, b) = mailbox.receive().unwrap();
+        .spawn::<Server<(i32, i32), _>, _>((), |_, (a, b)| {
             println!("Adding {} + {}", a, b);
-            let parent = lookup("parent", "^1").unwrap().unwrap();
+            let parent: Process<i32> = lookup("parent", "^1").unwrap().unwrap();
+            // Send back result as message through lookup
             parent.send(a + b);
+            // Also send it back as part of the response.
+            a + b
         })
         .unwrap();
 
-    child.send((23, 4));
-    let result = m.receive().unwrap();
+    let response = child.request((23, 4));
+    assert_eq!(response, 27);
+
+    let result = m.receive();
     println!("Adding {} + {} = {}", 23, 4, result);
 }

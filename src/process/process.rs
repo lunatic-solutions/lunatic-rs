@@ -5,7 +5,7 @@ use crate::{
     environment::{params_to_vec, Param},
     host_api,
     serializer::{Bincode, Serializer},
-    LunaticError, Mailbox, Tag,
+    LunaticError, Mailbox, Resource, Tag,
 };
 
 /// A handle to a process that can receive messages of type `M`, serialized by a serializer of type
@@ -34,7 +34,7 @@ where
     }
 
     /// Returns a globally unique process ID.
-    pub fn id(&self) -> u128 {
+    pub fn uuid(&self) -> u128 {
         let mut uuid: [u8; 16] = [0; 16];
         unsafe { host_api::process::id(self.id, &mut uuid as *mut [u8; 16]) };
         u128::from_le_bytes(uuid)
@@ -81,17 +81,26 @@ where
     }
 }
 
+impl<M, S> Resource for Process<M, S>
+where
+    S: Serializer<M>,
+{
+    fn id(&self) -> u64 {
+        self.id
+    }
+}
+
 impl<C, M, S> IntoProcess<C> for Process<M, S>
 where
     S: Serializer<C> + Serializer<M>,
 {
     type Handler = fn(capture: C, arg: Mailbox<M, S>);
 
-    fn spawn(captured: C, handler: Self::Handler) -> Result<Self, LunaticError>
+    fn spawn(module: Option<u64>, captured: C, handler: Self::Handler) -> Result<Self, LunaticError>
     where
         Self: Sized,
     {
-        spawn(None, false, captured, handler)
+        spawn(module, false, captured, handler)
     }
 }
 
@@ -101,11 +110,15 @@ where
 {
     type Handler = fn(capture: C, arg: Mailbox<M, S>);
 
-    fn spawn_link(captured: C, handler: Self::Handler) -> Result<Process<M, S>, LunaticError>
+    fn spawn_link(
+        module: Option<u64>,
+        captured: C,
+        handler: Self::Handler,
+    ) -> Result<Process<M, S>, LunaticError>
     where
         Self: Sized,
     {
-        spawn(None, true, captured, handler)
+        spawn(module, true, captured, handler)
     }
 }
 
@@ -116,7 +129,7 @@ where
 // use the current module but spawned inside another environment. Look at [`ThisModule`] for
 // more information about sending the current module to another environment.
 fn spawn<C, M, S>(
-    module_id: Option<u64>,
+    module: Option<u64>,
     link: bool,
     captured: C,
     entry: fn(C, Mailbox<M, S>),
@@ -151,7 +164,7 @@ where
         false => 0,
     };
     let result = unsafe {
-        match module_id {
+        match module {
             Some(module_id) => host_api::process::spawn(
                 link,
                 module_id,

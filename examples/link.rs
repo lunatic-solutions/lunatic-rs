@@ -1,12 +1,12 @@
-use lunatic::{process, Mailbox};
+use lunatic::{spawn_link, Mailbox, Task};
 
 #[lunatic::main]
-fn main(mailbox: Mailbox<()>) {
-    let (_child, _tag, mailbox) = process::spawn_link(mailbox, child).unwrap();
+fn main(_: Mailbox<()>) {
+    let child = spawn_link::<Task<()>, _>((), child).unwrap();
     // Wait on message or death
-    assert!(mailbox.receive().is_signal());
+    child.result();
 }
 
-fn child(_: Mailbox<()>) {
+fn child(_: ()) {
     panic!("Error");
 }

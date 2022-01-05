@@ -209,16 +209,39 @@ mod error;
 mod host_api;
 mod mailbox;
 pub mod net;
-pub mod process;
-// mod request;
+mod process;
 pub mod serializer;
 mod tag;
 
-// pub use environment::{lookup, Config, Environment, Module, Param, ThisModule};
+pub use environment::*;
 pub use error::LunaticError;
 pub use mailbox::{Mailbox, ReceiveError};
-// pub use request::Request;
+pub use process::*;
 pub use tag::Tag;
 
 pub use lunatic_macros::main;
 pub use lunatic_macros::test;
+
+/// Implemented for all resources held by the VM.
+pub trait Resource {
+    // Returns process local resource id.
+    fn id(&self) -> u64;
+}
+
+/// Returns a handle to the current process.
+///
+/// The reference to the current mailbox is required to assure that the returned process matches
+/// the mailbox.
+pub fn this_process<M, S>(_mailbox: &Mailbox<M, S>) -> Process<M, S>
+where
+    S: serializer::Serializer<M>,
+{
+    let id = unsafe { host_api::process::this() };
+    unsafe { Process::from(id) }
+}
+
+/// Returns a handle to the current environment.
+pub fn this_env() -> Environment {
+    let id = unsafe { host_api::process::this_env() };
+    Environment::from(id)
+}

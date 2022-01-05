@@ -1,10 +1,10 @@
-use lunatic::{process, Mailbox};
+use lunatic::{spawn, this_process, Mailbox, Process};
 
 #[lunatic::main]
 fn main(m: Mailbox<()>) {
-    let this = process::this(&m);
-    let proc = process::spawn_with(this, |parent, mailbox| {
-        let message = mailbox.receive().unwrap();
+    let this = this_process(&m);
+    let proc = spawn::<Process<String>, _>(this, |parent, mailbox| {
+        let message = mailbox.receive();
         println!("Hello {}", message);
         parent.send(());
     })

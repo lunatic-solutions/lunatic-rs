@@ -50,13 +50,19 @@ where
     /// Gets next message from process' mailbox that is tagged with one of the `tags`.
     ///
     /// If no such message exists, this function will block until a new message arrives.
+    /// If `tags` is `None` it will take the first available message.
     ///
     /// # Panics
     ///
     /// This function will panic if the received message can't be deserialized into `M`.
-    pub(crate) fn tag_receive(&self, tags: &[Tag]) -> M {
-        let tags: Vec<i64> = tags.into_iter().map(|tag| tag.id()).collect();
-        self.receive_(Some(&tags), None).unwrap()
+    pub(crate) fn tag_receive(&self, tags: Option<&[Tag]>) -> M {
+        match tags {
+            Some(tags) => {
+                let tags: Vec<i64> = tags.into_iter().map(|tag| tag.id()).collect();
+                self.receive_(Some(&tags), None).unwrap()
+            }
+            None => self.receive_(None, None).unwrap(),
+        }
     }
 
     /// Same as [`receive`], but only waits for the duration of timeout for the message.

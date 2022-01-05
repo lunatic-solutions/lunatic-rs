@@ -133,6 +133,7 @@ pub mod process {
         pub fn drop_process(process_id: u64);
         pub fn clone_process(process_id: u64) -> u64;
         pub fn sleep_ms(millis: u64);
+        #[allow(dead_code)]
         pub fn die_when_link_dies(trap: u32);
         pub fn this() -> u64;
         pub fn id(process_id: u64, uuid: *mut [u8; 16]);
