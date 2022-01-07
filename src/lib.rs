@@ -220,7 +220,8 @@ pub use process::*;
 pub use tag::Tag;
 
 pub use lunatic_macros::main;
-pub use lunatic_macros::test;
+// TODO: Figure out testing (https://github.com/lunatic-solutions/rust-lib/issues/8)
+// pub use lunatic_macros::test;
 
 /// Implemented for all resources held by the VM.
 pub trait Resource {

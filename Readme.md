@@ -188,13 +188,13 @@ will be able to just use the standard library versions.
 
 What currently works:
 
-- [x] **Process creation & joining** (with this library)
+- [x] **Process creation** (with this library)
 - [x] **Fine-grained process permissions** (with this library)
 - [x] **Message passing between processes** (with this library)
 - [x] **TCP networking** (with this library)
 - [x] **Filesystem access**
 - [x] **Environment variables**
-- [ ] **Distributed lunatic**
+- [x] **Distributed lunatic**
 
 > **NOTE:**
 > Some libraries currently don't compile under the target `wasm32-wasi` and can't be used inside
