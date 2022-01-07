@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use crate::{host_api, LunaticError};
 
+mod async_task;
 mod gen_server;
 mod proc;
 mod server;
@@ -76,7 +77,8 @@ pub fn sleep(duration: Duration) {
     unsafe { host_api::process::sleep_ms(duration.as_millis() as u64) };
 }
 
-// re-export [`GenericServer`], [`Process`], [`Server`], [`Task`]
+// re-export [`GenericServer`], [`Process`], [`Server`], [`Task`], [`AsyncTask`]
+pub use async_task::AsyncTask;
 pub use gen_server::GenericServer;
 pub use proc::Process;
 pub use server::Server;

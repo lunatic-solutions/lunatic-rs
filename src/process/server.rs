@@ -229,7 +229,7 @@ where
     S: Serializer<(Process<R, S>, M)> + Serializer<R>,
 {
     fn eq(&self, other: &Self) -> bool {
-        self.id() == other.id()
+        self.uuid() == other.uuid()
     }
 }
 
@@ -238,7 +238,9 @@ where
     S: Serializer<(Process<R, S>, M)> + Serializer<R>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Process").field("uuid", &self.id()).finish()
+        f.debug_struct("Process")
+            .field("uuid", &self.uuid())
+            .finish()
     }
 }
 

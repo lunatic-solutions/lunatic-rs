@@ -8,8 +8,32 @@ use crate::{
     LunaticError, Mailbox, Resource, Tag,
 };
 
-/// A handle to a process that can receive messages of type `M`, serialized by a serializer of type
-/// `S`.
+/// A process that can receive messages through a [`Mailbox`].
+///
+/// The generic type `M` defines the type of messages that can be sent to it and the type `S`
+/// defines the serializer that will be used to de/serialize the messages. By default the
+/// [`Bincode`] serializer is used.
+///
+/// # Example
+///
+/// A `Process` is spawned using the [`spawn`](crate::spawn) function:
+/// ```
+/// let proc = spawn::<Process<_>, _>(capture, |_capture, mailbox: Mailbox<i32>| {
+///   let received_value = mailbox.receive();
+/// });
+/// ```
+///
+/// The process can capture some context from the parent. It will be provided to it through the
+/// first argument of the entry function. The second argument is going to be the [`Mailbox`]. If
+/// the closure attempts to implicitly capture any variables from the outer context the code will
+/// fail to compile. Processes don't share any memory and everything needs to be passed through a
+/// message. This also limits the capturing process to only types that can be de/serialized with
+/// the serializer `S`.
+///
+/// You can send a message to the `Process` by calling the [`send`](Process::send) method.
+/// ```
+/// proc.send(1);
+/// ```
 pub struct Process<M, S = Bincode>
 where
     S: Serializer<M>,
@@ -40,6 +64,11 @@ where
         u128::from_le_bytes(uuid)
     }
 
+    /// Send a message to the process.
+    ///
+    /// # Panics
+    ///
+    /// The operation will panic if `message` can't be serialized using serializer `S`.
     pub fn send(&self, message: M) {
         // Create new message.
         unsafe { host_api::message::create_data(1, 0) };
@@ -49,6 +78,7 @@ where
         unsafe { host_api::message::send(self.id) };
     }
 
+    /// Send message to process with a specific tag.
     pub(crate) fn tag_send(&self, tag: Tag, message: M) {
         // Create new message.
         unsafe { host_api::message::create_data(tag.id(), 0) };
@@ -65,7 +95,7 @@ where
         unsafe { host_api::process::link(0, self.id) };
     }
 
-    /// Unlink processes.
+    /// Unlink processes from the caller.
     pub fn unlink(&self) {
         unsafe { host_api::process::unlink(self.id) };
     }
@@ -239,7 +269,7 @@ where
     S: Serializer<M>,
 {
     fn eq(&self, other: &Self) -> bool {
-        self.id() == other.id()
+        self.uuid() == other.uuid()
     }
 }
 
@@ -248,7 +278,9 @@ where
     S: Serializer<M>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Process").field("uuid", &self.id()).finish()
+        f.debug_struct("Process")
+            .field("uuid", &self.uuid())
+            .finish()
     }
 }
 

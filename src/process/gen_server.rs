@@ -324,13 +324,15 @@ extern "C" fn _lunatic_spawn_gen_server_by_index(type_helper: usize, function: u
 // Processes are equal if their UUID is equal.
 impl<T> PartialEq for GenericServer<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.id() == other.id()
+        self.uuid() == other.uuid()
     }
 }
 
 impl<T> std::fmt::Debug for GenericServer<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Process").field("uuid", &self.id()).finish()
+        f.debug_struct("Process")
+            .field("uuid", &self.uuid())
+            .finish()
     }
 }
 
