@@ -3,7 +3,7 @@ use std::time::Duration;
 use crate::{host_api, LunaticError};
 
 mod gen_server;
-mod process;
+mod proc;
 mod server;
 mod task;
 
@@ -78,6 +78,6 @@ pub fn sleep(duration: Duration) {
 
 // re-export [`GenericServer`], [`Process`], [`Server`], [`Task`]
 pub use gen_server::GenericServer;
-pub use process::Process;
+pub use proc::Process;
 pub use server::Server;
 pub use task::Task;

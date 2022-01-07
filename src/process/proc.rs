@@ -25,7 +25,7 @@ where
     S: Serializer<M>,
 {
     /// Construct a process from a raw ID.
-    pub unsafe fn from(id: u64) -> Self {
+    pub(crate) unsafe fn from(id: u64) -> Self {
         Process {
             id,
             consumed: UnsafeCell::new(false),
@@ -76,7 +76,7 @@ where
     /// are dropped. This characteristic is useful when implementing serializers for processes.
     /// Serializers will move the process out of the local state into the message scratch buffer
     /// and they can't be dropped from the local state anymore.
-    pub unsafe fn consume(&self) {
+    unsafe fn consume(&self) {
         *self.consumed.get() = true;
     }
 }
@@ -151,7 +151,10 @@ where
     // relay here on Rust generating the right pointer to the correct generic function during
     // monomorphization and send it to the none-generic `_lunatic_spawn_by_index` export.
 
-    let (type_helper, entry) = (type_helper_wrapper::<C, M, S> as i32, entry as i32);
+    let (type_helper, entry) = (
+        type_helper_wrapper::<C, M, S> as usize as i32,
+        entry as usize as i32,
+    );
 
     let params = params_to_vec(&[Param::I32(type_helper), Param::I32(entry)]);
     let mut id = 0;

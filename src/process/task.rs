@@ -113,7 +113,10 @@ fn spawn<C, M, S>(
 where
     S: Serializer<(Process<M, S>, Tag, C)> + Serializer<M>,
 {
-    let (type_helper, entry) = (type_helper_wrapper::<C, M, S> as i32, entry as i32);
+    let (type_helper, entry) = (
+        type_helper_wrapper::<C, M, S> as usize as i32,
+        entry as usize as i32,
+    );
 
     let params = params_to_vec(&[Param::I32(type_helper), Param::I32(entry)]);
     let mut id = 0;

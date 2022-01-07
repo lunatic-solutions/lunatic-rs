@@ -67,7 +67,7 @@ where
         // Create new message buffer.
         unsafe { host_api::message::create_data(1, 0) };
         // First encode the handler inside the message buffer.
-        let handler = unpacker::<T, M, S> as i32;
+        let handler = unpacker::<T, M, S> as usize as i32;
         let handler_message = Sendable::Message(handler);
         Bincode::encode(&handler_message).unwrap();
         // Then the message itself.
@@ -122,7 +122,7 @@ where
         let this_id = unsafe { host_api::process::this() };
         let this_proc: Process<()> = unsafe { Process::from(this_id) };
         // First encode the handler inside the message buffer.
-        let handler = unpacker::<T, M, S> as i32;
+        let handler = unpacker::<T, M, S> as usize as i32;
         let handler_message = Sendable::Request(handler, this_proc);
         Bincode::encode(&handler_message).unwrap();
         // Then the message itself.
@@ -135,7 +135,7 @@ where
 
 impl<T> GenericServer<T> {
     /// Construct a process from a raw ID.
-    pub unsafe fn from(id: u64) -> Self {
+    unsafe fn from(id: u64) -> Self {
         GenericServer {
             id,
             consumed: UnsafeCell::new(false),
@@ -168,7 +168,7 @@ impl<T> GenericServer<T> {
     /// are dropped. This characteristic is useful when implementing serializers for processes.
     /// Serializers will move the process out of the local state into the message scratch buffer
     /// and they can't be dropped from the local state anymore.
-    pub unsafe fn consume(&self) {
+    unsafe fn consume(&self) {
         *self.consumed.get() = true;
     }
 }
@@ -222,7 +222,10 @@ fn spawn<T>(
 where
     T: serde::Serialize + serde::de::DeserializeOwned,
 {
-    let (type_helper, init) = (type_helper_wrapper::<T> as i32, init as i32);
+    let (type_helper, init) = (
+        type_helper_wrapper::<T> as usize as i32,
+        init as usize as i32,
+    );
 
     let params = params_to_vec(&[Param::I32(type_helper), Param::I32(init)]);
     let mut id = 0;

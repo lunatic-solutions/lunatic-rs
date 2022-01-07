@@ -58,7 +58,7 @@ where
     pub(crate) fn tag_receive(&self, tags: Option<&[Tag]>) -> M {
         match tags {
             Some(tags) => {
-                let tags: Vec<i64> = tags.into_iter().map(|tag| tag.id()).collect();
+                let tags: Vec<i64> = tags.iter().map(|tag| tag.id()).collect();
                 self.receive_(Some(&tags), None).unwrap()
             }
             None => self.receive_(None, None).unwrap(),
