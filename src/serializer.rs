@@ -43,7 +43,7 @@ pub enum DecodeError {
 /// and `serde::Deserialize` traits. We can express this dependency in the following way:
 /// ```no_run
 /// impl<M: serde::Serialize + serde::Deserialize> Serializer<M> for Bincode {
-///     fn encode(message: M) -> Error;
+///     fn encode(message: M) -> Error {
 ///         // `message` is guaranteed to implement the `serde::Serialize`
 ///         // trait and can be encoded here using `Bincode`.
 ///     }
@@ -60,7 +60,9 @@ pub trait Serializer<M> {
     fn decode() -> Result<M, DecodeError>;
 }
 
-/// The `Bincode` serializer can serialize any message that satisfies the traits:
+/// A `Bincode` serializer.
+///
+/// It can serialize any message that satisfies the traits:
 /// - `serde::Serialize`
 /// - `serde::de::DeserializeOwned`
 ///
@@ -83,7 +85,9 @@ where
     }
 }
 
-/// The `MessagePack` serializer can serialize any message that satisfies the traits:
+/// A `MessagePack` serializer.
+///
+/// It can serialize any message that satisfies the traits:
 /// - `serde::Serialize`
 /// - `serde::de::DeserializeOwned`
 ///
@@ -104,7 +108,9 @@ where
     }
 }
 
-/// The `Json` serializer can serialize any message that satisfies the traits:
+/// A `Json` serializer.
+///
+/// It can serialize any message that satisfies the traits:
 /// - `serde::Serialize`
 /// - `serde::de::DeserializeOwned`
 ///

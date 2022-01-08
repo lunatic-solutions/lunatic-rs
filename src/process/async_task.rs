@@ -8,8 +8,7 @@ use crate::{
     LunaticError, Mailbox, Resource,
 };
 
-/// `AsyncTask` is an one-off process spawned from a function that can capture some input from the
-/// parent.
+/// An one-off process spawned from a function that can capture some input from the parent.
 ///
 /// # Example
 ///

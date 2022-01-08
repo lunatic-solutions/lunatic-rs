@@ -8,8 +8,24 @@ use crate::{
     LunaticError, Mailbox, Resource, Tag,
 };
 
-/// A [`Server`] is a simple process spawned from a function that can maintain a state, runs in a
-/// loop and answers requests sent to it.
+/// A process for implementing the server of a client-server relation.
+///
+/// The `Server` can hold and mutate some state while answering requests from other processes. All
+/// requests must be of the same type. Look at the [`GenericServer`](crate::GenericServer) for a
+/// server abstraction that can handle multiple kinds of messages.
+///
+/// # Example
+///
+/// ```
+/// let increment_server = spawn::<Server<i32, _>, _>(0, |state, message| {
+///     *state += message;
+///     *state
+/// }).unwrap();
+///
+/// assert_eq!(increment_server.request(1), 1);
+/// assert_eq!(increment_server.request(2), 3);
+/// assert_eq!(increment_server.request(3), 6);
+/// ```
 pub struct Server<M, R, S = Bincode>
 where
     S: Serializer<(Process<R, S>, M)> + Serializer<R>,
@@ -40,6 +56,7 @@ where
         u128::from_le_bytes(uuid)
     }
 
+    /// Send a request to the server and wait for the response.
     pub fn request(&self, message: M) -> R {
         let tag = Tag::new();
         // Create new message.

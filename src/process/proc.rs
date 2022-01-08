@@ -14,24 +14,23 @@ use crate::{
 /// defines the serializer that will be used to de/serialize the messages. By default the
 /// [`Bincode`] serializer is used.
 ///
+/// A `Process` is spawned using the [`spawn`](crate::spawn) function. When spawned, the process
+/// can capture some context from the parent. It will be provided to it through the
+/// first argument of the entry function. The second argument is going to be the [`Mailbox`].
+///
+/// If the closure attempts to implicitly capture any variables from the outer context the code
+/// will fail to compile. Processes don't share any memory and everything needs to be passed
+/// through a message. This also limits the capturing process to only types that can be
+/// de/serialized with the serializer `S`.
+///
+/// A message can be sent to the `Process` with the [`send`](Process::send) method.
+///
 /// # Example
 ///
-/// A `Process` is spawned using the [`spawn`](crate::spawn) function:
 /// ```
 /// let proc = spawn::<Process<_>, _>(capture, |_capture, mailbox: Mailbox<i32>| {
 ///   let received_value = mailbox.receive();
 /// });
-/// ```
-///
-/// The process can capture some context from the parent. It will be provided to it through the
-/// first argument of the entry function. The second argument is going to be the [`Mailbox`]. If
-/// the closure attempts to implicitly capture any variables from the outer context the code will
-/// fail to compile. Processes don't share any memory and everything needs to be passed through a
-/// message. This also limits the capturing process to only types that can be de/serialized with
-/// the serializer `S`.
-///
-/// You can send a message to the `Process` by calling the [`send`](Process::send) method.
-/// ```
 /// proc.send(1);
 /// ```
 pub struct Process<M, S = Bincode>

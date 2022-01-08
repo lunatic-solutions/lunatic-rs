@@ -40,8 +40,47 @@ where
     fn request(&self, request: M) -> Self::Result;
 }
 
-/// A [`GenericServer`] is a process spawned from a state that implements the `HandleMessage` &
-/// `HandleRequest` traits, allowing it to handle different types of messages sent to it.
+/// A process for implementing the server of a client-server relation.
+///
+/// The `GenericServer` can hold and mutate some state while answering requests from other
+/// processes. It can handle requests of different types. To define a handler for a certain
+/// type implement the [`HandleMessage`] or [`HandleRequest`] trait for them on the state
+/// type.
+///
+/// [`HandleMessage`] provides as `send` method to send messages to the server, without
+/// waiting on a response. [`HandleRequest`] provides a `request` method that will block
+/// until a response is received.
+///
+/// # Example
+///
+/// ```
+/// #[derive(serde::Serialize, serde::Deserialize)]
+/// struct IncServer(i32);
+///
+/// #[derive(serde::Serialize, serde::Deserialize)]
+/// struct IncMsg(i32);
+/// #[derive(serde::Serialize, serde::Deserialize)]
+/// struct State;
+///
+/// impl HandleMessage<i32> for IncServer {
+///     fn handle(&mut self, inc: IncMsg(i32)) {
+///         self.0 += inc.0;
+///     }
+/// }
+///
+/// impl HandleRequest<State> for IncServer {
+///     type Result = i32;
+///
+///     fn handle(&mut self, _: State) -> Self::Result {
+///         self.0
+///     }
+/// }
+///
+/// let inc_server = spawn::<GenericServer<_>, _>(IncServer(0), |_state| {}).unwrap();
+/// inc_server.send(IncMsg(33));
+/// inc_server.send(IncMsg(55));
+/// assert_eq!(inc_server.request(State), 88);
+/// ```
 pub struct GenericServer<T> {
     id: u64,
     // If set to true, the host call `lunatic::process::drop_process` will not be executed on drop.
@@ -54,6 +93,7 @@ where
     T: HandleMessage<M, S>,
     S: Serializer<M>,
 {
+    /// Send message to the server.
     fn send(&self, message: M) {
         fn unpacker<TU, MU, SU>(this: &mut TU)
         where
@@ -98,6 +138,7 @@ where
 {
     type Result = <T as HandleRequest<M, S>>::Result;
 
+    /// Send request to the server and block until an answer is received.
     fn request(&self, request: M) -> Self::Result {
         fn unpacker<TU, MU, SU>(
             this: &mut TU,

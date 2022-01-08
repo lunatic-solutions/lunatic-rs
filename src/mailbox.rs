@@ -11,7 +11,7 @@ use crate::{
 const SIGNAL: u32 = 1;
 const TIMEOUT: u32 = 9027;
 
-/// Mailbox for processes that are not linked, or linked and set to trap on notify signals.
+/// Mailbox of a [`Process`](crate::Process).
 #[derive(Debug)]
 pub struct Mailbox<M, S = Bincode>
 where
@@ -65,7 +65,7 @@ where
         }
     }
 
-    /// Same as [`receive`], but only waits for the duration of timeout for the message.
+    /// Same as [`receive`](Self::receive), but only waits for the duration of timeout for the message.
     pub fn receive_timeout(&self, timeout: Duration) -> Result<M, ReceiveError> {
         self.receive_(None, Some(timeout))
     }

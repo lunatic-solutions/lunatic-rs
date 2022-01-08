@@ -8,8 +8,8 @@ use crate::{
     LunaticError, Mailbox, Resource, Tag,
 };
 
-/// A `Task` is an one-off process spawned from a function that can capture some input from the
-/// parent and send back a result.
+/// An one-off process spawned from a function that can capture some input from the parent and send
+/// back a result.
 ///
 /// When [`result`](Task::result) is called it will block until the async computation is done and
 /// a result available. If you don't want to wait on the result use an

@@ -8,7 +8,7 @@ The main abstraction in [lunatic][1] is a process. Contrary to operating system 
 lunatic processes are lightweight and fast to spawn. They are designed for **massive**
 concurrency. Like operating system processes, they are sandboxed. Each of them gets a separate
 memory and they can't access the memory from other processes, not even through raw pointers.
-If we need to exchange any information between process we need to do it through message passing.
+If we want to exchange any information between process we need to do it through message passing.
 
 This library makes processes feel native to the Rust language. They can be spawned from just a
 function.
@@ -18,16 +18,19 @@ function.
 * **[`Process`]** - A process that can receive messages through a [`Mailbox`].
 * **[`Task`]** - One-off process that returns a value.
 * **[`AsyncTask`]** - One-off process that doesn't return a value.
-* **[`Server`]** - The Server abstracts the common client-server interaction. It can handle request
-                   messages of the same type.
-* **[`GenericServer`]** - A process that can handle request messages from others.
-* **[`Supervisor`]** - A process that can supervise others and re-spawn them if they die.
+* **[`Server`]** - Abstracts the common client-server interaction and can handle requests of the
+                   same type.
+* **[`GenericServer`]** - Abstracts the common client-server interaction and can handle requests
+                          of different types.
+* **`Supervisor`** - A process that can supervise others and re-spawn them if they trap.
 
 ### Linking
 
 Processes can be linked together. This means that if one of them fails, all linked ones will be
 killed too. The only exception is the Supervisor. The supervisor can define actions when one of the
 children dies.
+
+To spawn a linked process use the [`spawn_link`] function.
 
 ### Sandboxing
 
@@ -37,8 +40,6 @@ can limit:
 * Memory usage
 * Compute usage
 * WebAssembly host function access
-
-The `Environment` is configured through a [`Config`] struct.
 
 # Loading other WebAssembly modules dynamically
 
