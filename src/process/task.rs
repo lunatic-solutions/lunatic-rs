@@ -66,15 +66,6 @@ where
     }
 }
 
-impl<M, S> Resource for Task<M, S>
-where
-    S: Serializer<M>,
-{
-    fn id(&self) -> u64 {
-        self.id
-    }
-}
-
 impl<C, M, S> IntoProcess<C> for Task<M, S>
 where
     S: Serializer<(Process<M, S>, Tag, C)> + Serializer<M>,
@@ -89,7 +80,7 @@ where
     where
         Self: Sized,
     {
-        spawn(module, false, capture, handler)
+        spawn(module, None, capture, handler)
     }
 }
 
@@ -101,13 +92,14 @@ where
 
     fn spawn_link(
         module: Option<u64>,
+        tag: Tag,
         capture: C,
         handler: Self::Handler,
     ) -> Result<Task<M, S>, LunaticError>
     where
         Self: Sized,
     {
-        spawn(module, true, capture, handler)
+        spawn(module, Some(tag), capture, handler)
     }
 }
 
@@ -117,7 +109,7 @@ where
 // For more info on how this function works, read the explanation inside super::process::spawn.
 fn spawn<C, M, S>(
     module: Option<u64>,
-    link: bool,
+    link: Option<Tag>,
     capture: C,
     entry: fn(C) -> M,
 ) -> Result<Task<M, S>, LunaticError>
@@ -133,11 +125,8 @@ where
     let mut id = 0;
     let func = "_lunatic_spawn_async_task_by_index";
     let link = match link {
-        // TODO: Do we want to be notified with the right tag once the link dies?
-        //       I assume not, because only supervisors can use this information and we can't spawn
-        //       this kind of processes from supervisors.
-        true => 1,
-        false => 0,
+        Some(tag) => tag.id(),
+        None => 0,
     };
     let result = unsafe {
         match module {
@@ -169,7 +158,7 @@ where
         };
         // Create reference to self
         let this_id = unsafe { host_api::process::this() };
-        let this_proc: Process<M, S> = unsafe { Process::from(this_id) };
+        let this_proc: Process<M, S> = unsafe { Process::from_id(this_id) };
         // Send all data to child required
         child.send((this_proc, tag, capture));
         Ok(child)

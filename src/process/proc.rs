@@ -47,15 +47,6 @@ impl<M, S> Process<M, S>
 where
     S: Serializer<M>,
 {
-    /// Construct a process from a raw ID.
-    pub(crate) unsafe fn from(id: u64) -> Self {
-        Process {
-            id,
-            consumed: UnsafeCell::new(false),
-            serializer_type: PhantomData,
-        }
-    }
-
     /// Returns a globally unique process ID.
     pub fn uuid(&self) -> u128 {
         let mut uuid: [u8; 16] = [0; 16];
@@ -117,6 +108,14 @@ where
     fn id(&self) -> u64 {
         self.id
     }
+
+    unsafe fn from_id(id: u64) -> Self {
+        Self {
+            id,
+            consumed: UnsafeCell::new(false),
+            serializer_type: PhantomData,
+        }
+    }
 }
 
 impl<C, M, S> IntoProcess<C> for Process<M, S>
@@ -129,7 +128,7 @@ where
     where
         Self: Sized,
     {
-        spawn(module, false, captured, handler)
+        spawn(module, None, captured, handler)
     }
 }
 
@@ -141,13 +140,14 @@ where
 
     fn spawn_link(
         module: Option<u64>,
+        tag: Tag,
         captured: C,
         handler: Self::Handler,
     ) -> Result<Process<M, S>, LunaticError>
     where
         Self: Sized,
     {
-        spawn(module, true, captured, handler)
+        spawn(module, Some(tag), captured, handler)
     }
 }
 
@@ -159,7 +159,7 @@ where
 // more information about sending the current module to another environment.
 fn spawn<C, M, S>(
     module: Option<u64>,
-    link: bool,
+    link: Option<Tag>,
     captured: C,
     entry: fn(C, Mailbox<M, S>),
 ) -> Result<Process<M, S>, LunaticError>
@@ -189,11 +189,8 @@ where
     let mut id = 0;
     let func = "_lunatic_spawn_by_index";
     let link = match link {
-        // TODO: Do we want to be notified with the right tag once the link dies?
-        //       I assume not, because only supervisors can use this information and we can't spawn
-        //       this kind of processes from supervisors.
-        true => 1,
-        false => 0,
+        Some(tag) => tag.id(),
+        None => 0,
     };
     let result = unsafe {
         match module {
@@ -289,7 +286,7 @@ where
 {
     fn clone(&self) -> Self {
         let id = unsafe { host_api::process::clone_process(self.id) };
-        unsafe { Process::from(id) }
+        unsafe { Process::from_id(id) }
     }
 }
 
@@ -340,7 +337,7 @@ where
         E: serde::de::Error,
     {
         let id = unsafe { host_api::message::take_process(index) };
-        Ok(unsafe { Process::from(id) })
+        Ok(unsafe { Process::from_id(id) })
     }
 }
 

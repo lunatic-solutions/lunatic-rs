@@ -121,10 +121,18 @@ impl<T> Resource for GenericServer<T> {
     fn id(&self) -> u64 {
         self.id
     }
+
+    unsafe fn from_id(id: u64) -> Self {
+        Self {
+            id,
+            consumed: UnsafeCell::new(false),
+            serializer_type: PhantomData,
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
-enum Sendable {
+pub(crate) enum Sendable {
     Message(i32),
     // The process type can't be carried over as a generic and is set here to `()`, but overwritten
     // at the time of returning with the correct type.
@@ -149,10 +157,10 @@ where
         {
             // Get content out of message
             let message: MU = SU::decode().unwrap();
-            let result = <TU as HandleRequest<MU, SU>>::handle(this, message);
-            // Get tag out of message
+            // Get tag out of message before the handler function maybe manipulates it.
             let tag = unsafe { host_api::message::get_tag() };
             let tag = Tag::from(tag);
+            let result = <TU as HandleRequest<MU, SU>>::handle(this, message);
             sender.tag_send(tag, result);
         }
 
@@ -161,7 +169,7 @@ where
         unsafe { host_api::message::create_data(tag.id(), 0) };
         // Create reference to self
         let this_id = unsafe { host_api::process::this() };
-        let this_proc: Process<()> = unsafe { Process::from(this_id) };
+        let this_proc: Process<()> = unsafe { Process::from_id(this_id) };
         // First encode the handler inside the message buffer.
         let handler = unpacker::<T, M, S> as usize as i32;
         let handler_message = Sendable::Request(handler, this_proc);
@@ -228,7 +236,7 @@ where
     where
         Self: Sized,
     {
-        spawn(module, false, state, init)
+        spawn(module, None, state, init)
     }
 }
 
@@ -240,13 +248,14 @@ where
 
     fn spawn_link(
         module: Option<u64>,
+        tag: Tag,
         state: T,
         init: Self::Handler,
     ) -> Result<GenericServer<T>, LunaticError>
     where
         Self: Sized,
     {
-        spawn(module, true, state, init)
+        spawn(module, Some(tag), state, init)
     }
 }
 
@@ -256,7 +265,7 @@ where
 // For more info on how this function works, read the explanation inside super::process::spawn.
 fn spawn<T>(
     module: Option<u64>,
-    link: bool,
+    link: Option<Tag>,
     state: T,
     init: fn(state: &mut T),
 ) -> Result<GenericServer<T>, LunaticError>
@@ -272,11 +281,8 @@ where
     let mut id = 0;
     let func = "_lunatic_spawn_gen_server_by_index";
     let link = match link {
-        // TODO: Do we want to be notified with the right tag once the link dies?
-        //       I assume not, because only supervisors can use this information and we can't spawn
-        //       this kind of processes from supervisors.
-        true => 1,
-        false => 0,
+        Some(tag) => tag.id(),
+        None => 0,
     };
     let result = unsafe {
         match module {

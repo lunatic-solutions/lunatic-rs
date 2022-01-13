@@ -1,11 +1,12 @@
 use std::time::Duration;
 
-use crate::{host_api, LunaticError};
+use crate::{host_api, LunaticError, Tag};
 
 mod async_task;
 mod gen_server;
 mod proc;
 mod server;
+mod supervisor;
 mod task;
 
 /// `IntoProcess` is a helper trait to generalize over the [`spawn`] function.
@@ -62,6 +63,7 @@ pub trait IntoProcessLink<C> {
     // Spawn's a new process and returns a handle to it.
     fn spawn_link(
         module: Option<u64>,
+        tag: Tag,
         capture: C,
         handler: Self::Handler,
     ) -> Result<Self, LunaticError>
@@ -78,7 +80,7 @@ pub fn spawn_link<T, C>(capture: C, handler: T::Handler) -> Result<T, LunaticErr
 where
     T: IntoProcessLink<C>,
 {
-    <T as IntoProcessLink<C>>::spawn_link(None, capture, handler)
+    <T as IntoProcessLink<C>>::spawn_link(None, Tag::new(), capture, handler)
 }
 
 /// Suspends the current process for `duration` of time.
@@ -91,4 +93,5 @@ pub use async_task::AsyncTask;
 pub use gen_server::{GenericServer, HandleMessage, HandleRequest};
 pub use proc::Process;
 pub use server::Server;
+pub use supervisor::{HandleSupervisorMessage, HandleSupervisorRequest, Supervise, Supervisor};
 pub use task::Task;

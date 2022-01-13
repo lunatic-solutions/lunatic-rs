@@ -5,7 +5,7 @@ use crate::{
     environment::{params_to_vec, Param},
     host_api,
     serializer::{Bincode, Serializer},
-    LunaticError, Mailbox, Resource,
+    LunaticError, Mailbox, Resource, Tag,
 };
 
 /// An one-off process spawned from a function that can capture some input from the parent.
@@ -46,6 +46,13 @@ impl<S> Resource for AsyncTask<S> {
     fn id(&self) -> u64 {
         self.id
     }
+
+    unsafe fn from_id(id: u64) -> Self {
+        Self {
+            id,
+            serializer_type: PhantomData,
+        }
+    }
 }
 
 impl<C, S> IntoProcess<C> for AsyncTask<S>
@@ -62,7 +69,7 @@ where
     where
         Self: Sized,
     {
-        spawn(module, false, capture, handler)
+        spawn(module, None, capture, handler)
     }
 }
 
@@ -74,13 +81,14 @@ where
 
     fn spawn_link(
         module: Option<u64>,
+        tag: Tag,
         capture: C,
         handler: Self::Handler,
     ) -> Result<AsyncTask<S>, LunaticError>
     where
         Self: Sized,
     {
-        spawn(module, true, capture, handler)
+        spawn(module, Some(tag), capture, handler)
     }
 }
 
@@ -90,7 +98,7 @@ where
 // For more info on how this function works, read the explanation inside super::process::spawn.
 fn spawn<C, S>(
     module: Option<u64>,
-    link: bool,
+    link: Option<Tag>,
     capture: C,
     entry: fn(C),
 ) -> Result<AsyncTask<S>, LunaticError>
@@ -106,11 +114,8 @@ where
     let mut id = 0;
     let func = "_lunatic_spawn_task_by_index";
     let link = match link {
-        // TODO: Do we want to be notified with the right tag once the link dies?
-        //       I assume not, because only supervisors can use this information and we can't spawn
-        //       this kind of processes from supervisors.
-        true => 1,
-        false => 0,
+        Some(tag) => tag.id(),
+        None => 0,
     };
     let result = unsafe {
         match module {

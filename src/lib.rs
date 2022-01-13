@@ -110,8 +110,15 @@ pub use lunatic_macros::main;
 
 /// Implemented for all resources held by the VM.
 pub trait Resource {
-    // Returns process local resource id.
+    /// Returns process local resource id.
     fn id(&self) -> u64;
+    /// Turns process local resource id into resource handle.
+    ///
+    /// # Safety
+    ///
+    /// Extra care needs to be taken when balancing host side resources. It's easy to create an
+    /// invalid resource reference.
+    unsafe fn from_id(id: u64) -> Self;
 }
 
 /// Returns a handle to the current process.
@@ -123,7 +130,7 @@ where
     S: serializer::Serializer<M>,
 {
     let id = unsafe { host_api::process::this() };
-    unsafe { Process::from(id) }
+    unsafe { Process::from_id(id) }
 }
 
 /// Returns a handle to the current environment.

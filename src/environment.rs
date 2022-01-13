@@ -7,7 +7,7 @@ use crate::{
     host_api,
     process::{IntoProcess, IntoProcessLink, Process},
     serializer::Serializer,
-    Resource,
+    Resource, Tag,
 };
 
 /// Environment configuration.
@@ -272,7 +272,7 @@ where
             &mut process_id as *mut u64,
         )
     } {
-        0 => Ok(Some(unsafe { Process::from(process_id) })),
+        0 => Ok(Some(unsafe { Process::from_id(process_id) })),
         1 => Err(RegistryError::IncorrectSemver),
         2 => Ok(None),
         _ => unreachable!(),
@@ -321,7 +321,7 @@ impl Module {
         };
 
         if result == 0 {
-            Ok(unsafe { Process::from(process_or_error_id) })
+            Ok(unsafe { Process::from_id(process_or_error_id) })
         } else {
             Err(LunaticError::from(process_or_error_id))
         }
@@ -351,7 +351,7 @@ impl Module {
         };
 
         if result == 0 {
-            Ok(unsafe { Process::from(process_or_error_id) })
+            Ok(unsafe { Process::from_id(process_or_error_id) })
         } else {
             Err(LunaticError::from(process_or_error_id))
         }
@@ -395,7 +395,7 @@ impl ThisModule {
     where
         T: IntoProcessLink<C>,
     {
-        <T as IntoProcessLink<C>>::spawn_link(Some(self.id), capture, handler)
+        <T as IntoProcessLink<C>>::spawn_link(Some(self.id), Tag::new(), capture, handler)
     }
 }
 
