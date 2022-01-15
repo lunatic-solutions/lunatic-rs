@@ -53,6 +53,7 @@ pub mod networking {
             id: *mut u64,
         ) -> u32;
         pub fn drop_tcp_listener(tcp_listener_id: u64);
+        pub fn local_addr(tcp_listener_id: u64, addr_dns_iter: *mut u64) -> u32;
         pub fn tcp_accept(listener_id: u64, id: *mut u64, peer_dns_iter: *mut u64) -> u32;
         pub fn tcp_connect(
             addr_type: u32,
