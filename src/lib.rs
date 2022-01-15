@@ -22,7 +22,7 @@ function.
                    same type.
 * **[`GenericServer`]** - Abstracts the common client-server interaction and can handle requests
                           of different types.
-* **`Supervisor`** - A process that can supervise others and re-spawn them if they trap.
+* **[`Supervisor`]** - A process that can supervise others and re-spawn them if they trap.
 
 ### Linking
 

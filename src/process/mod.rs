@@ -5,6 +5,7 @@ use crate::{host_api, LunaticError, Tag};
 mod async_task;
 mod gen_server;
 mod proc;
+mod protocol;
 mod server;
 mod supervisor;
 mod task;
@@ -38,7 +39,7 @@ pub trait IntoProcess<C> {
 ///                same type.
 /// * [`GenericServer`] - Abstracts the common client-server interaction and can handle requests
 ///                       of different types.
-/// * `Supervisor` - A process that can supervise others and re-spawn them if they trap.
+/// * [`Supervisor`] - A process that can supervise others and re-spawn them if they trap.
 ///
 /// Refer to their individual documentation to see how they interact with the `spawn` function.
 pub fn spawn<T, C>(capture: C, handler: T::Handler) -> Result<T, LunaticError>
@@ -92,6 +93,7 @@ pub fn sleep(duration: Duration) {
 pub use async_task::AsyncTask;
 pub use gen_server::{GenericServer, HandleMessage, HandleRequest};
 pub use proc::Process;
+pub use protocol::Protocol;
 pub use server::Server;
 pub use supervisor::{HandleSupervisorMessage, HandleSupervisorRequest, Supervise, Supervisor};
 pub use task::Task;
