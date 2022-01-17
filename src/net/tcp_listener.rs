@@ -129,4 +129,22 @@ impl TcpListener {
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
+
+    /// Returns the local address that this listener is bound to.
+    ///
+    /// This can be useful, for example, to identify when binding to port 0 which port was assigned by the OS.
+    pub fn local_addr(&self) -> Result<SocketAddr> {
+        let mut dns_iter_or_error_id = 0;
+        let result = unsafe {
+            host_api::networking::local_addr(self.id, &mut dns_iter_or_error_id as *mut u64)
+        };
+        if result == 0 {
+            let mut dns_iter = SocketAddrIterator::from(dns_iter_or_error_id);
+            let addr = dns_iter.next().expect("must contain one element");
+            Ok(addr)
+        } else {
+            let lunatic_error = LunaticError::from(dns_iter_or_error_id);
+            Err(Error::new(ErrorKind::Other, lunatic_error))
+        }
+    }
 }
