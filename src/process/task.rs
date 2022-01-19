@@ -159,7 +159,7 @@ where
         // Create reference to self
         let this_id = unsafe { host_api::process::this() };
         let this_proc: Process<M, S> = unsafe { Process::from_id(this_id) };
-        // Send all data to child required
+        // Send all data to child
         child.send((this_proc, tag, capture));
         Ok(child)
     } else {
