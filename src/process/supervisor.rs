@@ -529,7 +529,7 @@ mod tests {
     use super::*;
     use crate::{
         process::{sleep, spawn, spawn_link},
-        AsyncTask, Server,
+        BackgroundTask, Server,
     };
 
     #[derive(serde::Serialize, serde::Deserialize, Default)]
@@ -544,7 +544,7 @@ mod tests {
                 *state += message;
                 // If we reach a state of 3 fail after answering request
                 if *state == 3 {
-                    spawn_link::<AsyncTask, _>((), |_| panic!("kill parent")).unwrap();
+                    spawn_link::<BackgroundTask, _>((), |_| panic!("kill parent")).unwrap();
                 }
                 *state
             });
@@ -595,7 +595,7 @@ mod tests {
         // There is no real way of testing traps for now, at least not until this is resolved:
         // https://github.com/lunatic-solutions/rust-lib/issues/8
         // A manual log output observation is necessary her to check if both processes failed.
-        spawn::<AsyncTask, _>((), |_| {
+        spawn::<BackgroundTask, _>((), |_| {
             let child = spawn_link::<Supervisor<_>, _>(TestSupervisor::default(), |_| {}).unwrap();
             // Trigger failure
             child.send(Panic);

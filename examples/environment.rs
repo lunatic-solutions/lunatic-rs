@@ -1,4 +1,4 @@
-use lunatic::{AsyncTask, Config, Environment, Mailbox};
+use lunatic::{BackgroundTask, Config, Environment, Mailbox};
 
 #[lunatic::main]
 fn main(_: Mailbox<()>) {
@@ -12,11 +12,11 @@ fn main(_: Mailbox<()>) {
 
     // This process will fail because it uses too much memory
     module
-        .spawn::<AsyncTask, _>((), |_| {
+        .spawn::<BackgroundTask, _>((), |_| {
             vec![0; 150_000];
         })
         .unwrap();
 
     // This process will fail because it uses too much compute
-    module.spawn::<AsyncTask, _>((), |_| loop {}).unwrap();
+    module.spawn::<BackgroundTask, _>((), |_| loop {}).unwrap();
 }

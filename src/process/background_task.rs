@@ -14,14 +14,14 @@ use crate::{
 ///
 /// ```
 /// // Run computation in different process.
-/// spawn::<AsyncTask<_>, _>((2, 3), |(a, b)| {a + b;}).unwrap();
+/// spawn::<BackgroundTask, _>((2, 3), |(a, b)| {a + b;}).unwrap();
 /// ```
-pub struct AsyncTask<S = Bincode> {
+pub struct BackgroundTask<S = Bincode> {
     id: u64,
     serializer_type: PhantomData<S>,
 }
 
-impl<S> AsyncTask<S> {
+impl<S> BackgroundTask<S> {
     /// Returns a globally unique process ID.
     pub fn uuid(&self) -> u128 {
         let mut uuid: [u8; 16] = [0; 16];
@@ -42,7 +42,7 @@ impl<S> AsyncTask<S> {
     }
 }
 
-impl<S> Resource for AsyncTask<S> {
+impl<S> Resource for BackgroundTask<S> {
     fn id(&self) -> u64 {
         self.id
     }
@@ -55,7 +55,7 @@ impl<S> Resource for AsyncTask<S> {
     }
 }
 
-impl<C, S> IntoProcess<C> for AsyncTask<S>
+impl<C, S> IntoProcess<C> for BackgroundTask<S>
 where
     S: Serializer<C>,
 {
@@ -65,7 +65,7 @@ where
         module: Option<u64>,
         capture: C,
         handler: Self::Handler,
-    ) -> Result<AsyncTask<S>, LunaticError>
+    ) -> Result<BackgroundTask<S>, LunaticError>
     where
         Self: Sized,
     {
@@ -73,7 +73,7 @@ where
     }
 }
 
-impl<C, S> IntoProcessLink<C> for AsyncTask<S>
+impl<C, S> IntoProcessLink<C> for BackgroundTask<S>
 where
     S: Serializer<C>,
 {
@@ -84,7 +84,7 @@ where
         tag: Tag,
         capture: C,
         handler: Self::Handler,
-    ) -> Result<AsyncTask<S>, LunaticError>
+    ) -> Result<BackgroundTask<S>, LunaticError>
     where
         Self: Sized,
     {
@@ -101,7 +101,7 @@ fn spawn<C, S>(
     link: Option<Tag>,
     capture: C,
     entry: fn(C),
-) -> Result<AsyncTask<S>, LunaticError>
+) -> Result<BackgroundTask<S>, LunaticError>
 where
     S: Serializer<C>,
 {
@@ -141,12 +141,12 @@ where
     if result == 0 {
         // If the captured variable is of size 0, we don't need to send it to another process.
         if std::mem::size_of::<C>() == 0 {
-            Ok(AsyncTask::<S> {
+            Ok(BackgroundTask::<S> {
                 id,
                 serializer_type: PhantomData,
             })
         } else {
-            let child = AsyncTask::<S> {
+            let child = BackgroundTask::<S> {
                 id,
                 serializer_type: PhantomData,
             };
@@ -180,13 +180,13 @@ extern "C" fn _lunatic_spawn_task_by_index(type_helper: usize, function: usize) 
 }
 
 // Processes are equal if their UUID is equal.
-impl<S> PartialEq for AsyncTask<S> {
+impl<S> PartialEq for BackgroundTask<S> {
     fn eq(&self, other: &Self) -> bool {
         self.uuid() == other.uuid()
     }
 }
 
-impl<S> std::fmt::Debug for AsyncTask<S> {
+impl<S> std::fmt::Debug for BackgroundTask<S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Process")
             .field("uuid", &self.uuid())
@@ -194,7 +194,7 @@ impl<S> std::fmt::Debug for AsyncTask<S> {
     }
 }
 
-impl<S> Drop for AsyncTask<S> {
+impl<S> Drop for BackgroundTask<S> {
     fn drop(&mut self) {
         unsafe { host_api::process::drop_process(self.id) };
     }
@@ -212,7 +212,7 @@ mod tests {
 
     #[test]
     fn spawn_test() {
-        let _child = spawn::<AsyncTask, _>(1, |capture| {
+        let _child = spawn::<BackgroundTask, _>(1, |capture| {
             assert_eq!(capture, 1);
         })
         .unwrap();
@@ -223,8 +223,8 @@ mod tests {
         // There is no real way of testing traps for now, at least not until this is resolved:
         // https://github.com/lunatic-solutions/rust-lib/issues/8
         // A manual log output observation is necessary her to check if both processes failed.
-        let _child = spawn::<AsyncTask, _>((), |_| {
-            let _child = spawn_link::<AsyncTask, _>((), |_| {
+        let _child = spawn::<BackgroundTask, _>((), |_| {
+            let _child = spawn_link::<BackgroundTask, _>((), |_| {
                 panic!("fails");
             })
             .unwrap();

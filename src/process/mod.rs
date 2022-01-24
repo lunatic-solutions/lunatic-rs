@@ -2,8 +2,9 @@ use std::time::Duration;
 
 use crate::{host_api, LunaticError, Tag};
 
-mod async_task;
+mod background_task;
 mod gen_server;
+mod macros;
 mod proc;
 mod protocol;
 mod server;
@@ -34,7 +35,7 @@ pub trait IntoProcess<C> {
 ///
 /// * [`Process`] - A process that can receive messages through a [`Mailbox`](crate::Mailbox).
 /// * [`Task`] - One-off process that returns a value.
-/// * [`AsyncTask`] - One-off process that doesn't return a value.
+/// * [`BackgroundTask`] - One-off process that doesn't return a value.
 /// * [`Server`] - Abstracts the common client-server interaction and can handle requests of the
 ///                same type.
 /// * [`GenericServer`] - Abstracts the common client-server interaction and can handle requests
@@ -90,10 +91,11 @@ pub fn sleep(duration: Duration) {
 }
 
 // re-export all process types
-pub use async_task::AsyncTask;
+pub use background_task::BackgroundTask;
 pub use gen_server::{GenericServer, HandleMessage, HandleRequest};
+pub use macros::*;
 pub use proc::Process;
-pub use protocol::Protocol;
+pub use protocol::{session::*, Protocol};
 pub use server::Server;
 pub use supervisor::{HandleSupervisorMessage, HandleSupervisorRequest, Supervise, Supervisor};
 pub use task::Task;

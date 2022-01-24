@@ -1,4 +1,4 @@
-mod session;
+pub mod session;
 
 use std::{any::TypeId, marker::PhantomData};
 
@@ -220,7 +220,7 @@ mod tests {
     use super::session::{End, HasDual, Recv, Send};
     use crate::{
         process::{sleep, spawn, spawn_link},
-        AsyncTask, Protocol,
+        BackgroundTask, Protocol,
     };
 
     type AddProtocol = Recv<i32, Recv<i32, Send<i32, End>>>;
@@ -247,7 +247,7 @@ mod tests {
         // There is no real way of testing traps for now, at least not until this is resolved:
         // https://github.com/lunatic-solutions/rust-lib/issues/8
         // A manual log output observation is necessary her to check if both processes failed.
-        spawn::<AsyncTask, _>((), |_| {
+        spawn::<BackgroundTask, _>((), |_| {
             let _dont_drop = spawn_link::<Protocol<AddProtocol>, _>((), |_, _| {
                 // Will panic because protocol is dropped without finishing.
             })

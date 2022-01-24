@@ -17,7 +17,7 @@ function.
 
 * **[`Process`]** - A process that can receive messages through a [`Mailbox`].
 * **[`Task`]** - One-off process that returns a value.
-* **[`AsyncTask`]** - One-off process that doesn't return a value.
+* **[`BackgroundTask`]** - One-off process that doesn't return a value.
 * **[`Server`]** - Abstracts the common client-server interaction and can handle requests of the
                    same type.
 * **[`GenericServer`]** - Abstracts the common client-server interaction and can handle requests

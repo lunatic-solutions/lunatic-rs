@@ -1,4 +1,4 @@
-use lunatic::{net, spawn, AsyncTask};
+use lunatic::{net, spawn, BackgroundTask};
 use std::io::{BufRead, BufReader, Write};
 
 fn main() {
@@ -7,7 +7,7 @@ fn main() {
     while let Ok((tcp_stream, _peer)) = listener.accept() {
         // Pass the TCP stream as a context to the new process. We can't use a closures that
         // capture parent variables because no memory is shared between processes.
-        spawn::<AsyncTask, _>(tcp_stream, handle).unwrap();
+        spawn::<BackgroundTask, _>(tcp_stream, handle).unwrap();
     }
 }
 

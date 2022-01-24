@@ -13,7 +13,7 @@ use crate::{
 ///
 /// When [`result`](Task::result) is called it will block until the async computation is done and
 /// a result available. If you don't want to wait on the result use an
-/// [`AsyncTask`](crate::AsyncTask).
+/// [`BackgroundTask`](crate::BackgroundTask).
 ///
 /// # Example
 ///
@@ -23,7 +23,7 @@ use crate::{
 /// // Wait for process to finish and get result.
 /// assert_eq!(child.result(), 5);
 /// ```
-#[must_use = "If `result` is not called on `Task` it will leak memory. Use `AsyncTask` instead."]
+#[must_use = "If `result` is not called on `Task` it will leak memory. Use `BackgroundTask` instead."]
 pub struct Task<M, S = Bincode>
 where
     S: Serializer<M>,
