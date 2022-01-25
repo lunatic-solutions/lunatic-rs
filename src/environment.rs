@@ -11,17 +11,29 @@ use crate::{
 };
 
 /// Environment configuration.
-pub struct Config {
+pub struct EnvConfig {
     id: u64,
 }
 
-impl Drop for Config {
+impl Drop for EnvConfig {
     fn drop(&mut self) {
         unsafe { host_api::process::drop_config(self.id) };
     }
 }
 
-impl Config {
+impl Default for EnvConfig {
+    /// By default all host functions are accessible, the memory limit is set to 4 Gb and there is
+    /// no compute limit.
+    fn default() -> Self {
+        let bytes = 0x1_0000_0000; // 4 Gb
+        let id = unsafe { host_api::process::create_config(bytes, 0) };
+        let mut this = Self { id };
+        this.allow_namespace("");
+        this
+    }
+}
+
+impl EnvConfig {
     /// Create a new environment configuration.
     ///
     /// * **max_memory** - The maximum amount of memory in **bytes** that processes spawned into
@@ -42,6 +54,32 @@ impl Config {
     /// An empty string ("") is considered a prefix of **all** namespaces.
     pub fn allow_namespace(&mut self, namespace: &str) {
         unsafe { host_api::process::allow_namespace(self.id, namespace.as_ptr(), namespace.len()) };
+    }
+
+    /// Allow all host functions in the `wasi_snapshot_preview1` namespace.
+    pub fn allow_wasi(&mut self) {
+        let wasi = "wasi_snapshot_preview1::";
+        unsafe { host_api::process::allow_namespace(self.id, wasi.as_ptr(), wasi.len()) };
+    }
+
+    /// Allow all host functions in the `lunatic::networking` namespace.
+    pub fn allow_networking(&mut self) {
+        let networking = "lunatic::networking::";
+        unsafe {
+            host_api::process::allow_namespace(self.id, networking.as_ptr(), networking.len())
+        };
+    }
+
+    /// Allow all host functions in the `lunatic::process` namespace.
+    pub fn allow_processes(&mut self) {
+        let processes = "lunatic::process::";
+        unsafe { host_api::process::allow_namespace(self.id, processes.as_ptr(), processes.len()) };
+    }
+
+    /// Allow all host functions in the `lunatic::process` namespace.
+    pub fn allow_messaging(&mut self) {
+        let processes = "lunatic::message::";
+        unsafe { host_api::process::allow_namespace(self.id, processes.as_ptr(), processes.len()) };
     }
 
     /// Grant access to the given host directory.
@@ -65,6 +103,8 @@ impl Config {
     }
 
     /// Add a WebAssembly module as a plugin to this configuration.
+    ///
+    /// The plugin API is still WIP and not stable/documented at the moment.
     pub fn add_plugin(&mut self, plugin: &[u8]) -> Result<(), LunaticError> {
         let mut error_id = 0;
         let result = unsafe {
@@ -124,6 +164,9 @@ impl Display for RegistryError {
 /// ```
 pub struct Environment {
     id: u64,
+    /// The currently running module is going to be implicitly added to the environment if the
+    /// methods `spawn` or `spawn_link` are called on it.
+    this_module: Option<ThisModule>,
 }
 
 impl Drop for Environment {
@@ -134,11 +177,14 @@ impl Drop for Environment {
 
 impl Environment {
     pub(crate) fn from(id: u64) -> Self {
-        Environment { id }
+        Environment {
+            id,
+            this_module: None,
+        }
     }
 
     /// Create a new environment from a configuration.
-    pub fn new(config: Config) -> Result<Self, LunaticError> {
+    pub fn new(config: EnvConfig) -> Result<Self, LunaticError> {
         let mut env_or_error_id = 0;
         let result = unsafe {
             host_api::process::create_environment(config.id, &mut env_or_error_id as *mut u64)
@@ -146,6 +192,7 @@ impl Environment {
         if result == 0 {
             Ok(Self {
                 id: env_or_error_id,
+                this_module: None,
             })
         } else {
             Err(LunaticError::from(env_or_error_id))
@@ -153,7 +200,7 @@ impl Environment {
     }
 
     /// Create a new environment on a remote node.
-    pub fn new_remote(node_name: &str, config: Config) -> Result<Self, LunaticError> {
+    pub fn new_remote(node_name: &str, config: EnvConfig) -> Result<Self, LunaticError> {
         let mut env_or_error_id = 0;
         let result = unsafe {
             host_api::process::create_remote_environment(
@@ -166,6 +213,7 @@ impl Environment {
         if result == 0 {
             Ok(Self {
                 id: env_or_error_id,
+                this_module: None,
             })
         } else {
             Err(LunaticError::from(env_or_error_id))
@@ -192,16 +240,46 @@ impl Environment {
         }
     }
 
+    /// Spawns a new process  into this environment.
+    pub fn spawn<T, C>(&mut self, capture: C, handler: T::Handler) -> Result<T, LunaticError>
+    where
+        T: IntoProcess<C>,
+    {
+        match &self.this_module {
+            Some(module) => module.spawn(capture, handler),
+            None => match self.add_this_module() {
+                Ok(()) => self.spawn(capture, handler),
+                Err(err) => Err(err),
+            },
+        }
+    }
+
+    /// Spawns a new process into this environment and link it to the parent.
+    pub fn spawn_link<T, C>(&mut self, capture: C, handler: T::Handler) -> Result<T, LunaticError>
+    where
+        T: IntoProcessLink<C>,
+    {
+        match &self.this_module {
+            Some(module) => module.spawn_link(capture, handler),
+            None => match self.add_this_module() {
+                Ok(()) => self.spawn_link(capture, handler),
+                Err(err) => Err(err),
+            },
+        }
+    }
+
     /// Add the currently running module to the environment.
-    pub fn add_this_module(&mut self) -> Result<ThisModule, LunaticError> {
+    fn add_this_module(&mut self) -> Result<(), LunaticError> {
         let mut module_or_error_id = 0;
         let result = unsafe {
             host_api::process::add_this_module(self.id, &mut module_or_error_id as *mut u64)
         };
         if result == 0 {
-            Ok(ThisModule {
+            let module = ThisModule {
                 id: module_or_error_id,
-            })
+            };
+            self.this_module = Some(module);
+            Ok(())
         } else {
             Err(LunaticError::from(module_or_error_id))
         }
@@ -363,7 +441,7 @@ impl Module {
 /// This type is useful because it allows us to spawn existing functions by reference into a new
 /// environment. This is only possible if we are running inside the module we are spawning the
 /// processes from, otherwise we could not reference them by table id.
-pub struct ThisModule {
+struct ThisModule {
     id: u64,
 }
 
@@ -379,7 +457,7 @@ impl ThisModule {
     /// TODO: Research if `spawn` and `spawn_link` could move the whole spawning procedure into the new
     ///       async task, so that there can't be any failure during the host call and we can return `T`
     ///       instead of a `Result` here.
-    pub fn spawn<T, C>(&self, capture: C, handler: T::Handler) -> Result<T, LunaticError>
+    fn spawn<T, C>(&self, capture: C, handler: T::Handler) -> Result<T, LunaticError>
     where
         T: IntoProcess<C>,
     {
@@ -391,7 +469,7 @@ impl ThisModule {
     /// TODO: Research if `spawn` and `spawn_link` could move the whole spawning procedure into the new
     ///       async task, so that there can't be any failure during the host call and we can return `T`
     ///       instead of a `Result` here.
-    pub fn spawn_link<T, C>(&self, capture: C, handler: T::Handler) -> Result<T, LunaticError>
+    fn spawn_link<T, C>(&self, capture: C, handler: T::Handler) -> Result<T, LunaticError>
     where
         T: IntoProcessLink<C>,
     {
