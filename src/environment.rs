@@ -289,7 +289,7 @@ impl Environment {
     ///
     /// The version must be in a correct semver format. If a process was registered under the same
     /// name and version, it will be overwritten.
-    pub fn register<M, S>(
+    pub fn register_name<M, S>(
         &self,
         name: &str,
         version: &str,
@@ -315,7 +315,7 @@ impl Environment {
     }
 
     /// Unregister a process from the environment
-    pub fn unregister(&self, name: &str, version: &str) -> Result<(), RegistryError> {
+    pub fn unregister_name(&self, name: &str, version: &str) -> Result<(), RegistryError> {
         match unsafe {
             host_api::process::unregister(
                 name.as_ptr(),
@@ -331,15 +331,81 @@ impl Environment {
             _ => unreachable!(),
         }
     }
+
+    /// Register a process under a specific name, type & version in the environment.
+    ///
+    /// The version must be in a correct semver format. If a process was registered under the same
+    /// type and version, it will be overwritten.
+    pub fn register_type<T, C>(
+        &self,
+        name: &str,
+        version: &str,
+        process: T,
+    ) -> Result<(), RegistryError>
+    where
+        // TODO: Introduce a new trait `Process?` to not overload `IntoProcess` for all the use cases.
+        T: IntoProcess<C> + Resource + IntoProcessName,
+    {
+        let type_name = T::name();
+        let name = format!("{}+{}", type_name, name);
+        match unsafe {
+            host_api::process::register(
+                name.as_ptr(),
+                name.len(),
+                version.as_ptr(),
+                version.len(),
+                self.id,
+                process.id(),
+            )
+        } {
+            0 => Ok(()),
+            1 => Err(RegistryError::IncorrectSemver),
+            _ => unreachable!(),
+        }
+    }
 }
 
 /// Returns a process that was registered inside the environment that the caller belongs to.
 ///
 /// The query can be be an exact version or follow semver query rules (e.g. "^1.1").
-pub fn lookup<M, S>(name: &str, query: &str) -> Result<Option<Process<M, S>>, RegistryError>
+///
+/// # Safety
+///
+/// This function takes a type hint, but doesn't provide any guarantees that the returned process
+/// has the correct type. For a safer alternative look at `register_type` & [`lookup_type`].
+pub unsafe fn lookup_name<M, S>(
+    name: &str,
+    query: &str,
+) -> Result<Option<Process<M, S>>, RegistryError>
 where
     S: Serializer<M>,
 {
+    let mut process_id: u64 = 0;
+    match host_api::process::lookup(
+        name.as_ptr(),
+        name.len(),
+        query.as_ptr(),
+        query.len(),
+        &mut process_id as *mut u64,
+    ) {
+        0 => Ok(Some(Process::from_id(process_id))),
+        1 => Err(RegistryError::IncorrectSemver),
+        2 => Ok(None),
+        _ => unreachable!(),
+    }
+}
+
+/// Returns a process that was registered inside the environment that the caller belongs to and has
+/// the requested type signature. If the name exists, but type mismatches the function will return
+/// `Ok(None)`.
+///
+/// The query can be be an exact version or follow semver query rules (e.g. "^1.1").
+pub fn lookup_type<T, C>(name: &str, query: &str) -> Result<Option<T>, RegistryError>
+where
+    T: IntoProcess<C> + Resource + IntoProcessName,
+{
+    let type_name = T::name();
+    let name = format!("{}+{}", type_name, name);
     let mut process_id: u64 = 0;
     match unsafe {
         host_api::process::lookup(
@@ -350,10 +416,20 @@ where
             &mut process_id as *mut u64,
         )
     } {
-        0 => Ok(Some(unsafe { Process::from_id(process_id) })),
+        0 => Ok(Some(unsafe { T::from_id(process_id) })),
         1 => Err(RegistryError::IncorrectSemver),
         2 => Ok(None),
         _ => unreachable!(),
+    }
+}
+
+pub trait IntoProcessName {
+    fn name() -> &'static str;
+}
+
+impl<T> IntoProcessName for T {
+    fn name() -> &'static str {
+        std::any::type_name::<T>()
     }
 }
 

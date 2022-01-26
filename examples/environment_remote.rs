@@ -5,7 +5,7 @@
 // > cargo build --example environment_remote
 // > lunatic --node 0.0.0.0:8334 --node-name bar --peer 0.0.0.0:8333 target/wasm32-wasi/debug/examples/environment_remote.wasm
 
-use lunatic::{lookup, this_process, EnvConfig, Environment, Mailbox, Process, Server};
+use lunatic::{lookup_name, this_process, EnvConfig, Environment, Mailbox, Process, Server};
 
 #[lunatic::main]
 fn main(m: Mailbox<i32>) {
@@ -15,13 +15,14 @@ fn main(m: Mailbox<i32>) {
 
     // Register parent in remote environment. In this case the parent could have been passed to the
     // child as part of the spawn context.
-    env.register("parent", "1.0.0", this_process(&m)).unwrap();
+    env.register_name("parent", "1.0.0", this_process(&m))
+        .unwrap();
 
     // Spawn child
     let child = env
         .spawn::<Server<(i32, i32), _>, _>((), |_, (a, b)| {
             println!("Adding {} + {}", a, b);
-            let parent: Process<i32> = lookup("parent", "^1").unwrap().unwrap();
+            let parent: Process<i32> = unsafe { lookup_name("parent", "^1").unwrap().unwrap() };
             // Send back result as message through lookup
             parent.send(a + b);
             // Also send it back as part of the response.
