@@ -564,8 +564,6 @@ mod tests {
 
     #[derive(serde::Serialize, serde::Deserialize)]
     struct Panic;
-    #[derive(serde::Serialize, serde::Deserialize)]
-    struct PanicChild;
 
     impl HandleSupervisorMessage<Panic> for TestSupervisor {
         fn handle(&mut self, _: Panic, _children: &mut Children) {

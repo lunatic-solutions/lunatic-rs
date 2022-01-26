@@ -453,16 +453,22 @@ mod tests {
     #[derive(serde::Serialize, serde::Deserialize)]
     struct TestServer(i32);
 
-    impl HandleMessage<i32> for TestServer {
-        fn handle(&mut self, message: i32) {
-            self.0 += message;
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct Inc(i32);
+
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct Count;
+
+    impl HandleMessage<Inc> for TestServer {
+        fn handle(&mut self, message: Inc) {
+            self.0 += message.0;
         }
     }
 
-    impl HandleRequest<()> for TestServer {
+    impl HandleRequest<Count> for TestServer {
         type Result = i32;
 
-        fn handle(&mut self, _: ()) -> Self::Result {
+        fn handle(&mut self, _: Count) -> Self::Result {
             self.0
         }
     }
@@ -479,9 +485,9 @@ mod tests {
     #[test]
     fn spawn_test() {
         let child = spawn::<GenericServer<_>, _>(TestServer(0), |_state| {}).unwrap();
-        child.send(33);
-        child.send(55);
-        let result = child.request(());
+        child.send(Inc(33));
+        child.send(Inc(55));
+        let result = child.request(Count);
         assert_eq!(result, 88);
 
         sleep(Duration::from_millis(100));
