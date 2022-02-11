@@ -12,7 +12,7 @@ readme = "Readme.md"
 [dependencies]
 thiserror = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-rmp-serde = "0.15"
+rmp-serde = { version = "0.15", features = ["serde128"] }
 lunatic-macros = { version = "^0.6.1", path = "./lunatic-macros" }
 
 [workspace]
