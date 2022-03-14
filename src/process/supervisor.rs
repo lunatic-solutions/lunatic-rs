@@ -6,12 +6,12 @@ use super::{
     IntoProcess, IntoProcessLink, Process,
 };
 use crate::{
-    environment::{params_to_vec, Param},
     host_api,
     mailbox::LinkMailbox,
+    module::{params_to_vec, Param, WasmModule},
     process::gen_server::Sendable,
     serializer::{Bincode, Serializer},
-    LunaticError, Mailbox, Resource, Tag,
+    LunaticError, Mailbox, ProcessConfig, Resource, Tag,
 };
 
 pub trait HandleSupervisorMessage<M, S = Bincode>
@@ -112,8 +112,13 @@ impl Children {
     {
         let tag = Tag::new();
         let re_spawner = move || {
-            let result =
-                <T as IntoProcessLink<C>>::spawn_link(None, tag, capture.clone(), handler.clone());
+            let result = <T as IntoProcessLink<C>>::spawn_link(
+                None,
+                None,
+                tag,
+                capture.clone(),
+                handler.clone(),
+            );
             match result {
                 Ok(process) => {
                     let pid = process.id();
@@ -298,14 +303,15 @@ where
     type Handler = fn(state: &mut T);
 
     fn spawn(
-        module: Option<u64>,
+        module: Option<WasmModule>,
+        config: Option<&ProcessConfig>,
         state: T,
         init: Self::Handler,
     ) -> Result<Supervisor<T>, LunaticError>
     where
         Self: Sized,
     {
-        spawn(module, None, state, init)
+        spawn(module, config, None, state, init)
     }
 }
 
@@ -316,7 +322,8 @@ where
     type Handler = fn(state: &mut T);
 
     fn spawn_link(
-        module: Option<u64>,
+        module: Option<WasmModule>,
+        config: Option<&ProcessConfig>,
         tag: Tag,
         state: T,
         init: Self::Handler,
@@ -324,7 +331,7 @@ where
     where
         Self: Sized,
     {
-        spawn(module, Some(tag), state, init)
+        spawn(module, config, Some(tag), state, init)
     }
 }
 
@@ -333,7 +340,8 @@ where
 //
 // For more info on how this function works, read the explanation inside super::process::spawn.
 fn spawn<T>(
-    module: Option<u64>,
+    module: Option<WasmModule>,
+    config: Option<&ProcessConfig>,
     link: Option<Tag>,
     state: T,
     init: fn(state: &mut T),
@@ -353,26 +361,19 @@ where
         Some(tag) => tag.id(),
         None => 0,
     };
+    let module_id = module.unwrap_or_else(WasmModule::inherit).id();
+    let config_id = config.map_or_else(|| ProcessConfig::inherit().id(), |config| config.id());
     let result = unsafe {
-        match module {
-            Some(module_id) => host_api::process::spawn(
-                link,
-                module_id,
-                func.as_ptr(),
-                func.len(),
-                params.as_ptr(),
-                params.len(),
-                &mut id,
-            ),
-            None => host_api::process::inherit_spawn(
-                link,
-                func.as_ptr(),
-                func.len(),
-                params.as_ptr(),
-                params.len(),
-                &mut id,
-            ),
-        }
+        host_api::process::spawn(
+            link,
+            config_id,
+            module_id,
+            func.as_ptr(),
+            func.len(),
+            params.as_ptr(),
+            params.len(),
+            &mut id,
+        )
     };
     if result == 0 {
         // If the captured variable is of size 0, we don't need to send it to another process.

@@ -1,4 +1,3 @@
-#![allow(clippy::needless_doctest_main)]
 /*!
 Helper library for building Rust applications that run on [lunatic][1].
 
@@ -32,21 +31,9 @@ children dies.
 
 To spawn a linked process use the [`spawn_link`] function.
 
-### Sandboxing
+### Process configuration
 
-An [`Environment`] can define characteristics that processes spawned into it have. The environment
-can limit:
-
-* Memory usage
-* Compute usage
-* WebAssembly host function access
-
-# Loading other WebAssembly modules dynamically
-
-Lunatic allows for dynamic loading of other WebAssembly modules at runtime.
-[`Environment::add_module`] can be used to add WebAssembly modules to an environment.
-
-Once a [`Module`] is loaded, processes can be spawned from it with [`Module::spawn`].
+TODO
 
 # Setup
 
@@ -89,16 +76,17 @@ and cargo is going to automatically build your project as a WebAssembly module a
 [1]: https://github.com/lunatic-solutions/lunatic
 */
 
-mod environment;
+mod config;
 mod error;
 mod host_api;
 mod mailbox;
+mod module;
 pub mod net;
 mod process;
 pub mod serializer;
 mod tag;
 
-pub use environment::*;
+pub use config::ProcessConfig;
 pub use error::LunaticError;
 pub use mailbox::{Mailbox, ReceiveError};
 pub use process::*;
@@ -131,10 +119,4 @@ where
 {
     let id = unsafe { host_api::process::this() };
     unsafe { Process::from_id(id) }
-}
-
-/// Returns a handle to the current environment.
-pub fn this_env() -> Environment {
-    let id = unsafe { host_api::process::this_env() };
-    Environment::from(id)
 }

@@ -2,10 +2,10 @@ use std::marker::PhantomData;
 
 use super::{IntoProcess, IntoProcessLink};
 use crate::{
-    environment::{params_to_vec, Param},
     host_api,
+    module::{params_to_vec, Param, WasmModule},
     serializer::{Bincode, Serializer},
-    LunaticError, Mailbox, Resource, Tag,
+    LunaticError, Mailbox, ProcessConfig, Resource, Tag,
 };
 
 /// An one-off process spawned from a function that can capture some input from the parent.
@@ -62,14 +62,15 @@ where
     type Handler = fn(capture: C);
 
     fn spawn(
-        module: Option<u64>,
+        module: Option<WasmModule>,
+        config: Option<&ProcessConfig>,
         capture: C,
         handler: Self::Handler,
     ) -> Result<BackgroundTask<S>, LunaticError>
     where
         Self: Sized,
     {
-        spawn(module, None, capture, handler)
+        spawn(module, config, None, capture, handler)
     }
 }
 
@@ -80,7 +81,8 @@ where
     type Handler = fn(capture: C);
 
     fn spawn_link(
-        module: Option<u64>,
+        module: Option<WasmModule>,
+        config: Option<&ProcessConfig>,
         tag: Tag,
         capture: C,
         handler: Self::Handler,
@@ -88,7 +90,7 @@ where
     where
         Self: Sized,
     {
-        spawn(module, Some(tag), capture, handler)
+        spawn(module, config, Some(tag), capture, handler)
     }
 }
 
@@ -97,7 +99,8 @@ where
 //
 // For more info on how this function works, read the explanation inside super::process::spawn.
 fn spawn<C, S>(
-    module: Option<u64>,
+    module: Option<WasmModule>,
+    config: Option<&ProcessConfig>,
     link: Option<Tag>,
     capture: C,
     entry: fn(C),
@@ -117,26 +120,19 @@ where
         Some(tag) => tag.id(),
         None => 0,
     };
+    let module_id = module.unwrap_or_else(WasmModule::inherit).id();
+    let config_id = config.map_or_else(|| ProcessConfig::inherit().id(), |config| config.id());
     let result = unsafe {
-        match module {
-            Some(module_id) => host_api::process::spawn(
-                link,
-                module_id,
-                func.as_ptr(),
-                func.len(),
-                params.as_ptr(),
-                params.len(),
-                &mut id,
-            ),
-            None => host_api::process::inherit_spawn(
-                link,
-                func.as_ptr(),
-                func.len(),
-                params.as_ptr(),
-                params.len(),
-                &mut id,
-            ),
-        }
+        host_api::process::spawn(
+            link,
+            config_id,
+            module_id,
+            func.as_ptr(),
+            func.len(),
+            params.as_ptr(),
+            params.len(),
+            &mut id,
+        )
     };
     if result == 0 {
         // If the captured variable is of size 0, we don't need to send it to another process.

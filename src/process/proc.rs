@@ -2,10 +2,10 @@ use std::{cell::UnsafeCell, marker::PhantomData};
 
 use super::{IntoProcess, IntoProcessLink};
 use crate::{
-    environment::{params_to_vec, Param},
     host_api,
+    module::{params_to_vec, Param, WasmModule},
     serializer::{Bincode, Serializer},
-    LunaticError, Mailbox, Resource, Tag,
+    LunaticError, Mailbox, ProcessConfig, Resource, Tag,
 };
 
 /// A process that can receive messages through a [`Mailbox`].
@@ -124,11 +124,16 @@ where
 {
     type Handler = fn(capture: C, arg: Mailbox<M, S>);
 
-    fn spawn(module: Option<u64>, captured: C, handler: Self::Handler) -> Result<Self, LunaticError>
+    fn spawn(
+        module: Option<WasmModule>,
+        config: Option<&ProcessConfig>,
+        captured: C,
+        handler: Self::Handler,
+    ) -> Result<Self, LunaticError>
     where
         Self: Sized,
     {
-        spawn(module, None, captured, handler)
+        spawn(module, config, None, captured, handler)
     }
 }
 
@@ -139,7 +144,8 @@ where
     type Handler = fn(capture: C, arg: Mailbox<M, S>);
 
     fn spawn_link(
-        module: Option<u64>,
+        module: Option<WasmModule>,
+        config: Option<&ProcessConfig>,
         tag: Tag,
         captured: C,
         handler: Self::Handler,
@@ -147,7 +153,7 @@ where
     where
         Self: Sized,
     {
-        spawn(module, Some(tag), captured, handler)
+        spawn(module, config, Some(tag), captured, handler)
     }
 }
 
@@ -158,7 +164,8 @@ where
 // use the current module but spawned inside another environment. Look at [`ThisModule`] for
 // more information about sending the current module to another environment.
 fn spawn<C, M, S>(
-    module: Option<u64>,
+    module: Option<WasmModule>,
+    config: Option<&ProcessConfig>,
     link: Option<Tag>,
     captured: C,
     entry: fn(C, Mailbox<M, S>),
@@ -192,26 +199,20 @@ where
         Some(tag) => tag.id(),
         None => 0,
     };
+
+    let module_id = module.unwrap_or_else(WasmModule::inherit).id();
+    let config_id = config.map_or_else(|| ProcessConfig::inherit().id(), |config| config.id());
     let result = unsafe {
-        match module {
-            Some(module_id) => host_api::process::spawn(
-                link,
-                module_id,
-                func.as_ptr(),
-                func.len(),
-                params.as_ptr(),
-                params.len(),
-                &mut id,
-            ),
-            None => host_api::process::inherit_spawn(
-                link,
-                func.as_ptr(),
-                func.len(),
-                params.as_ptr(),
-                params.len(),
-                &mut id,
-            ),
-        }
+        host_api::process::spawn(
+            link,
+            config_id,
+            module_id,
+            func.as_ptr(),
+            func.len(),
+            params.as_ptr(),
+            params.len(),
+            &mut id,
+        )
     };
     if result == 0 {
         // If the captured variable is of size 0, we don't need to send it to another process.

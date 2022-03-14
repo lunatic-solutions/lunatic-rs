@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::{host_api, LunaticError, Tag};
+use crate::{host_api, module::WasmModule, LunaticError, ProcessConfig, Tag};
 
 mod background_task;
 mod gen_server;
@@ -24,7 +24,12 @@ pub trait IntoProcess<C> {
     // The type of the 2nd argument passed to the [`spawn`] function.
     type Handler;
     // Spawn's a new process and returns a handle to it.
-    fn spawn(module: Option<u64>, capture: C, handler: Self::Handler) -> Result<Self, LunaticError>
+    fn spawn(
+        module: Option<WasmModule>,
+        config: Option<&ProcessConfig>,
+        capture: C,
+        handler: Self::Handler,
+    ) -> Result<Self, LunaticError>
     where
         Self: Sized;
 }
@@ -47,7 +52,18 @@ pub fn spawn<T, C>(capture: C, handler: T::Handler) -> Result<T, LunaticError>
 where
     T: IntoProcess<C>,
 {
-    <T as IntoProcess<C>>::spawn(None, capture, handler)
+    <T as IntoProcess<C>>::spawn(None, None, capture, handler)
+}
+
+pub fn spawn_config<T, C>(
+    config: &ProcessConfig,
+    capture: C,
+    handler: T::Handler,
+) -> Result<T, LunaticError>
+where
+    T: IntoProcess<C>,
+{
+    <T as IntoProcess<C>>::spawn(None, Some(config), capture, handler)
 }
 
 /// `IntoProcessLink` is a helper trait to generalize over the [`spawn_link`] function.
@@ -64,7 +80,8 @@ pub trait IntoProcessLink<C> {
     type Handler;
     // Spawn's a new process and returns a handle to it.
     fn spawn_link(
-        module: Option<u64>,
+        module: Option<WasmModule>,
+        config: Option<&ProcessConfig>,
         tag: Tag,
         capture: C,
         handler: Self::Handler,
@@ -82,7 +99,18 @@ pub fn spawn_link<T, C>(capture: C, handler: T::Handler) -> Result<T, LunaticErr
 where
     T: IntoProcessLink<C>,
 {
-    <T as IntoProcessLink<C>>::spawn_link(None, Tag::new(), capture, handler)
+    <T as IntoProcessLink<C>>::spawn_link(None, None, Tag::new(), capture, handler)
+}
+
+pub fn spawn_link_config<T, C>(
+    config: &ProcessConfig,
+    capture: C,
+    handler: T::Handler,
+) -> Result<T, LunaticError>
+where
+    T: IntoProcessLink<C>,
+{
+    <T as IntoProcessLink<C>>::spawn_link(None, Some(config), Tag::new(), capture, handler)
 }
 
 /// Suspends the current process for `duration` of time.
