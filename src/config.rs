@@ -98,6 +98,35 @@ impl ProcessConfig {
     pub fn can_spawn_processes(&self) -> bool {
         (unsafe { host_api::process::config_can_spawn_processes(self.id() as u64) }) > 0
     }
+
+    /// Adds environment variable.
+    pub fn add_environment_variable(&self, key: &str, value: &str) {
+        unsafe {
+            host_api::wasi::config_add_environment_variable(
+                self.id() as u64,
+                key.as_ptr(),
+                key.len(),
+                value.as_ptr(),
+                value.len(),
+            )
+        }
+    }
+
+    /// Adds command line argument.
+    pub fn add_command_line_argument(&self, argument: &str) {
+        unsafe {
+            host_api::wasi::config_add_command_line_argument(
+                self.id() as u64,
+                argument.as_ptr(),
+                argument.len(),
+            )
+        }
+    }
+
+    /// Mark a directory as preopened.
+    pub fn preopen_dir(&self, dir: &str) {
+        unsafe { host_api::wasi::config_preopen_dir(self.id() as u64, dir.as_ptr(), dir.len()) }
+    }
 }
 
 impl Default for ProcessConfig {

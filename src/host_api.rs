@@ -121,3 +121,18 @@ pub mod process {
         pub fn unlink(process_id: u64);
     }
 }
+
+pub mod wasi {
+    #[link(wasm_import_module = "lunatic::wasi")]
+    extern "C" {
+        pub fn config_add_environment_variable(
+            config_id: u64,
+            key: *const u8,
+            key_len: usize,
+            value: *const u8,
+            value_len: usize,
+        );
+        pub fn config_add_command_line_argument(config_id: u64, key: *const u8, key_len: usize);
+        pub fn config_preopen_dir(config_id: u64, key: *const u8, key_len: usize);
+    }
+}
