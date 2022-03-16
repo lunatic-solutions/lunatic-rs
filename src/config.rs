@@ -65,6 +65,16 @@ impl ProcessConfig {
         unsafe { host_api::process::config_get_max_fuel(self.id() as u64) }
     }
 
+    /// Sets the ability of a process to compile WebAssembly modules.
+    pub fn set_can_compile_modules(&mut self, can: bool) {
+        unsafe { host_api::process::config_set_can_compile_modules(self.id() as u64, can as u32) };
+    }
+
+    /// Returns true if processes can compile WebAssembly modules.
+    pub fn can_compile_modules(&self) -> bool {
+        (unsafe { host_api::process::config_can_compile_modules(self.id() as u64) }) > 0
+    }
+
     /// Sets the ability of a process to create their own sub-configuration.
     ///
     /// This setting can be dangerous. If a process is missing a permission, but has the

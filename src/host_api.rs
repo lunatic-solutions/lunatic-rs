@@ -87,12 +87,16 @@ pub mod networking {
 pub mod process {
     #[link(wasm_import_module = "lunatic::process")]
     extern "C" {
+        pub fn compile_module(data: *const u8, data_len: usize, id: *mut u64) -> i32;
+        pub fn drop_module(config_id: u64);
         pub fn create_config() -> u64;
         pub fn drop_config(config_id: u64);
         pub fn config_set_max_memory(config_id: u64, max_memory: u64);
         pub fn config_get_max_memory(config_id: u64) -> u64;
         pub fn config_set_max_fuel(config_id: u64, max_fuel: u64);
         pub fn config_get_max_fuel(config_id: u64) -> u64;
+        pub fn config_can_compile_modules(config_id: u64) -> u32;
+        pub fn config_set_can_compile_modules(config_id: u64, can: u32);
         pub fn config_can_create_configs(config_id: u64) -> u32;
         pub fn config_set_can_create_configs(config_id: u64, can: u32);
         pub fn config_can_spawn_processes(config_id: u64) -> u32;
