@@ -20,5 +20,6 @@ lunatic-macros = { version = "^0.6.1", path = "./lunatic-macros" }
 
 [workspace]
 members = [
-  "lunatic-macros"
+  "lunatic-macros",
+  "lunatic-test",
 ]

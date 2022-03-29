@@ -1,0 +1,16 @@
+[package]
+name = "lunatic-test"
+version = "0.1.0"
+edition = "2021"
+authors = ["Bernard Kolobara <bernard@lunatic.solutions>"]
+description = "#[lunatic::test] macro, meant as a drop-in replacement for Rust's #[test]"
+license = "Apache-2.0/MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+quote = "1"
+syn = { version = "1", features = ["full", "extra-traits"] }
+
+[lib]
+proc-macro = true
