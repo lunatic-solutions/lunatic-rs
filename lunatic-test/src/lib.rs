@@ -10,8 +10,12 @@ pub fn test(_args: TokenStream, item: TokenStream) -> TokenStream {
 
     // Check if #[should_panic] attribute is present.
     let mut should_panic = None;
+    let mut ignore = "";
     for attribute in input.attrs.iter() {
         if let Some(ident) = attribute.path.get_ident() {
+            if ident == "ignore" {
+                ignore = "#ignore_";
+            }
             if ident == "should_panic" {
                 // Common error message
                 let error = syn::Error::new_spanned(
@@ -66,7 +70,7 @@ pub fn test(_args: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
 
-    let mut export_name = "#lunatic_test_".to_string();
+    let mut export_name = format!("#lunatic_test_{}", ignore);
     if let Some(panic_str) = should_panic {
         export_name = format!("{}#panic_{}#", export_name, panic_str,);
     }

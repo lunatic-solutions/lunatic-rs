@@ -604,16 +604,4 @@ mod tests {
         .unwrap();
         sleep(Duration::from_millis(100));
     }
-
-    #[export_name = "#lunatic_test_hello_world"]
-    extern "C" fn test1() {
-        println!("Running test 1");
-        assert!(true);
-    }
-
-    #[export_name = "#lunatic_test_#trap_What is not accepted#hello_world"]
-    extern "C" fn test2() {
-        println!("Running test 2");
-        assert!(false, "Failure is not accepted");
-    }
 }
