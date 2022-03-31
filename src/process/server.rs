@@ -341,6 +341,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use lunatic_test::test;
     use std::time::Duration;
 
     use super::*;

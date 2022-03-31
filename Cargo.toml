@@ -17,6 +17,7 @@ rmp-serde = "^0.15"
 bincode = "^1.3"
 protobuf = "^2.25"
 lunatic-macros = { version = "^0.6.1", path = "./lunatic-macros" }
+lunatic-test = { version = "^0.1", path = "./lunatic-test" }
 
 [workspace]
 members = [

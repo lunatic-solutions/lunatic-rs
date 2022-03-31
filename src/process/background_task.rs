@@ -198,6 +198,7 @@ impl<S> Drop for BackgroundTask<S> {
 
 #[cfg(test)]
 mod tests {
+    use lunatic_test::test;
     use std::time::Duration;
 
     use super::*;

@@ -33,6 +33,7 @@ impl Default for Tag {
 
 #[cfg(test)]
 mod tests {
+    use lunatic_test::test;
     // use super::Tag;
 
     #[test]

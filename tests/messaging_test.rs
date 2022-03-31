@@ -1,6 +1,7 @@
 use std::{process::exit, time::Duration};
 
 use lunatic::{spawn, this_process, Mailbox, Process, ReceiveError, Server, Task};
+use lunatic_test::test;
 
 #[test]
 fn message_integer() {

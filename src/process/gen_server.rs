@@ -441,6 +441,7 @@ impl<'de, T> serde::de::Deserialize<'de> for GenericServer<T> {
 
 #[cfg(test)]
 mod tests {
+    use lunatic_test::test;
     use std::time::Duration;
 
     use super::*;
