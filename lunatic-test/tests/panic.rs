@@ -17,3 +17,10 @@ fn panics() {
 fn assert_failure_is_also_a_panic() {
     assert!(false);
 }
+
+#[test]
+#[ignore]
+#[should_panic(expected = "#")]
+fn hashtag_works_in_panic_string() {
+    panic!("has")
+}

@@ -72,6 +72,8 @@ pub fn test(_args: TokenStream, item: TokenStream) -> TokenStream {
 
     let mut export_name = format!("#lunatic_test_{}", ignore);
     if let Some(panic_str) = should_panic {
+        // Escape # in panic_str
+        let panic_str = panic_str.replace('#', "\\#");
         export_name = format!("{}#panic_{}#", export_name, panic_str,);
     }
     let function_name = input.sig.ident.to_string();
