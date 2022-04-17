@@ -1,4 +1,4 @@
-use crate::host_api::error;
+use crate::host::api::error;
 use std::fmt::{Debug, Display, Formatter};
 use thiserror::Error;
 

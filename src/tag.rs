@@ -15,8 +15,10 @@ impl Tag {
 // Reserve first 128 tags for special purposes.
 static mut COUNTER: i64 = 128;
 
+pub(crate) static REGULAR_MESSAGE: i64 = 1;
+
 impl Tag {
-    // Returns a unique tag inside of the process.
+    // Returns a unique tag inside the process.
     pub fn new() -> Tag {
         unsafe {
             COUNTER += 1;
@@ -33,15 +35,14 @@ impl Default for Tag {
 
 #[cfg(test)]
 mod tests {
+    use super::Tag;
     use lunatic_test::test;
-    // use super::Tag;
 
     #[test]
     fn tag_increments() {
-        // All tests run in the same process, this makes it impossible to run per process checks.
-        // assert_eq!(Tag::new(), Tag(129));
-        // assert_eq!(Tag::new(), Tag(130));
-        // assert_eq!(Tag::new(), Tag(131));
-        // assert_eq!(Tag::new(), Tag(132));
+        assert_eq!(Tag::new(), Tag(129));
+        assert_eq!(Tag::new(), Tag(130));
+        assert_eq!(Tag::new(), Tag(131));
+        assert_eq!(Tag::new(), Tag(132));
     }
 }

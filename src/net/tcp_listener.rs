@@ -2,7 +2,7 @@ use std::io::{Error, ErrorKind, Result};
 use std::net::SocketAddr;
 
 use super::SocketAddrIterator;
-use crate::{error::LunaticError, host_api, net::TcpStream};
+use crate::{error::LunaticError, host, net::TcpStream};
 
 /// A TCP server, listening for connections.
 ///
@@ -47,7 +47,7 @@ pub struct TcpListener {
 
 impl Drop for TcpListener {
     fn drop(&mut self) {
-        unsafe { host_api::networking::drop_tcp_listener(self.id) };
+        unsafe { host::api::networking::drop_tcp_listener(self.id) };
     }
 }
 
@@ -71,7 +71,7 @@ impl TcpListener {
                     let ip = v4_addr.ip().octets();
                     let port = v4_addr.port() as u32;
                     unsafe {
-                        host_api::networking::tcp_bind(
+                        host::api::networking::tcp_bind(
                             4,
                             ip.as_ptr(),
                             port,
@@ -87,7 +87,7 @@ impl TcpListener {
                     let flow_info = v6_addr.flowinfo();
                     let scope_id = v6_addr.scope_id();
                     unsafe {
-                        host_api::networking::tcp_bind(
+                        host::api::networking::tcp_bind(
                             6,
                             ip.as_ptr(),
                             port,
@@ -113,7 +113,7 @@ impl TcpListener {
         let mut tcp_stream_or_error_id = 0;
         let mut dns_iter_id = 0;
         let result = unsafe {
-            host_api::networking::tcp_accept(
+            host::api::networking::tcp_accept(
                 self.id,
                 &mut tcp_stream_or_error_id as *mut u64,
                 &mut dns_iter_id as *mut u64,
@@ -136,7 +136,7 @@ impl TcpListener {
     pub fn local_addr(&self) -> Result<SocketAddr> {
         let mut dns_iter_or_error_id = 0;
         let result = unsafe {
-            host_api::networking::local_addr(self.id, &mut dns_iter_or_error_id as *mut u64)
+            host::api::networking::tcp_local_addr(self.id, &mut dns_iter_or_error_id as *mut u64)
         };
         if result == 0 {
             let mut dns_iter = SocketAddrIterator::from(dns_iter_or_error_id);

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use lunatic::{sleep, spawn_config, BackgroundTask, Mailbox, ProcessConfig};
+use lunatic::{sleep, Mailbox, Process, ProcessConfig};
 
 #[lunatic::main]
 fn main(_: Mailbox<()>) {
@@ -10,13 +10,12 @@ fn main(_: Mailbox<()>) {
     config.set_max_fuel(1);
 
     // This vector allocation will fail and the process will trap
-    spawn_config::<BackgroundTask, _>(&config, (), |_| {
+    Process::spawn_config(&config, (), |_, _: Mailbox<()>| {
         vec![0; 150_000];
-    })
-    .unwrap();
+    });
 
     // This process will fail because it uses too much compute
-    spawn_config::<BackgroundTask, _>(&config, (), |_| loop {}).unwrap();
+    Process::spawn_config(&config, (), |_, _: Mailbox<()>| loop {});
 
     // Sleep for 1 sec
     sleep(Duration::from_millis(200));

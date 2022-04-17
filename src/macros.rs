@@ -2,15 +2,15 @@
 macro_rules! spawn {
     // Regular process that is not capturing any variables, spawned from a closure.
     (@process |$mailbox:ident : Mailbox<$mailbox_ty:ty>| $body:expr) => {
-        spawn::<lunatic::Process<$mailbox_ty>, _>((), |_, $mailbox| $body).unwrap()
+        lunatic::Process::<$mailbox_ty>::spawn((), |_, $mailbox| $body)
     };
     // Regular process capturing variable `$argument`, spawned from a closure.
     (@process |$argument:ident, $mailbox:ident : Mailbox<$mailbox_ty:ty>| $body:expr) => {
-        spawn::<lunatic::Process<$mailbox_ty>, _>($argument, |$argument, $mailbox| $body).unwrap()
+        lunatic::Process::<$mailbox_ty>::spawn($argument, |$argument, $mailbox| $body)
     };
     // Regular process that is not capturing any variables, spawned from a function name.
     (@process $function:path) => {
-        spawn::<lunatic::Process<_>, _>((), $function).unwrap()
+        lunatic::Process::spawn((), $function)
     };
     // Regular process capturing variable `$argument`, spawned from a function name.
     (@process $argument:ident, $function:path) => {
@@ -36,11 +36,11 @@ macro_rules! spawn {
 
     // Task spawned from a closure.
     (@task |$argument:ident| $body:expr) => {
-        spawn::<lunatic::Task<_>, _>($argument, |$argument| $body).unwrap()
+       lunatic::Task::spawn_link($argument, |$argument| $body)
     };
     // Task spawned from a function name.
     (@task $argument:ident, $function:path) => {
-        spawn::<lunatic::Task<_>, _>($argument, $function).unwrap()
+        lunatic::Task::spawn_link($argument, $function)
     };
 
     // Background task that is not capturing any variables, spawned from a closure.

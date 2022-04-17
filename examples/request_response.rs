@@ -1,12 +1,25 @@
-use lunatic::{spawn, Mailbox, Server};
+use lunatic::{Mailbox, Request, Server, ServerRequest, StartServer};
+
+struct Adder;
+impl Server for Adder {
+    type Arg = ();
+    type State = Self;
+
+    fn init(_: ()) -> Adder {
+        Adder
+    }
+}
+impl ServerRequest<(i32, i32)> for Adder {
+    type Response = i32;
+
+    fn handle(&mut self, (a, b): (i32, i32)) -> i32 {
+        a + b
+    }
+}
 
 #[lunatic::main]
 fn main(_: Mailbox<()>) {
-    // Spawn a process that gets two numbers as a request and can reply to the sender with the sum
-    // of the numbers.
-    let add_server = spawn::<Server<(i32, i32), _>, _>((), |_, (a, b)| a + b).unwrap();
-    // Make specific requests to the `add_server` & ignore all messages in the mailbox that are not
-    // responses to the request.
+    let add_server = Adder::start((), None);
     assert_eq!(add_server.request((1, 1)), 2);
     assert_eq!(add_server.request((1, 2)), 3);
 }

@@ -1,23 +1,23 @@
-use std::{process::exit, time::Duration};
+use std::time::Duration;
 
-use lunatic::{spawn, this_process, Mailbox, Process, ReceiveError, Server, Task};
+use lunatic::{Mailbox, Process, ReceiveError, Request, Server, ServerRequest, StartServer, Task};
 use lunatic_test::test;
 
 #[test]
 fn message_integer() {
-    let child = spawn::<Task<_>, _>(127, |input| input).unwrap();
+    let child = Task::spawn_link(127, |input| input);
     assert_eq!(child.result(), 127);
 }
 
 #[test]
 fn message_vector() {
-    let child = spawn::<Task<_>, _>(vec![1, 2, 3, 4, 5], |input| input).unwrap();
+    let child = Task::spawn_link(vec![1, 2, 3, 4, 5], |input| input);
     assert_eq!(child.result(), vec![1, 2, 3, 4, 5]);
 }
 
 #[test]
 fn message_custom_type() {
-    let child = spawn::<Task<_>, _>((), |_| X {
+    let child = Task::spawn_link((), |_| X {
         y: Y {
             string: String::from("Hello!"),
         },
@@ -26,8 +26,7 @@ fn message_custom_type() {
         en: E::A(1, 2),
         enb: E::B("A longer string #$".to_string()),
         enc: E::C,
-    })
-    .unwrap();
+    });
 
     let expected = X {
         y: Y {
@@ -43,34 +42,46 @@ fn message_custom_type() {
 }
 
 #[test]
-fn message_resource() {
-    let this_mailbox = unsafe { Mailbox::new() };
-    let this: Process<Proc> = this_process(&this_mailbox);
-    spawn::<Process<_>, _>(this, |parent, _: Mailbox<()>| {
-        let empty_proc = spawn::<Process<_>, _>((), |_, _: Mailbox<i32>| {}).unwrap();
+fn message_resource(mailbox: Mailbox<Proc>) {
+    let this = mailbox.this();
+    Process::spawn(this, |parent, _: Mailbox<()>| {
+        let empty_proc = Process::spawn((), |_, _: Mailbox<i32>| {});
         parent.send(Proc(empty_proc));
-        let panic_proc = spawn::<Process<_>, _>((), |_, _: Mailbox<i32>| exit(1)).unwrap();
+        let panic_proc = Process::spawn((), |_, _: Mailbox<i32>| panic!());
         parent.send(Proc(panic_proc));
-    })
-    .unwrap();
+    });
     // Receive first
-    let _ = this_mailbox.receive();
+    let _ = mailbox.receive();
     // Receive second
-    let _ = this_mailbox.receive();
+    let _ = mailbox.receive();
 }
 
 #[test]
-fn request_reply() {
+fn request_reply(mailbox: Mailbox<u64>) {
+    struct Adder;
+    impl Server for Adder {
+        type Arg = ();
+        type State = Self;
+
+        fn init(_: ()) -> Adder {
+            Adder
+        }
+    }
+    impl ServerRequest<(i32, i32)> for Adder {
+        type Response = i32;
+
+        fn handle(&mut self, (a, b): (i32, i32)) -> i32 {
+            a + b
+        }
+    }
+
     // Spawn a server that fills our mailbox with u64 messages.
-    let this_mailbox = unsafe { Mailbox::new() };
-    let this: Process<u64> = this_process(&this_mailbox);
-    spawn::<Process<_>, _>(this, |parent, _: Mailbox<()>| loop {
+    Process::spawn(mailbox.this(), |parent, _: Mailbox<()>| loop {
         parent.send(1337);
-    })
-    .unwrap();
+    });
 
     // Spawn another process that can reply to us with an i32 message.
-    let add_server = spawn::<Server<_, _>, _>((), |_, (a, b)| a + b).unwrap();
+    let add_server = Adder::start((), None);
 
     // Ignore all messages in the mailbox and make specific requests to the `add_server`.
     for _ in 0..1_000 {
@@ -82,12 +93,9 @@ fn request_reply() {
     }
 }
 
-// TODO: All tests run in same process and the mailbox is already full of messages.
-//       Once the testing story around processes is solved this can be used.
-// #[test]
-fn _timeout() {
-    let this_mailbox = unsafe { Mailbox::<u64>::new() };
-    let result = this_mailbox.receive_timeout(Duration::new(0, 10_000)); // 10 us
+#[test]
+fn timeout(mailbox: Mailbox<u64>) {
+    let result = mailbox.receive_timeout(Duration::new(0, 10_000)); // 10 us
     match result {
         Err(ReceiveError::Timeout) => (), // success
         _ => unreachable!(),

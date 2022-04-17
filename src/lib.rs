@@ -16,12 +16,8 @@ function.
 
 * **[`Process`]** - A process that can receive messages through a [`Mailbox`].
 * **[`Task`]** - One-off process that returns a value.
-* **[`BackgroundTask`]** - One-off process that doesn't return a value.
-* **[`Server`]** - Abstracts the common client-server interaction and can handle requests of the
-                   same type.
-* **[`GenericServer`]** - Abstracts the common client-server interaction and can handle requests
-                          of different types.
-* **[`Supervisor`]** - A process that can supervise others and re-spawn them if they trap.
+* **[`Server`]** - Abstracts the common client-server interaction and can handle requests.
+* **[`Supervisor`]** - A process that can supervise servers and re-spawn them if they panic.
 
 ### Linking
 
@@ -78,19 +74,29 @@ and cargo is going to automatically build your project as a WebAssembly module a
 
 mod config;
 mod error;
-mod host_api;
+pub mod host;
+mod macros;
 mod mailbox;
 mod module;
 pub mod net;
-mod process;
+pub(crate) mod process;
 pub mod serializer;
+pub(crate) mod server;
+pub(crate) mod supervisor;
 mod tag;
+pub(crate) mod task;
+
+use std::marker::PhantomData;
 
 pub use config::ProcessConfig;
 pub use error::LunaticError;
+pub use macros::*;
 pub use mailbox::{Mailbox, ReceiveError};
-pub use process::*;
+pub use module::WasmModule;
+pub use process::Process;
+pub use server::{Message, Request, Server, ServerMessage, ServerRef, ServerRequest, StartServer};
 pub use tag::Tag;
+pub use task::Task;
 
 pub use lunatic_macros::main;
 // TODO: Figure out testing (https://github.com/lunatic-solutions/rust-lib/issues/8)
@@ -117,6 +123,11 @@ pub fn this_process<M, S>(_mailbox: &Mailbox<M, S>) -> Process<M, S>
 where
     S: serializer::Serializer<M>,
 {
-    let id = unsafe { host_api::process::this() };
+    let id = unsafe { host::api::process::this() };
     unsafe { Process::from_id(id) }
+}
+
+/// Suspends the current process for `duration` of time.
+pub fn sleep(duration: std::time::Duration) {
+    unsafe { host::api::process::sleep_ms(duration.as_millis() as u64) };
 }

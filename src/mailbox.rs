@@ -3,15 +3,15 @@ use std::{marker::PhantomData, time::Duration};
 use thiserror::Error;
 
 use crate::{
-    host_api::message,
+    host::{self, api::message},
     serializer::{Bincode, DecodeError, Serializer},
-    Tag,
+    Process, Resource, Tag,
 };
 
 const LINK_TRAPPED: u32 = 1;
 const TIMEOUT: u32 = 9027;
 
-/// Mailbox of a [`Process`](crate::Process).
+/// Mailbox of a [`Process`](crate::process::Process).
 #[derive(Debug)]
 pub struct Mailbox<M, S = Bincode>
 where
@@ -34,6 +34,11 @@ where
         Self {
             serializer_type: PhantomData {},
         }
+    }
+
+    /// Returns a reference to the currently running process
+    pub fn this(&self) -> Process<M, S> {
+        unsafe { <Process<M, S> as Resource>::from_id(host::api::process::this()) }
     }
 
     /// Gets next message from process' mailbox.
@@ -120,9 +125,6 @@ where
     /// It's not safe to mix different types of mailboxes inside one process. This function should
     /// never be used directly.
     pub(crate) unsafe fn new() -> Self {
-        // Don't trap if link dies.
-        crate::host_api::process::die_when_link_dies(0);
-
         Self {
             serializer_type: PhantomData {},
         }
@@ -136,7 +138,7 @@ where
     /// # Panics
     ///
     /// This function will panic if the received message can't be deserialized into `M`.
-    pub(crate) fn tag_receive(&self, tags: Option<&[Tag]>) -> Result<M, LinkTrapped> {
+    pub fn tag_receive(&self, tags: Option<&[Tag]>) -> Result<M, LinkTrapped> {
         match tags {
             Some(tags) => {
                 let tags: Vec<i64> = tags.iter().map(|tag| tag.id()).collect();
@@ -178,7 +180,7 @@ where
 
 #[derive(Error, Debug)]
 #[error("The link trapped")]
-pub struct LinkTrapped(Tag);
+pub(crate) struct LinkTrapped(Tag);
 
 impl LinkTrapped {
     pub(crate) fn tag(&self) -> Tag {

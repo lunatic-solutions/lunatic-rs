@@ -1,6 +1,6 @@
 use std::u128;
 
-use crate::{error::LunaticError, host_api, process::Process, serializer::Serializer, Resource};
+use crate::{error::LunaticError, host, serializer::Serializer, Process, Resource};
 
 /// A compiled instance of a WebAssembly module.
 ///
@@ -14,7 +14,7 @@ impl Drop for WasmModule {
     fn drop(&mut self) {
         match self {
             WasmModule::Module(id) => {
-                unsafe { host_api::process::drop_module(*id) };
+                unsafe { host::api::process::drop_module(*id) };
             }
             WasmModule::Inherit => (),
         }
@@ -30,7 +30,7 @@ impl WasmModule {
         let mut module_or_error_id: u64 = 0;
 
         let result = unsafe {
-            host_api::process::compile_module(
+            host::api::process::compile_module(
                 data.as_ptr(),
                 data.len(),
                 &mut module_or_error_id as *mut u64,
@@ -70,7 +70,7 @@ impl WasmModule {
         let mut process_or_error_id = 0;
         let params: Vec<u8> = params_to_vec(params);
         let result = unsafe {
-            host_api::process::spawn(
+            host::api::process::spawn(
                 0,
                 -1,
                 self.id(),
@@ -101,7 +101,7 @@ impl WasmModule {
         let mut process_or_error_id = 0;
         let params: Vec<u8> = params_to_vec(params);
         let result = unsafe {
-            host_api::process::spawn(
+            host::api::process::spawn(
                 1,
                 -1,
                 self.id(),

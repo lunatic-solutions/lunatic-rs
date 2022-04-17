@@ -1,4 +1,4 @@
-use crate::host_api::message;
+use crate::host::api::message;
 
 use thiserror::Error;
 

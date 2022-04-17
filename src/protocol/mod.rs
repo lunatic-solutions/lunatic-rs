@@ -6,7 +6,7 @@ use self::session::{End, HasDual};
 
 use super::{IntoProcess, IntoProcessLink};
 use crate::{
-    host_api,
+    host,
     module::{params_to_vec, Param, WasmModule},
     serializer::{Bincode, Serializer},
     LunaticError, Mailbox, Process, ProcessConfig, Resource, Tag,
@@ -28,7 +28,7 @@ where
     /// Returns a globally unique process ID.
     pub fn uuid(&self) -> u128 {
         let mut uuid: [u8; 16] = [0; 16];
-        unsafe { host_api::process::id(self.id, &mut uuid as *mut [u8; 16]) };
+        unsafe { host::api::process::id(self.id, &mut uuid as *mut [u8; 16]) };
         u128::from_le_bytes(uuid)
     }
 
@@ -42,11 +42,11 @@ where
         S: Serializer<(Process<()>, Tag, C)>,
     {
         // Create new message.
-        unsafe { host_api::message::create_data(1, 0) };
+        unsafe { host::api::message::create_data(1, 0) };
         // During serialization resources will add themself to the message.
         S::encode(&message).unwrap();
         // Send it!
-        unsafe { host_api::message::send(self.id) };
+        unsafe { host::api::message::send(self.id) };
     }
 }
 
@@ -134,7 +134,7 @@ where
     let module_id = module.unwrap_or_else(WasmModule::inherit).id();
     let config_id = config.map_or_else(|| ProcessConfig::inherit().id(), |config| config.id());
     let result = unsafe {
-        host_api::process::spawn(
+        host::api::process::spawn(
             link,
             config_id,
             module_id,
@@ -153,7 +153,7 @@ where
             phantom: PhantomData,
         };
         // Create reference to self
-        let this_id = unsafe { host_api::process::this() };
+        let this_id = unsafe { host::api::process::this() };
         let this_proc: Process<()> = unsafe { Process::from_id(this_id) };
         // Send all data to child
         child.send_init((this_proc, tag, captured));
@@ -209,7 +209,7 @@ where
         if TypeId::of::<P>() != TypeId::of::<End>() {
             panic!("Protocol prematurely dropped, before reaching the `End` state.");
         }
-        unsafe { host_api::process::drop_process(self.id) };
+        unsafe { host::api::process::drop_process(self.id) };
     }
 }
 
@@ -220,7 +220,7 @@ mod tests {
 
     use super::session::{End, HasDual, Recv, Send};
     use crate::{
-        process::{sleep, spawn, spawn_link},
+        proc::{sleep, spawn, spawn_link},
         BackgroundTask, Protocol,
     };
 
@@ -236,7 +236,7 @@ mod tests {
                 let _ = protocol.send(capture + a + b);
             })
             .unwrap();
-        assert_eq!(child.tag.id(), 130);
+
         let child = child.send(2);
         let child = child.send(2);
         let (_, result) = child.receive();

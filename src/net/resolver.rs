@@ -3,7 +3,7 @@ use std::{
     time::Duration,
 };
 
-use crate::{error::LunaticError, host_api};
+use crate::{error::LunaticError, host};
 
 /// Iterator over [`SocketAddr`]
 #[derive(Debug)]
@@ -20,7 +20,7 @@ impl SocketAddrIterator {
 impl Drop for SocketAddrIterator {
     fn drop(&mut self) {
         unsafe {
-            host_api::networking::drop_dns_iterator(self.id);
+            host::api::networking::drop_dns_iterator(self.id);
         }
     }
 }
@@ -35,7 +35,7 @@ impl Iterator for SocketAddrIterator {
         let mut flowinfo: u32 = 0;
         let mut scope_id: u32 = 0;
         let next = unsafe {
-            host_api::networking::resolve_next(
+            host::api::networking::resolve_next(
                 self.id,
                 &mut addr_type as *mut u32,
                 addr.as_mut_ptr(),
@@ -92,7 +92,7 @@ fn resolve_timeout_(
         None => 0,
     };
     let result = unsafe {
-        host_api::networking::resolve(
+        host::api::networking::resolve(
             name.as_ptr(),
             name.len(),
             timeout_ms,
