@@ -4,18 +4,36 @@ use crate::host;
 ///
 /// The functions `spawn_config` & `spawn_link_config` can be used to create processes with a
 /// specific configuration.
-pub enum ProcessConfig {
+pub struct ProcessConfig(ProcessConfigType);
+
+enum ProcessConfigType {
     // ID of a configuration held by the host as a resource.
     Config(u64),
     // Indicates that the configuration should be inherited from the parent process.
     Inherit,
 }
 
-impl Drop for ProcessConfig {
+impl Drop for ProcessConfigType {
     fn drop(&mut self) {
         match self {
-            ProcessConfig::Config(id) => unsafe { host::api::process::drop_config(*id) },
-            ProcessConfig::Inherit => (),
+            ProcessConfigType::Config(id) => unsafe { host::api::process::drop_config(*id) },
+            ProcessConfigType::Inherit => (),
+        }
+    }
+}
+
+impl std::fmt::Debug for ProcessConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            ProcessConfigType::Config(_) => f
+                .debug_struct("ProcessConfig")
+                .field("max_memory", &self.get_max_memory())
+                .field("max_fuel", &self.get_max_fuel())
+                .field("can_compile_modules", &self.can_compile_modules())
+                .field("can_create_configs", &self.can_create_configs())
+                .field("can_spawn_processes", &self.can_spawn_processes())
+                .finish(),
+            ProcessConfigType::Inherit => f.debug_struct("ProcessConfig::Inherit").finish(),
         }
     }
 }
@@ -27,18 +45,18 @@ impl ProcessConfig {
     /// inherited from parent.
     pub fn new() -> Self {
         let id = unsafe { host::api::process::create_config() };
-        Self::Config(id)
+        Self(ProcessConfigType::Config(id))
     }
 
     pub(crate) fn inherit() -> Self {
-        Self::Inherit
+        Self(ProcessConfigType::Inherit)
     }
 
     /// Returns the id of the configuration resource or -1 in case it's an inherited configuration.
     pub fn id(&self) -> i64 {
-        match self {
-            ProcessConfig::Config(id) => *id as i64,
-            ProcessConfig::Inherit => -1,
+        match self.0 {
+            ProcessConfigType::Config(id) => id as i64,
+            ProcessConfigType::Inherit => -1,
         }
     }
 

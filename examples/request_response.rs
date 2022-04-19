@@ -1,4 +1,7 @@
-use lunatic::{Mailbox, Request, Server, ServerRequest, StartServer};
+use lunatic::{
+    server::{Request, Server, ServerRequest, StartServer},
+    Mailbox,
+};
 
 struct Adder;
 impl Server for Adder {

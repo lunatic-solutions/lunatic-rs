@@ -1,5 +1,5 @@
 /*!
-Helper library for building Rust applications that run on [lunatic][1].
+Framework for building Rust applications that run on [lunatic][1].
 
 # Main concepts
 
@@ -14,16 +14,17 @@ function.
 
 ### Process types:
 
-* **[`Process`]** - A process that can receive messages through a [`Mailbox`].
+* **[`Process`]** - A process that can receive messages through a [`Mailbox`] or
+    [`Protocol`](protocol::Protocol).
 * **[`Task`]** - One-off process that returns a value.
-* **[`Server`]** - Abstracts the common client-server interaction and can handle requests.
-* **[`Supervisor`]** - A process that can supervise servers and re-spawn them if they panic.
+* **[`Server`](server::Server)** - Abstracts the common client-server interaction.
+* **[`Supervisor`](supervisor::Supervisor)** - A process that can supervise servers and re-spawn
+    them if they fail.
 
 ### Linking
 
 Processes can be linked together. This means that if one of them fails, all linked ones will be
-killed too. The only exception is the Supervisor. The supervisor can define actions when one of the
-children dies.
+killed too.
 
 To spawn a linked process use the [`spawn_link`] function.
 
@@ -34,7 +35,7 @@ TODO
 # Setup
 
 To run Rust applications on lunatic, you will first need to download the lunatic runtime by
-following the installation steps in [this repository][1]. The runtime is just single executable
+following the installation steps in [this repository][1]. The runtime is just a single executable
 and runs on Windows, macOS and Linux.
 
 Lunatic applications need to be compiled to WebAssembly before they can be executed by the
@@ -65,28 +66,30 @@ target = "wasm32-wasi"
 runner = "lunatic"
 ```
 
-Now you can just use the commands you were already familiar with, such as `cargo run`, `cargo test`
+Now you can just use the commands you were already familiar with, such as `cargo run`, `cargo test`*
 and cargo is going to automatically build your project as a WebAssembly module and run it inside of
 `lunatic`.
+
+* For tests you will need to use the provided [`test`] macro instead of the standard library one.
 
 [1]: https://github.com/lunatic-solutions/lunatic
 */
 
 mod config;
 mod error;
-pub mod host;
 mod macros;
 mod mailbox;
 mod module;
-pub mod net;
-pub(crate) mod process;
-pub mod serializer;
-pub(crate) mod server;
-pub(crate) mod supervisor;
+mod process;
 mod tag;
-pub(crate) mod task;
+mod task;
 
-use std::marker::PhantomData;
+pub mod host;
+pub mod net;
+pub mod protocol;
+pub mod serializer;
+pub mod server;
+pub mod supervisor;
 
 pub use config::ProcessConfig;
 pub use error::LunaticError;
@@ -94,37 +97,23 @@ pub use macros::*;
 pub use mailbox::{Mailbox, ReceiveError};
 pub use module::WasmModule;
 pub use process::Process;
-pub use server::{Message, Request, Server, ServerMessage, ServerRef, ServerRequest, StartServer};
 pub use tag::Tag;
 pub use task::Task;
 
 pub use lunatic_macros::main;
-// TODO: Figure out testing (https://github.com/lunatic-solutions/rust-lib/issues/8)
-// pub use lunatic_macros::test;
+pub use lunatic_test::test;
 
 /// Implemented for all resources held by the VM.
 pub trait Resource {
-    /// Returns process local resource id.
+    /// Returns process local resource ID.
     fn id(&self) -> u64;
-    /// Turns process local resource id into resource handle.
+    /// Turns process local resource ID into resource handle.
     ///
     /// # Safety
     ///
     /// Extra care needs to be taken when balancing host side resources. It's easy to create an
     /// invalid resource reference.
     unsafe fn from_id(id: u64) -> Self;
-}
-
-/// Returns a handle to the current process.
-///
-/// The reference to the current mailbox is required to assure that the returned process matches
-/// the mailbox.
-pub fn this_process<M, S>(_mailbox: &Mailbox<M, S>) -> Process<M, S>
-where
-    S: serializer::Serializer<M>,
-{
-    let id = unsafe { host::api::process::this() };
-    unsafe { Process::from_id(id) }
 }
 
 /// Suspends the current process for `duration` of time.

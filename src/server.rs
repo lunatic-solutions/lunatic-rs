@@ -303,7 +303,7 @@ where
         }
 
         // Create new message buffer.
-        unsafe { host::api::message::create_data(1, 0) };
+        unsafe { host::api::message::create_data(Tag::none().id(), 0) };
         // First encode the handler inside the message buffer.
         let handler = unpacker::<T::State, M, S> as usize as i32;
         let handler_message = Sendable::Message(handler);

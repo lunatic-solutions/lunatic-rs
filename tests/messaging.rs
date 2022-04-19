@@ -1,6 +1,9 @@
 use std::time::Duration;
 
-use lunatic::{Mailbox, Process, ReceiveError, Request, Server, ServerRequest, StartServer, Task};
+use lunatic::{
+    server::{Request, Server, ServerRequest, StartServer},
+    Mailbox, Process, ReceiveError, Task,
+};
 use lunatic_test::test;
 
 #[test]

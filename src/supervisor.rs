@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
-use crate::server::StartFailableServer;
-use crate::{host, Server, Tag};
+use crate::server::{Server, StartFailableServer};
+use crate::{host, Tag};
 
 pub trait Supervisor
 where
@@ -130,7 +130,7 @@ mod tests {
     use lunatic_test::test;
 
     use super::{Supervisor, SupervisorConfig};
-    use crate::{sleep, Server, StartServer};
+    use crate::{server::{Server, StartServer}, sleep};
 
     struct SimpleServer;
 

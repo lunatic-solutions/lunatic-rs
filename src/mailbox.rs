@@ -4,38 +4,27 @@ use thiserror::Error;
 
 use crate::{
     host::{self, api::message},
+    process::IntoProcess,
     serializer::{Bincode, DecodeError, Serializer},
-    Process, Resource, Tag,
+    Process, ProcessConfig, Resource, Tag,
 };
 
 const LINK_TRAPPED: u32 = 1;
 const TIMEOUT: u32 = 9027;
 
-/// Mailbox of a [`Process`](crate::process::Process).
-#[derive(Debug)]
+/// Mailbox of a [`Process`](crate::Process).
+#[derive(Debug, Clone, Copy)]
 pub struct Mailbox<M, S = Bincode>
 where
     S: Serializer<M>,
 {
-    serializer_type: PhantomData<(M, S)>,
+    phantom: PhantomData<(M, S)>,
 }
 
 impl<M, S> Mailbox<M, S>
 where
     S: Serializer<M>,
 {
-    /// Create a mailbox with a specific type.
-    ///
-    /// ### Safety
-    ///
-    /// It's not safe to mix different types of mailboxes inside one process. This function should
-    /// never be used directly.
-    pub unsafe fn new() -> Self {
-        Self {
-            serializer_type: PhantomData {},
-        }
-    }
-
     /// Returns a reference to the currently running process
     pub fn this(&self) -> Process<M, S> {
         unsafe { <Process<M, S> as Resource>::from_id(host::api::process::this()) }
@@ -47,7 +36,8 @@ where
     ///
     /// # Panics
     ///
-    /// This function will panic if the received message can't be deserialized into `M`.
+    /// This function will panic if the received message can't be deserialized into `M`
+    /// with serializer `S`.
     pub fn receive(&self) -> M {
         self.receive_(Some(&[1]), None).unwrap()
     }
@@ -59,8 +49,9 @@ where
     ///
     /// # Panics
     ///
-    /// This function will panic if the received message can't be deserialized into `M`.
-    pub(crate) fn tag_receive(&self, tags: Option<&[Tag]>) -> M {
+    /// This function will panic if the received message can't be deserialized into `M`
+    /// with serializer `S`.
+    pub fn tag_receive(&self, tags: Option<&[Tag]>) -> M {
         match tags {
             Some(tags) => {
                 let tags: Vec<i64> = tags.iter().map(|tag| tag.id()).collect();
@@ -70,7 +61,7 @@ where
         }
     }
 
-    /// Same as [`receive`](Self::receive), but only waits for the duration of timeout for the message.
+    /// Same as `receive`, but only waits for the duration of timeout for the message.
     pub fn receive_timeout(&self, timeout: Duration) -> Result<M, ReceiveError> {
         self.receive_(None, Some(timeout))
     }
@@ -93,6 +84,19 @@ where
             return Err(ReceiveError::Timeout);
         }
         S::decode().map_err(|err| err.into())
+    }
+
+    /// Create a mailbox with a specific type.
+    ///
+    /// ### Safety
+    ///
+    /// It's not safe to mix different types of mailboxes inside one process. This function should
+    /// never be used directly. The only reason it's public is that it's used inside the `main`
+    /// macro and needs to be available outside this crate.
+    pub unsafe fn new() -> Self {
+        Self {
+            phantom: PhantomData {},
+        }
     }
 }
 
@@ -185,5 +189,90 @@ pub(crate) struct LinkTrapped(Tag);
 impl LinkTrapped {
     pub(crate) fn tag(&self) -> Tag {
         self.0
+    }
+}
+
+impl<M, S> IntoProcess<M, S> for Mailbox<M, S>
+where
+    S: Serializer<M>,
+{
+    type Process = Process<M, S>;
+
+    fn spawn<C>(
+        capture: C,
+        entry: fn(C, Self),
+        link: Option<Tag>,
+        config: Option<&ProcessConfig>,
+    ) -> Self::Process
+    where
+        S: Serializer<C> + Serializer<M>,
+    {
+        let entry = entry as usize as i32;
+
+        // The `type_helper_wrapper` function is used here to create a pointer to a function with
+        // generic types C, M & S. We can only send pointer data across processes and this is the
+        // only way the Rust compiler will let us transfer this information into the new process.
+        match host::spawn(config, link, type_helper_wrapper::<C, M, S>, entry) {
+            Ok(id) => {
+                // If the captured variable is of size 0, we don't need to send it to another process.
+                if std::mem::size_of::<C>() == 0 {
+                    unsafe { Process::from_id(id) }
+                } else {
+                    let child = unsafe { Process::<C, S>::from_id(id) };
+                    child.send(capture);
+                    // Processes can only receive one type of message, but to pass in the captured variable
+                    // we pretend for the first message that our process is receiving messages of type `C`.
+                    unsafe { std::mem::transmute(child) }
+                }
+            }
+            Err(err) => panic!("Failed to spawn a process: {}", err),
+        }
+    }
+}
+
+// Wrapper function to help transfer the generic types C, M & S into the new process.
+fn type_helper_wrapper<C, M, S>(function: i32)
+where
+    S: Serializer<C> + Serializer<M>,
+{
+    // If the captured variable is of size 0, don't wait on it.
+    let captured = if std::mem::size_of::<C>() == 0 {
+        unsafe { std::mem::MaybeUninit::<C>::zeroed().assume_init() }
+    } else {
+        unsafe { Mailbox::<C, S>::new() }.receive()
+    };
+    let mailbox = unsafe { Mailbox::new() };
+    let function: fn(C, Mailbox<M, S>) = unsafe { std::mem::transmute(function) };
+    function(captured, mailbox);
+}
+
+#[cfg(test)]
+mod tests {
+    use lunatic_test::test;
+    use std::time::Duration;
+
+    use super::*;
+    use crate::{sleep, Mailbox};
+
+    #[test]
+    fn mailbox() {
+        let child = Process::spawn(1, |capture, mailbox: Mailbox<i32>| {
+            assert_eq!(capture, 1);
+            assert_eq!(mailbox.receive(), 2);
+        });
+
+        child.send(2);
+        sleep(Duration::from_millis(100));
+    }
+
+    #[test]
+    #[should_panic]
+    fn mailbox_link() {
+        Process::spawn_link((), |_, _: Mailbox<()>| {
+            panic!("fails");
+        });
+
+        // This process should fail before 100ms, because the link panics.
+        sleep(Duration::from_millis(100));
     }
 }

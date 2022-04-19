@@ -1,4 +1,4 @@
-pub(crate) mod api;
+pub mod api;
 
 use crate::{
     module::{params_to_vec, Param, WasmModule},
@@ -7,7 +7,7 @@ use crate::{
 
 // Performs the low level dance that will turn a high level rust function into a lunatic process.
 //
-// Returns the process resource ID as an u64 in case of sucess.
+// Returns the process resource ID as an u64 in case of success.
 //
 // If `config` is None, the configuration used by the currently running process will be inherited.
 // If link is `Some`, the newly crated process will be linked to the caller.
