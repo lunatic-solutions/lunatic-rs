@@ -93,7 +93,6 @@ pub mod supervisor;
 
 pub use config::ProcessConfig;
 pub use error::LunaticError;
-pub use macros::*;
 pub use mailbox::{Mailbox, ReceiveError};
 pub use module::WasmModule;
 pub use process::Process;

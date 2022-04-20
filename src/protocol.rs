@@ -269,7 +269,7 @@ mod tests {
 
     #[test]
     fn protocol() {
-        let child = Process::spawn(1, |capture: i32, protocol: Protocol<AddProtocol>| {
+        let child = Process::spawn_link(1, |capture: i32, protocol: Protocol<AddProtocol>| {
             assert_eq!(capture, 1);
             let (protocol, a) = protocol.receive();
             let (protocol, b) = protocol.receive();

@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use crate::{
     host::{self, api::message},
-    process::IntoProcess,
+    process::{IntoProcess, NoLink},
     serializer::{Bincode, DecodeError, Serializer},
     Process, ProcessConfig, Resource, Tag,
 };
@@ -191,6 +191,8 @@ impl LinkTrapped {
         self.0
     }
 }
+
+impl<M, S> NoLink for Mailbox<M, S> where S: Serializer<M> {}
 
 impl<M, S> IntoProcess<M, S> for Mailbox<M, S>
 where

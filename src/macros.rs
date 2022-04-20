@@ -1,89 +1,86 @@
 #[macro_export]
 macro_rules! spawn {
-    // Regular process that is not capturing any variables, spawned from a closure.
-    (@process |$mailbox:ident : Mailbox<$mailbox_ty:ty>| $body:expr) => {
-        lunatic::Process::<$mailbox_ty>::spawn((), |_, $mailbox| $body)
+    // From closure
+
+    // A background process (no mailbox & not capturing any variables).
+    (|| $body:expr) => {
+        lunatic::Process::spawn((), |_, _: lunatic::Mailbox<()>| $body)
     };
-    // Regular process capturing variable `$argument`, spawned from a closure.
-    (@process |$argument:ident, $mailbox:ident : Mailbox<$mailbox_ty:ty>| $body:expr) => {
-        lunatic::Process::<$mailbox_ty>::spawn($argument, |$argument, $mailbox| $body)
+    // A background process (no mailbox) that can capture one or more variables.
+    (|$($argument:ident),*| $body:expr) => {
+        lunatic::Process::spawn(($($argument),*), |($($argument),*), _: lunatic::Mailbox<()>| $body)
     };
-    // Regular process that is not capturing any variables, spawned from a function name.
-    (@process $function:path) => {
-        lunatic::Process::spawn((), $function)
+    // A process with a mailbox that is not capturing any variables.
+    (|$mailbox:ident : Mailbox<$mailbox_ty:ty>| $body:expr) => {
+        lunatic::Process::spawn((), |_, $mailbox: lunatic::Mailbox<$mailbox_ty>| $body)
     };
-    // Regular process capturing variable `$argument`, spawned from a function name.
-    (@process $argument:ident, $function:path) => {
-        spawn::<lunatic::Process<_>, _>($argument, $function).unwrap()
+    // A process capturing variable `$argument`.
+    (|$argument:ident, $mailbox:ident : Mailbox<$mailbox_ty:ty>| $body:expr) => {
+        lunatic::Process::spawn(
+            $argument,
+            |$argument, $mailbox: lunatic::Mailbox<$mailbox_ty>| $body,
+        )
     };
 
-    // Protocol that is not capturing any variables, spawned from a closure.
-    (@protocol |$mailbox:ident : Protocol<$mailbox_ty:ty>| $body:expr) => {
-        spawn::<lunatic::Protocol<<$mailbox_tyas lunatic::HasDual>::Dual>, _>((), |_, $mailbox| $body).unwrap()
-    };
-    // Protocol capturing variable `$argument`, spawned from a closure.
-    (@protocol |$argument:ident, $mailbox:ident : Protocol<$mailbox_ty:ty>| $body:expr) => {
-        spawn::<lunatic::Protocol<$mailbox_ty>, _>($argument, |$argument, $mailbox| $body).unwrap()
-    };
-    // Protocol that is not capturing any variables, spawned from a function name.
-    (@protocol $function:path) => {
-        spawn::<lunatic::Protocol<_>, _>((), $function).unwrap()
-    };
-    // Protocol capturing variable `$argument`, spawned from a function name.
-    (@protocol $argument:ident, $function:path) => {
-        spawn::<lunatic::Protocol<_>, _>($argument, $function).unwrap()
-    };
+    // From functions
 
-    // Task spawned from a closure.
-    (@task |$argument:ident| $body:expr) => {
-       lunatic::Task::spawn_link($argument, |$argument| $body)
+    // A background process (no mailbox & not capturing any variables).
+    ($function:ident) => {
+        lunatic::Process::spawn((), |_, _: lunatic::Mailbox<()>| $function() )
     };
-    // Task spawned from a function name.
-    (@task $argument:ident, $function:path) => {
-        lunatic::Task::spawn_link($argument, $function)
-    };
-
-    // Background task that is not capturing any variables, spawned from a closure.
-    (@background || $body:expr) => {
-        spawn::<lunatic::BackgroundTask, _>((), |_| $body).unwrap()
-    };
-    // Background task capturing variable `$argument`, spawned from a closure.
-    (@background |$argument:ident| $body:expr) => {
-        spawn::<lunatic::BackgroundTask, _>($argument, |$argument| $body).unwrap()
-    };
-    // Background task that is not capturing any variables, spawned from a function name.
-    (@background $function:path) => {
-        spawn::<lunatic::BackgroundTask, _>((), $function).unwrap()
-    };
-    // Background task capturing variable `$argument`, spawned from a function name.
-    (@background $argument:ident, $function:path) => {
-        spawn::<lunatic::BackgroundTask, _>($argument, $function).unwrap()
-    };
-
-    // Server capturing state `$state`, spawned from a closure.
-    (@server |$state:ident, $message:ident : $message_ty:ty| $body:expr) => {
-        spawn::<lunatic::Server<$mailbox_ty, _>, _>($state, |$state, $message| $body).unwrap()
-    };
-    // Server capturing state `$state`, spawned from a function name.
-    (@server $state:ident, $function:path) => {
-        spawn::<lunatic::Server<_, _>, _>($state, $function).unwrap()
-    };
-
-    // Generic server from `$state`.
-    (@gen_server $state:path) => {
-        spawn::<lunatic::GenericServer<_>, _>($state, |_state| {}).unwrap()
-    };
-
-    // Supervisor server from `$state`.
-    (@gen_server $state:path) => {
-        spawn::<lunatic::Supervisor<_>, _>($state, |_state| {}).unwrap()
+    // A background process (no mailbox) that can capture one or more variables.
+    ($function:ident($($argument:ident),*)) => {
+        lunatic::Process::spawn(($($argument),*), |($($argument),*), _: lunatic::Mailbox<()>| $function($($argument),*))
     };
 }
 
 #[macro_export]
-macro_rules! spawn_in {
-    ($env:ident, |$argument:ident : Mailbox<$mailbox:ty>| $body:expr) => {
-        $env.spawn::<lunatic::Process<$mailbox>, _>((), |_, $argument| $body)
-            .unwrap()
+macro_rules! spawn_link {
+    // From closure
+
+    // A background process (no mailbox & not capturing any variables).
+    (|| $body:expr) => {
+        lunatic::Process::spawn_link((), |_, _: lunatic::Mailbox<()>| $body)
+    };
+    // A background process (no mailbox) that can capture one or more variables.
+    (|$($argument:ident),*| $body:expr) => {
+        lunatic::Process::spawn_link(($($argument),*), |($($argument),*), _: lunatic::Mailbox<()>| $body)
+    };
+    // A process with a mailbox that is not capturing any variables.
+    (|$mailbox:ident : Mailbox<$mailbox_ty:ty>| $body:expr) => {
+        lunatic::Process::spawn_link((), |_, $mailbox: lunatic::Mailbox<$mailbox_ty>| $body)
+    };
+    // A process with a mailbox capturing variable `$argument`.
+    (|$argument:ident, $mailbox:ident : Mailbox<$mailbox_ty:ty>| $body:expr) => {
+        lunatic::Process::spawn_link(
+            $argument,
+            |$argument, $mailbox: lunatic::Mailbox<$mailbox_ty>| $body,
+        )
+    };
+
+    // A protocol that is not capturing any variables.
+    (|$protocol:ident : Protocol<$proto_ty:ty>| $body:expr) => {
+        lunatic::Process::spawn_link(
+            (),
+            |_, $protocol: lunatic::protocol::Protocol<$proto_ty>| $body,
+        )
+    };
+    // A protocol capturing variable `$argument`.
+    (|$argument:ident, $protocol:ident : Protocol<$proto_ty:ty>| $body:expr) => {
+        lunatic::Process::spawn_link(
+            $argument,
+            |$argument, $protocol: lunatic::protocol::Protocol<$proto_ty>| $body,
+        )
+    };
+
+    // From functions
+
+    // A background process (no mailbox & not capturing any variables).
+    ($function:ident) => {
+        lunatic::Process::spawn_link((), |_, _: lunatic::Mailbox<()>| $function() )
+    };
+    // A background process (no mailbox) that can capture one or more variables.
+    ($function:ident($($argument:ident),*)) => {
+        lunatic::Process::spawn_link(($($argument),*), |($($argument),*), _: lunatic::Mailbox<()>| $function($($argument),*))
     };
 }

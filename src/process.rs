@@ -23,6 +23,12 @@ pub trait IntoProcess<M, S> {
         S: Serializer<C> + Serializer<ProtocolCapture<C>>;
 }
 
+/// A marker trait expressing that a process can be spawned from this type without linking.
+///
+/// This is used to forbid [`Protocol`](crate::protocol::Protocol) to use the `spawn` functions
+/// and only allow usage of `spawn_link` functions.
+pub trait NoLink {}
+
 /// Processes are isolated units of compute.
 ///
 /// In lunatic, all code runs inside processes. Processes run concurrently and communicate via
@@ -110,6 +116,7 @@ impl<M, S> Process<M, S> {
     where
         S: Serializer<C> + Serializer<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
+        T: NoLink,
     {
         T::spawn(capture, entry, None, None)
     }
@@ -139,6 +146,7 @@ impl<M, S> Process<M, S> {
     where
         S: Serializer<C> + Serializer<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
+        T: NoLink,
     {
         T::spawn(capture, entry, None, Some(config))
     }

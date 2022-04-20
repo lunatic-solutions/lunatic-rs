@@ -73,4 +73,15 @@ mod tests {
         assert_eq!(Tag::new(), Tag(131));
         assert_eq!(Tag::new(), Tag(132));
     }
+
+    #[test]
+    fn test_special_tag() {
+        assert!(Tag::special(64).is_some());
+        assert!(Tag::special(128).is_some());
+
+        assert!(Tag::special(63).is_none());
+        assert!(Tag::special(129).is_none());
+
+        assert_eq!(Tag::none(), Tag::none());
+    }
 }
