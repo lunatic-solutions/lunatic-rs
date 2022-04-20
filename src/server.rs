@@ -10,10 +10,10 @@ use crate::{
 /// A trait for implementing the server of a client-server relation.
 ///
 /// Types that implement the `Server` trait become the state of the server process. This state can
-/// be mutated through messages and requests. To define a handler for them, [`HandleMessage`] or
+/// be mutated through messages and requests. To define a handler for them, [`ServerMessage`] or
 /// [`ServerRequest`] can be used.
 ///
-/// [`HandleMessage`] provides a `send` method to send messages to the server, without
+/// [`ServerMessage`] provides a `send` method to send messages to the server, without
 /// waiting on a response. [`ServerRequest`] provides a `request` method that will block
 /// until a response is received.
 pub trait Server

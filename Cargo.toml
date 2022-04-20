@@ -19,6 +19,14 @@ protobuf = "^2.25"
 lunatic-macros = { version = "^0.6.1", path = "./lunatic-macros" }
 lunatic-test = { version = "^0.1", path = "./lunatic-test" }
 
+[dev-dependencies]
+# WASI branch
+criterion = { git = "https://github.com/bheisler/criterion.rs", branch = "version-0.4", default-features = false  }
+
+[[bench]]
+name = "spawning"
+harness = false
+
 [workspace]
 members = [
   "lunatic-macros",

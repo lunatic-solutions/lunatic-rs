@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use lunatic::{sleep, spawn_link, Mailbox};
+use lunatic::{sleep, spawn_link};
 
 fn main() {
     let local = "I'm a string.".to_string();
