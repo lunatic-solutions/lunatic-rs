@@ -79,7 +79,7 @@ pub fn test(_args: TokenStream, item: TokenStream) -> TokenStream {
     let function_name = input.sig.ident.to_string();
 
     // Only one argument of type `lunatic::Mailbox<T>` can be supplied.
-    let input = if input.sig.inputs.len() > 0 {
+    let input = if !input.sig.inputs.is_empty() {
         let name = input.sig.ident;
         let arguments = input.sig.inputs;
         let block = input.block;

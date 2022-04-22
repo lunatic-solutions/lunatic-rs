@@ -1,21 +1,21 @@
 use lunatic::{
-    server::{Request, Server, ServerRequest, StartServer},
+    process::{AbstractProcess, ProcessRef, ProcessRequest, Request, StartProcess},
     Mailbox,
 };
 
 struct Adder;
-impl Server for Adder {
+impl AbstractProcess for Adder {
     type Arg = ();
     type State = Self;
 
-    fn init(_: ()) -> Adder {
+    fn init(_: ProcessRef<Self>, _: ()) -> Adder {
         Adder
     }
 }
-impl ServerRequest<(i32, i32)> for Adder {
+impl ProcessRequest<(i32, i32)> for Adder {
     type Response = i32;
 
-    fn handle(&mut self, (a, b): (i32, i32)) -> i32 {
+    fn handle(_: &mut Self::State, (a, b): (i32, i32)) -> i32 {
         a + b
     }
 }

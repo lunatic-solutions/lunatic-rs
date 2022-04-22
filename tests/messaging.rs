@@ -1,26 +1,26 @@
 use std::time::Duration;
 
 use lunatic::{
-    server::{Request, Server, ServerRequest, StartServer},
-    Mailbox, Process, ReceiveError, Task,
+    process::{AbstractProcess, ProcessRef, ProcessRequest, Request, StartProcess},
+    spawn_link, Mailbox, Process, ReceiveError,
 };
 use lunatic_test::test;
 
 #[test]
 fn message_integer() {
-    let child = Task::spawn_link(127, |input| input);
+    let child = spawn_link!(@task |input = 127| input);
     assert_eq!(child.result(), 127);
 }
 
 #[test]
 fn message_vector() {
-    let child = Task::spawn_link(vec![1, 2, 3, 4, 5], |input| input);
+    let child = spawn_link!(@task |input = { vec![1, 2, 3, 4, 5] }| input);
     assert_eq!(child.result(), vec![1, 2, 3, 4, 5]);
 }
 
 #[test]
 fn message_custom_type() {
-    let child = Task::spawn_link((), |_| X {
+    let child = spawn_link!(@task || X {
         y: Y {
             string: String::from("Hello!"),
         },
@@ -62,18 +62,18 @@ fn message_resource(mailbox: Mailbox<Proc>) {
 #[test]
 fn request_reply(mailbox: Mailbox<u64>) {
     struct Adder;
-    impl Server for Adder {
+    impl AbstractProcess for Adder {
         type Arg = ();
         type State = Self;
 
-        fn init(_: ()) -> Adder {
+        fn init(_: ProcessRef<Self>, _: ()) -> Adder {
             Adder
         }
     }
-    impl ServerRequest<(i32, i32)> for Adder {
+    impl ProcessRequest<(i32, i32)> for Adder {
         type Response = i32;
 
-        fn handle(&mut self, (a, b): (i32, i32)) -> i32 {
+        fn handle(_: &mut Self::State, (a, b): (i32, i32)) -> i32 {
             a + b
         }
     }

@@ -38,7 +38,7 @@ impl Tag {
     ///
     /// The `id` must be in the range between 64 and 128 or the function will return `None`.
     pub fn special(id: i64) -> Option<Tag> {
-        if id >= 64 && id <= 128 {
+        if (64..=128).contains(&id) {
             Some(Tag(id))
         } else {
             None

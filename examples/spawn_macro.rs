@@ -11,8 +11,7 @@ fn main() {
     let proc = spawn_link!(|mailbox: Mailbox<String>| println!("{}", mailbox.receive()));
     proc.send("Hello non-capturing closure!".to_string());
 
-    let input = "Hello function!".to_string();
-    let _ = spawn_link!(function_process(input));
+    let _ = spawn_link!(|input = {"Hello function!".to_string()}| function_process(input));
 
     sleep(Duration::from_millis(100));
 }

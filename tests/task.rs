@@ -1,35 +1,35 @@
-use lunatic::Task;
+use lunatic::spawn_link;
 use lunatic_test::test;
 
 #[test]
 fn simple_task() {
-    let task = Task::spawn_link((2, 3), |(a, b)| a + b);
+    let task = spawn_link!(@task |a = 2, b = {3}| a + b);
     assert_eq!(task.result(), 5);
 }
 
+#[allow(unreachable_code)]
 #[test]
 #[should_panic]
 fn failing_child_kills_task() {
-    let task = Task::spawn_link((), |_| panic!(""));
+    let task = spawn_link!(@task || panic!(""));
     task.result()
 }
 
 #[test]
-fn result_should_be_called() {
-    // This will pring an error to stderr. Display it with:
-    // cargo test result_should_be_called --test task -- --show-output
-    let _ = Task::spawn_link((), |_| {});
+#[should_panic]
+fn result_must_be_called() {
+    let _ = spawn_link!(@task  || {});
 }
 
 #[test]
 fn recursive_count() {
-    let task = Task::spawn_link(1000, recursive_count_sub);
+    let task = spawn_link!(@task |n = 1_000| recursive_count_sub(n));
     assert_eq!(500500, task.result());
 }
 
 fn recursive_count_sub(n: i32) -> i32 {
     if n > 0 {
-        n + Task::spawn_link(n - 1, recursive_count_sub).result()
+        n + spawn_link!(@task |n = {n - 1}| recursive_count_sub(n)).result()
     } else {
         0
     }

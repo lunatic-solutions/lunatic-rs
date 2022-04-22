@@ -1,8 +1,8 @@
 use std::{any::TypeId, marker::PhantomData, mem::ManuallyDrop};
 
 use crate::{
+    function_process::IntoProcess,
     host,
-    process::IntoProcess,
     serializer::{Bincode, Serializer},
     Mailbox, Process, ProcessConfig, Resource, Tag,
 };
@@ -32,9 +32,10 @@ pub struct Protocol<P: 'static, S = Bincode> {
 
 impl<P: 'static, S> Drop for Protocol<P, S> {
     fn drop(&mut self) {
-        if TypeId::of::<P>() != TypeId::of::<End>() {
+        if TypeId::of::<P>() != TypeId::of::<End>() && TypeId::of::<P>() != TypeId::of::<TaskEnd>()
+        {
             panic!(
-                "Protocol prematurely dropped, before reaching the `End` state (currently: {}).",
+                "Protocol prematurely dropped, before reaching the `End` or `TaskEnd` state (currently: {}).",
                 std::any::type_name::<P>()
             );
         }
@@ -97,6 +98,22 @@ where
     }
 }
 
+impl<A, S> Protocol<Recv<A, TaskEnd>, S>
+where
+    S: Serializer<A>,
+{
+    /// A task is a special case of a protocol spawned with the `spawn!(@task ...)` macro.
+    /// It only returns one value.
+    #[must_use]
+    pub fn result(self) -> A {
+        // Temporarily cast to right mailbox type.
+        let mailbox: Mailbox<A, S> = unsafe { Mailbox::new() };
+        let result = mailbox.tag_receive(Some(&[self.tag]));
+        let _: Protocol<TaskEnd, S> = self.cast(); // Only `End` protocols can be dropped
+        result
+    }
+}
+
 impl<P, Q, S> Protocol<Choose<P, Q>, S>
 where
     S: Serializer<bool>,
@@ -144,6 +161,9 @@ where
     }
 }
 
+// A special case of the protocol with a `result()` function.
+pub struct TaskEnd;
+
 /// End of communication session
 pub struct End;
 
@@ -166,6 +186,10 @@ pub struct Offer<P, Q>(PhantomData<(P, Q)>);
 /// This trait is sealed and cannot be implemented outside session-types.
 pub trait HasDual: private::Sealed {
     type Dual: HasDual;
+}
+
+impl HasDual for TaskEnd {
+    type Dual = TaskEnd;
 }
 
 impl HasDual for End {
@@ -198,6 +222,7 @@ mod private {
     pub trait Sealed {}
 
     // Impl for all exported protocol types
+    impl Sealed for TaskEnd {}
     impl Sealed for End {}
     impl<A, P> Sealed for Send<A, P> {}
     impl<A, P> Sealed for Recv<A, P> {}

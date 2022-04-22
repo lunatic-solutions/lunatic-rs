@@ -3,8 +3,8 @@ use std::{marker::PhantomData, time::Duration};
 use thiserror::Error;
 
 use crate::{
+    function_process::{IntoProcess, NoLink},
     host::{self, api::message},
-    process::{IntoProcess, NoLink},
     serializer::{Bincode, DecodeError, Serializer},
     Process, ProcessConfig, Resource, Tag,
 };
@@ -64,6 +64,21 @@ where
     /// Same as `receive`, but only waits for the duration of timeout for the message.
     pub fn receive_timeout(&self, timeout: Duration) -> Result<M, ReceiveError> {
         self.receive_(None, Some(timeout))
+    }
+
+    /// Same as `tag_receive`, but only waits for the duration of timeout for the message.
+    pub fn tag_receive_timeout(
+        &self,
+        tags: Option<&[Tag]>,
+        timeout: Duration,
+    ) -> Result<M, ReceiveError> {
+        match tags {
+            Some(tags) => {
+                let tags: Vec<i64> = tags.iter().map(|tag| tag.id()).collect();
+                self.receive_(Some(&tags), Some(timeout))
+            }
+            None => self.receive_(None, Some(timeout)),
+        }
     }
 
     fn receive_(&self, tags: Option<&[i64]>, timeout: Option<Duration>) -> Result<M, ReceiveError> {

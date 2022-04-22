@@ -1,12 +1,12 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use lunatic::Task;
+use lunatic::spawn_link;
 
 fn spawn_benchmark(c: &mut Criterion) {
     c.bench_function("task", |b| {
         b.iter(|| {
             // Spawn task and wait for it to finish.
-            let task = Task::spawn_link(0, |input| input + 1);
-            assert_eq!(task.result(), 1);
+            let task = spawn_link!(@task |input = 1| input + 1);
+            assert_eq!(task.result(), 2);
         })
     });
 }

@@ -16,9 +16,9 @@ function.
 
 * **[`Process`]** - A process that can receive messages through a [`Mailbox`] or
     [`Protocol`](protocol::Protocol).
-* **[`Task`]** - One-off process that returns a value.
-* **[`Server`](server::Server)** - Abstracts the common client-server interaction.
-* **[`Supervisor`](supervisor::Supervisor)** - A process that can supervise servers and re-spawn
+* **[`AbstractProcess`](process::AbstractProcess)** - Abstracts state managment and message/request
+    handling.
+* **[`Supervisor`](supervisor::Supervisor)** - A process that can supervise others and re-spawn
     them if they fail.
 
 ### Linking
@@ -77,27 +77,25 @@ and cargo is going to automatically build your project as a WebAssembly module a
 
 mod config;
 mod error;
+mod function_process;
 mod macros;
 mod mailbox;
 mod module;
-mod process;
 mod tag;
-mod task;
 
 pub mod host;
 pub mod net;
+pub mod process;
 pub mod protocol;
 pub mod serializer;
-pub mod server;
 pub mod supervisor;
 
 pub use config::ProcessConfig;
 pub use error::LunaticError;
+pub use function_process::Process;
 pub use mailbox::{Mailbox, ReceiveError};
 pub use module::WasmModule;
-pub use process::Process;
 pub use tag::Tag;
-pub use task::Task;
 
 pub use lunatic_macros::main;
 pub use lunatic_test::test;
