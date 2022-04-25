@@ -1,3 +1,5 @@
+//! Low level lunatic VM syscalls.
+
 pub mod api;
 
 use crate::{

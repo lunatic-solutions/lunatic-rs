@@ -1,3 +1,5 @@
+//! Serializer implementations for messages.
+
 use crate::host::api::message;
 
 use thiserror::Error;

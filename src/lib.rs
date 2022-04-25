@@ -30,30 +30,36 @@ To spawn a linked process use the [`spawn_link`] function.
 
 ### Process configuration
 
-TODO
+Most `spawn` func
 
-# Setup
+### Setup
 
-To run Rust applications on lunatic, you will first need to download the lunatic runtime by
-following the installation steps in [this repository][1]. The runtime is just a single executable
-and runs on Windows, macOS and Linux.
-
-Lunatic applications need to be compiled to WebAssembly before they can be executed by the
-runtime. Rust has great support for WebAssembly and you can build a lunatic compatible
-applications just by passing the `--target=wasm32-wasi` flag to cargo, e.g:
-
+To run the example you will first need to download the lunatic runtime by following the
+installation steps in [this repository][1]. The runtime is just single executable and runs on
+Windows, macOS and Linux. If you have already Rust installed, you can get it with:
+```bash
+cargo install lunatic-runtime
 ```
+
+[Lunatic][1] applications need to be compiled to [WebAssembly][2] before they can be executed by
+the runtime. Rust has great support for WebAssembly and you can build a lunatic compatible
+application just by passing the `--target=wasm32-wasi` flag to cargo, e.g:
+
+```bash
+# Add the WebAssembly target
+rustup target add wasm32-wasi
+# Build the app
 cargo build --release --target=wasm32-wasi
 ```
 
 This will generate a .wasm file in the `target/wasm32-wasi/release/` folder inside your project.
-You can now run your application by passing the generated .wasm file to lunatic, e.g:
+You can now run your application by passing the generated .wasm file to Lunatic, e.g:
 
 ```
 lunatic target/wasm32-wasi/release/<name>.wasm
 ```
 
-# Better developer experience
+#### Better developer experience
 
 To simplify developing, testing and running lunatic applications with cargo, you can add a
 `.cargo/config.toml` file to your project with the following content:
@@ -66,13 +72,19 @@ target = "wasm32-wasi"
 runner = "lunatic"
 ```
 
-Now you can just use the commands you were already familiar with, such as `cargo run`, `cargo test`*
-and cargo is going to automatically build your project as a WebAssembly module and run it inside of
+Now you can just use the commands you were already familiar with, such as `cargo run`, `cargo test`
+and cargo is going to automatically build your project as a WebAssembly module and run it inside
 `lunatic`.
 
-* For tests you will need to use the provided [`test`] macro instead of the standard library one.
+### Testing
+
+Lunatic provides a macro [`test`] to turn your tests into processes. Check out the [`tests`][3]
+directory for examples.
 
 [1]: https://github.com/lunatic-solutions/lunatic
+[2]: https://webassembly.org/
+[3]: https://github.com/lunatic-solutions/rust-lib/tree/main/tests
+
 */
 
 mod config;

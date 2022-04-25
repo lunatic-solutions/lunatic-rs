@@ -15,6 +15,49 @@ use crate::{
 ///
 /// [`Message`] provides a `send` method to send messages to the process, without waiting on a
 /// response. [`Request`] provides a `request` method that will block until a response is received.
+///
+/// # Example
+///
+/// ```
+/// use lunatic::process::{
+///     AbstractProcess, Message, ProcessMessage, ProcessRef, ProcessRequest,
+///     Request, StartProcess,
+/// };
+///
+/// struct Counter(u32);
+///
+/// impl AbstractProcess for Counter {
+///     type Arg = u32;
+///     type State = Self;
+///
+///     fn init(_: ProcessRef<Self>, start: u32) -> Self {
+///         Self(start)
+///     }
+/// }
+///
+/// #[derive(serde::Serialize, serde::Deserialize)]
+/// struct Inc;
+/// impl ProcessMessage<Inc> for Counter {
+///     fn handle(state: &mut Self::State, _: Inc) {
+///         state.0 += 1;
+///     }
+/// }
+///
+/// #[derive(serde::Serialize, serde::Deserialize)]
+/// struct Count;
+/// impl ProcessRequest<Count> for Counter {
+///     type Response = u32;
+///
+///     fn handle(state: &mut Self::State, _: Count) -> u32 {
+///         state.0
+///     }
+/// }
+///
+///
+/// let counter = Counter::start(5, None);
+/// counter.send(Inc);
+/// assert_eq!(counter.request(Count), 6);
+/// ```
 pub trait AbstractProcess {
     /// The argument received by the `init` function.
     ///
@@ -29,8 +72,8 @@ pub trait AbstractProcess {
     /// Entry function of the new process.
     ///
     /// This function is executed inside the new process. It will receive the arguments passed
-    /// to the `start` or `start_link` function by the parent. And will return the starting state
-    /// of the newly spawned process.
+    /// to the [`start`](StartProcess::start) or [`start_link`](StartProcess::start_link) function
+    /// by the parent. And will return the starting state of the newly spawned process.
     ///
     /// The parent will block on the call of `start` or `start_link` until this function finishes.
     /// This allows startups to be synchronized.

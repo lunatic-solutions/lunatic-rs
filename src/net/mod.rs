@@ -1,4 +1,4 @@
-/*! Networking related functions */
+//! Networking related functions.
 
 mod resolver;
 mod tcp_listener;

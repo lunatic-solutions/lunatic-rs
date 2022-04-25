@@ -54,7 +54,7 @@ pub trait NoLink {}
 /// A mailbox process takes a [`Mailbox`](crate::Mailbox) that can only receive messages of one
 /// type.
 ///
-/// /// # Example
+/// # Example
 ///
 /// ```
 /// let child = Process::spawn(1, |capture, mailbox: Mailbox<i32>| {
@@ -70,10 +70,10 @@ pub trait NoLink {}
 /// [`Serializer`] trait can be used instead. The serializer just needs to be added to the
 /// [`Mailbox`](crate::Mailbox) type (e.g. `Mailbox<i32, MessagePack>`).
 ///
-/// Processes can also be linked together using the `spawn_link` function. This means that if one
-/// of them fails (panics) the other will be killed too. It is always recommended to spawn linked
-/// processes when they depend on each other. That way we can avoid one process forever waiting on
-/// a message from another process that doesn't exist anymore.
+/// Processes can also be linked together using the [`spawn_link`](Self::spawn_link`) function.
+/// This means that if one of them fails (panics) the other will be killed too. It is always
+/// recommended to spawn linked processes when they depend on each other. That way we can avoid
+/// one process forever waiting on a message from another process that doesn't exist anymore.
 ///
 /// ### Protocol based processes
 ///
@@ -104,6 +104,8 @@ pub trait NoLink {}
 ///
 /// Same as the mailbox, the protocol based process can choose another serializer (e.g.
 /// `Protocol<AddProtocol, MessagePack>`).
+///
+/// If a protocol based process is dropped before the `End` state is reached, the drop will panic.
 pub struct Process<M, S = Bincode> {
     id: u64,
     // If set to true, the host call `lunatic::process::drop_process` will not be executed on drop.

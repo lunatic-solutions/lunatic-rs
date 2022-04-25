@@ -3,13 +3,52 @@ use std::marker::PhantomData;
 use crate::process::{AbstractProcess, ProcessRef, StartFailableProcess};
 use crate::{host, Tag};
 
+/// A `Supervisor` can detect failures (panics) inside [`AbstractProcesses`](AbstractProcess) and
+/// restart them.
+///
+/// # Example
+///
+/// ```
+/// struct Sup;
+/// impl Supervisor for Sup {
+///     type Arg = ();
+///     // Start 3 `Counters` and monitor them for failures.
+///     type Children = (Counter, Counter, Counter);
+///
+///     fn init(config: &mut SupervisorConfig<Self>, _: ()) {
+///         // If a child fails, just restart it.
+///         config.set_strategy(SupervisorStrategy::OneForOne);
+///         // Start each `Counter` with a state of `0` & name last child "hello".
+///         config.children_args((0, None),(0, None),(0, "hello".to_owned()));
+///     }
+/// }
+///
+/// let sup = Sup::start((), None);
+/// let children = sup.children();
+/// let count1 = children.2.request(Count);
+/// // Get reference to named child.
+/// let hello = ProcessRef::<Counter>::lookup("hello").unwrap();
+/// let count2 = hello.request(Count);
+/// assert_eq!(count1, count2);
+/// ```
 pub trait Supervisor
 where
     Self: Sized,
 {
+    /// The argument received by the `init` function.
+    ///
+    /// This argument is sent from the parent to the child and needs to be serializable.
     type Arg: serde::Serialize + serde::de::DeserializeOwned;
+
+    /// A tuple of types that implement `AbstractProcess`.
+    ///
+    /// They will be spawned as children. This can also include other supervisors.
     type Children: Supervisable<Self>;
 
+    /// Entry function of the supervisor.
+    ///
+    /// It's used to configure the supervisor. The function `config.children_args()` must be called
+    /// to provide arguments & names for children. If it's not called the supervisor will panic.
     fn init(config: &mut SupervisorConfig<Self>, arg: Self::Arg);
 }
 

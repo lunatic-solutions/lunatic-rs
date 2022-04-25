@@ -23,20 +23,19 @@ Rust :)
 
 ### Example
 
-Spawning a new process is as simple as passing a function to it.
+Spawning a new process is as simple as defining an entry function.
 
 ```rust
-use lunatic::{spawn, Mailbox, Task};
+use lunatic::{spawn_link, Mailbox};
 
 #[lunatic::main]
 fn main(_: Mailbox<()>) {
-    let child = spawn::<Task<()>, _>((), |_| {
+    let child = spawn_link!(@task || {
         // This closure gets a new heap and stack to
         // execute on, and can't access the memory of
         // the parent process.
         println!("Hi! I'm a process.");
-    })
-    .unwrap();
+    });
     // Wait for child to finish
     let _ignore = child.result();
 }
@@ -48,13 +47,19 @@ Check out more examples [here](https://github.com/lunatic-solutions/rust-lib/tre
 
 To run the example you will first need to download the lunatic runtime by following the
 installation steps in [this repository][1]. The runtime is just single executable and runs on
-Windows, macOS and Linux.
+Windows, macOS and Linux. If you have already Rust installed, you can get it with:
+```bash
+cargo install lunatic-runtime
+```
 
 [Lunatic][1] applications need to be compiled to [WebAssembly][3] before they can be executed by
 the runtime. Rust has great support for WebAssembly and you can build a lunatic compatible
-applications just by passing the `--target=wasm32-wasi` flag to cargo, e.g:
+application just by passing the `--target=wasm32-wasi` flag to cargo, e.g:
 
-```
+```bash
+# Add the WebAssembly target
+rustup target add wasm32-wasi
+# Build the app
 cargo build --release --target=wasm32-wasi
 ```
 
@@ -79,17 +84,13 @@ runner = "lunatic"
 ```
 
 Now you can just use the commands you were already familiar with, such as `cargo run`, `cargo test`
-and cargo is going to automatically build your project as a WebAssembly module and run it inside of
+and cargo is going to automatically build your project as a WebAssembly module and run it inside
 `lunatic`.
 
 ### Testing
 
 Lunatic provides a macro `#[lunatic::test]` to turn your tests into processes. Check out the
 `tests` folder for examples.
-
-If you want to forward some flags to the tests, you will need to use double `--`, the first
-tells cargo to forward the flags to lunatic, the second tells lunatic to forward the flags to the
-test. E.g. `cargo test -- -- --nocaputre`
 
 ### Supported lunatic features
 
@@ -98,7 +99,7 @@ Some features are directly supported through Rust's standard library, like files
 
 Some features that are usually available in Rust's standard library (like TCP, e.g.
 `std::net::TcpListener`) are not standardized yet by [WASI][4]. So we made them available through
-**this library** (e.g. `lunatic::net::TcpListener`). Once WASI gets support for this features you
+**this library** (e.g. `lunatic::net::TcpListener`). Once WASI gets support for these features you
 will be able to just use the standard library instead.
 
 What currently works:
@@ -109,11 +110,11 @@ What currently works:
 - [x] **TCP networking** (with this library)
 - [x] **Filesystem access**
 - [x] **Environment variables**
-- [x] **Distributed lunatic**
+- [ ] **Distributed lunatic**
 
 > **NOTE:**
 > Some libraries currently don't compile under the target `wasm32-wasi` and can't be used inside
-> lunatic applications. This includes most of Rust's `async` libraries.
+> lunatic applications. This includes most of Rust's `async` ecosystem.
 
 [1]: https://github.com/lunatic-solutions/lunatic
 [2]: https://www.erlang.org/

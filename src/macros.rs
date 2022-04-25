@@ -1,4 +1,5 @@
 /// Returns either `spawn`, `spawn_link` or `spawn_link_config`, depending on the arguments.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! spawn_link_config {
     () => {
@@ -15,6 +16,27 @@ macro_rules! spawn_link_config {
     };
 }
 
+/// Helper macro for spawning processes.
+///
+/// The [`Process::spawn`](crate::Process::spawn) function can be too verbose for simple processes.
+/// This macro should cover most common cases of spawning a process from non-capturing closures.
+///
+/// # Example
+///
+/// ```
+/// // Background process
+/// spawn!(|| {});
+/// // Mailbox process
+/// spawn!(|_mailbox: Mailbox<()>| {});
+/// // Capture local var
+/// let local_var = "Hello".to_owned();
+/// spawn!(|local_var| assert_eq!(local_var, "Hello"));
+/// // Give variable during invocation
+/// spawn!(|local_var = {"Hello".to_owned()}| assert_eq!(local_var, "Hello"));
+/// // Background process with config
+/// let config = ProcessConfig::new();
+/// spawn!(&config, || {});
+/// ```
 #[macro_export]
 macro_rules! spawn {
     // A background process (no mailbox & not capturing any variables).
@@ -62,6 +84,33 @@ macro_rules! spawn {
     };
 }
 
+/// Helper macro for spawning linked processes.
+///
+/// The [`Process::spawn_link`](crate::Process::spawn_link) function can be too verbose for simple
+/// processes. This macro should cover most common cases of spawning a process from non-capturing
+/// closures.
+///
+/// # Example
+///
+/// ```
+/// // Background process
+/// spawn_link!(|| {});
+/// // Mailbox process
+/// spawn_link!(|_mailbox: Mailbox<()>| {});
+/// // Capture local var
+/// let local_var = "Hello".to_owned();
+/// spawn_link!(|local_var| assert_eq!(local_var, "Hello"));
+/// // Give variable during invocation
+/// spawn_link!(|local_var = {"Hello".to_owned()}| assert_eq!(local_var, "Hello"));
+/// // Protocol, no capture
+/// spawn_link!(|_proto: Protocol<End>| {});
+/// // Protocol, capture local_var
+/// let local_var = "Hello".to_owned();
+/// spawn_link!(|local_var, _proto: Protocol<End>| assert_eq!(local_var, "Hello"));
+/// // Background process with config
+/// let config = ProcessConfig::new();
+/// spawn_link!(&config, || {});
+/// ```
 #[macro_export]
 macro_rules! spawn_link {
     // From closure
