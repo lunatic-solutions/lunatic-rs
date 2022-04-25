@@ -182,3 +182,38 @@ fn children_args_not_called() {
 
     Sup::start_link((), None);
 }
+
+#[test]
+fn shutdown() {
+    struct A;
+
+    impl AbstractProcess for A {
+        type Arg = ();
+        type State = A;
+
+        fn init(proc: ProcessRef<Self>, _: ()) -> A {
+            println!("{}", proc.uuid());
+            A
+        }
+
+        fn terminate(_: Self::State) {
+            println!("Exit");
+        }
+    }
+
+    struct Sup;
+    impl Supervisor for Sup {
+        type Arg = ();
+        type Children = (A, A, A, A);
+
+        fn init(config: &mut SupervisorConfig<Self>, _: ()) {
+            config.set_strategy(SupervisorStrategy::OneForOne);
+            config.children_args(((), (), (), ()));
+        }
+    }
+
+    let sup = Sup::start((), None);
+    sup.shutdown();
+
+    sleep(Duration::from_millis(100));
+}

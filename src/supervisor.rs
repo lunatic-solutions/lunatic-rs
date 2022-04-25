@@ -38,6 +38,10 @@ where
         config
     }
 
+    fn terminate(config: SupervisorConfig<T>) {
+        config.terminate();
+    }
+
     fn handle_link_trapped(config: &mut SupervisorConfig<T>, tag: Tag) {
         T::Children::handle_failure(config, tag);
     }
@@ -75,6 +79,10 @@ where
     ) -> <<T as Supervisor>::Children as Supervisable<T>>::Processes {
         self.children.as_ref().unwrap().clone()
     }
+
+    fn terminate(self) {
+        T::Children::terminate(self);
+    }
 }
 
 impl<T> Default for SupervisorConfig<T>
@@ -101,7 +109,7 @@ where
     type Tags;
 
     fn start_links(config: &mut SupervisorConfig<T>, args: Self::Args);
-
+    fn terminate(config: SupervisorConfig<T>);
     fn handle_failure(config: &mut SupervisorConfig<T>, tag: Tag);
 }
 
@@ -126,6 +134,10 @@ where
         };
         config.children = Some(proc);
         config.children_tags = Some(tag);
+    }
+
+    fn terminate(config: SupervisorConfig<K>) {
+        config.children.unwrap().shutdown();
     }
 
     fn handle_failure(config: &mut SupervisorConfig<K>, tag: Tag) {
@@ -208,6 +220,12 @@ mod macros {
 
                     config.children = Some(($(paste::paste!([<proc$i>])),*));
                     config.children_tags = Some(($(paste::paste!([<tag$i>])),*));
+                }
+
+                fn terminate(config: SupervisorConfig<K>) {
+                    $(
+                        config.children.as_ref().unwrap().$i.shutdown();
+                    )*
                 }
 
                 fn handle_failure(config: &mut SupervisorConfig<K>, tag: Tag) {

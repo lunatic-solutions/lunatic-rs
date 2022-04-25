@@ -9,6 +9,29 @@ use lunatic::{
 };
 
 #[test]
+fn shutdown() {
+    struct A;
+
+    impl AbstractProcess for A {
+        type Arg = ();
+        type State = A;
+
+        fn init(_: ProcessRef<Self>, _: ()) -> A {
+            A
+        }
+
+        fn terminate(_: Self::State) {
+            println!("Exiting");
+        }
+    }
+
+    let a = A::start_link((), None);
+    a.shutdown();
+
+    sleep(Duration::from_millis(100));
+}
+
+#[test]
 fn handle_message() {
     struct A;
 

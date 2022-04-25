@@ -36,6 +36,9 @@ pub trait AbstractProcess {
     /// This allows startups to be synchronized.
     fn init(this: ProcessRef<Self>, arg: Self::Arg) -> Self::State;
 
+    /// Called when a `shutdown` command is received.
+    fn terminate(_state: Self::State) {}
+
     /// This function will be called if the process is set to catch link deaths with
     /// `host::api::process::die_when_link_dies(1)` and a linked process traps.
     fn handle_link_trapped(_state: &mut Self::State, _tag: Tag) {}
@@ -240,6 +243,10 @@ fn starter<T>(
                         unsafe { std::mem::transmute(handler) };
                     handler(&mut state, sender);
                 }
+                Sendable::Shutdown => {
+                    T::terminate(state);
+                    break;
+                }
             },
             Err(link_trapped) => T::handle_link_trapped(&mut state, link_trapped.tag()),
         }
@@ -302,6 +309,20 @@ impl<T> Clone for ProcessRef<T> {
     }
 }
 
+impl<T> ProcessRef<T>
+where
+    T: AbstractProcess,
+{
+    /// Shut down process
+    pub fn shutdown(&self) {
+        // Create new message buffer.
+        unsafe { host::api::message::create_data(Tag::none().id(), 0) };
+        Bincode::encode(&Sendable::Shutdown).unwrap();
+        // Send the message
+        unsafe { host::api::message::send(self.process.id()) };
+    }
+}
+
 // This is a wrapper around the message/request that is sent to a process.
 //
 // The first `i32` value is a pointer
@@ -311,6 +332,7 @@ enum Sendable {
     // The process type can't be carried over as a generic and is set here to `()`, but overwritten
     // at the time of returning with the correct type.
     Request(i32, Process<()>),
+    Shutdown,
 }
 
 impl<M, S, T> Message<M, S> for ProcessRef<T>
