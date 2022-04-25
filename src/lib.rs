@@ -30,7 +30,9 @@ To spawn a linked process use the [`spawn_link`] function.
 
 ### Process configuration
 
-Most `spawn` func
+Spawn functions have a variant that takes a [`ProcessConfig`]. This configuration can be used
+to set a memory or CPU limit on the newly spawned process. It can also be used to control file
+and network access permissions of processes.
 
 ### Setup
 
