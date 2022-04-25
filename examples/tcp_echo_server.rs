@@ -1,4 +1,4 @@
-use lunatic::{net, process, Mailbox};
+use lunatic::{net, Mailbox, Process};
 use std::io::{BufRead, BufReader, Write};
 
 fn main() {
@@ -7,7 +7,7 @@ fn main() {
     while let Ok((tcp_stream, _peer)) = listener.accept() {
         // Pass the TCP stream as a context to the new process. We can't use a closures that
         // capture parent variables because no memory is shared between processes.
-        process::spawn_with(tcp_stream, handle).unwrap();
+        Process::spawn(tcp_stream, handle);
     }
 }
 

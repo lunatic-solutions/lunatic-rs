@@ -1,0 +1,36 @@
+use lunatic::spawn_link;
+use lunatic_test::test;
+
+#[test]
+fn simple_task() {
+    let task = spawn_link!(@task |a = 2, b = {3}| a + b);
+    assert_eq!(task.result(), 5);
+}
+
+#[allow(unreachable_code)]
+#[test]
+#[should_panic]
+fn failing_child_kills_task() {
+    let task = spawn_link!(@task || panic!(""));
+    task.result()
+}
+
+#[test]
+#[should_panic]
+fn result_must_be_called() {
+    let _ = spawn_link!(@task  || {});
+}
+
+#[test]
+fn recursive_count() {
+    let task = spawn_link!(@task |n = 1_000| recursive_count_sub(n));
+    assert_eq!(500500, task.result());
+}
+
+fn recursive_count_sub(n: i32) -> i32 {
+    if n > 0 {
+        n + spawn_link!(@task |n = {n - 1}| recursive_count_sub(n)).result()
+    } else {
+        0
+    }
+}

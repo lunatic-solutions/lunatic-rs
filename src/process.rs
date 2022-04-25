@@ -1,443 +1,582 @@
-use std::{
-    cell::UnsafeCell,
-    fmt::{self, Debug},
-    marker::PhantomData,
-    mem::transmute,
-    time::Duration,
-};
+use std::marker::PhantomData;
 
 use crate::{
-    environment::{params_to_vec, Param},
-    error::LunaticError,
-    host_api::{self, message, process},
-    mailbox::{LinkMailbox, Mailbox, MessageRw, TransformMailbox},
-    request::Request,
-    tag::Tag,
-    Environment,
+    host,
+    mailbox::{LinkMailbox, LinkTrapped},
+    serializer::{Bincode, Serializer},
+    supervisor::{Supervisable, Supervisor, SupervisorConfig},
+    Mailbox, Process, ProcessConfig, Resource, Tag,
 };
 
-use rmp_serde::decode;
-use serde::{
-    de::{self, DeserializeOwned, Visitor},
-    Deserialize, Deserializer, Serialize, Serializer,
-};
+/// Types that implement the `AbstractProcess` trait can be started as processes.
+///
+/// Their state can be mutated through messages and requests. To define a handler for them,
+/// use [`ProcessMessage`] or [`ProcessRequest`].
+///
+/// [`Message`] provides a `send` method to send messages to the process, without waiting on a
+/// response. [`Request`] provides a `request` method that will block until a response is received.
+///
+/// # Example
+///
+/// ```
+/// use lunatic::process::{
+///     AbstractProcess, Message, ProcessMessage, ProcessRef, ProcessRequest,
+///     Request, StartProcess,
+/// };
+///
+/// struct Counter(u32);
+///
+/// impl AbstractProcess for Counter {
+///     type Arg = u32;
+///     type State = Self;
+///
+///     fn init(_: ProcessRef<Self>, start: u32) -> Self {
+///         Self(start)
+///     }
+/// }
+///
+/// #[derive(serde::Serialize, serde::Deserialize)]
+/// struct Inc;
+/// impl ProcessMessage<Inc> for Counter {
+///     fn handle(state: &mut Self::State, _: Inc) {
+///         state.0 += 1;
+///     }
+/// }
+///
+/// #[derive(serde::Serialize, serde::Deserialize)]
+/// struct Count;
+/// impl ProcessRequest<Count> for Counter {
+///     type Response = u32;
+///
+///     fn handle(state: &mut Self::State, _: Count) -> u32 {
+///         state.0
+///     }
+/// }
+///
+///
+/// let counter = Counter::start(5, None);
+/// counter.send(Inc);
+/// assert_eq!(counter.request(Count), 6);
+/// ```
+pub trait AbstractProcess {
+    /// The argument received by the `init` function.
+    ///
+    /// This argument is sent from the parent to the child and needs to be serializable.
+    type Arg: serde::Serialize + serde::de::DeserializeOwned;
 
-/// A sandboxed computation.
-///
-/// Processes are fundamental building blocks of Lunatic applications. Each of them has their own
-/// memory space. The only way for processes to interact is trough [`Serialize + DeserializeOwned`]
-/// passing.
-///
-/// ### Safety:
-/// It's not safe to use mutable `static` variables to share data between processes, because each
-/// of them is going to see a separate heap and a unique `static` variable.
-pub struct Process<T: Serialize + DeserializeOwned> {
-    pub(crate) id: u64,
-    // If the process handle is serialized it will be removed from our resources, so we can't call
-    // `drop_process()` anymore on it.
-    consumed: UnsafeCell<bool>,
-    _phantom: PhantomData<T>,
+    /// The state of the process.
+    ///
+    /// In most cases this value is set to `Self`.
+    type State;
+
+    /// Entry function of the new process.
+    ///
+    /// This function is executed inside the new process. It will receive the arguments passed
+    /// to the [`start`](StartProcess::start) or [`start_link`](StartProcess::start_link) function
+    /// by the parent. And will return the starting state of the newly spawned process.
+    ///
+    /// The parent will block on the call of `start` or `start_link` until this function finishes.
+    /// This allows startups to be synchronized.
+    fn init(this: ProcessRef<Self>, arg: Self::Arg) -> Self::State;
+
+    /// Called when a `shutdown` command is received.
+    fn terminate(_state: Self::State) {}
+
+    /// This function will be called if the process is set to catch link deaths with
+    /// `host::api::process::die_when_link_dies(1)` and a linked process traps.
+    fn handle_link_trapped(_state: &mut Self::State, _tag: Tag) {}
 }
 
-impl<T: Serialize + DeserializeOwned> PartialEq for Process<T> {
-    fn eq(&self, other: &Self) -> bool {
-        let mut uuid_self: [u8; 16] = [0; 16];
-        unsafe { host_api::process::id(self.id, &mut uuid_self as *mut [u8; 16]) };
-        let mut uuid_other: [u8; 16] = [0; 16];
-        unsafe { host_api::process::id(other.id, &mut uuid_other as *mut [u8; 16]) };
-        uuid_self == uuid_other
+/// Defines a handler for a message of type `M`.
+pub trait ProcessMessage<M, S = Bincode>: AbstractProcess
+where
+    S: Serializer<M>,
+{
+    fn handle(state: &mut Self::State, message: M);
+}
+
+/// Defines a handler for a request of type `M`.
+pub trait ProcessRequest<M, S = Bincode>: AbstractProcess
+where
+    S: Serializer<M>,
+{
+    type Response;
+
+    fn handle(state: &mut Self::State, request: M) -> Self::Response;
+}
+
+pub trait StartProcess<T>
+where
+    T: AbstractProcess,
+{
+    fn start(arg: T::Arg, name: Option<&str>) -> ProcessRef<T>;
+    fn start_config(arg: T::Arg, name: Option<&str>, config: &ProcessConfig) -> ProcessRef<T>;
+    fn start_link(arg: T::Arg, name: Option<&str>) -> ProcessRef<T>;
+    fn start_link_config(arg: T::Arg, name: Option<&str>, config: &ProcessConfig) -> ProcessRef<T>;
+}
+
+impl<T> StartProcess<T> for T
+where
+    T: AbstractProcess,
+{
+    /// Start a process.
+    fn start(arg: T::Arg, name: Option<&str>) -> ProcessRef<T> {
+        start::<T>(arg, name, None, None).unwrap()
+    }
+
+    /// Start a process with configuration.
+    fn start_config(arg: T::Arg, name: Option<&str>, config: &ProcessConfig) -> ProcessRef<T> {
+        start::<T>(arg, name, None, Some(config)).unwrap()
+    }
+
+    /// Start a linked process.
+    fn start_link(arg: T::Arg, name: Option<&str>) -> ProcessRef<T> {
+        start::<T>(arg, name, Some(Tag::new()), None).unwrap()
+    }
+
+    /// Start a linked process with configuration.
+    fn start_link_config(arg: T::Arg, name: Option<&str>, config: &ProcessConfig) -> ProcessRef<T> {
+        start::<T>(arg, name, Some(Tag::new()), Some(config)).unwrap()
     }
 }
 
-impl<T: Serialize + DeserializeOwned> Debug for Process<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+pub trait SelfReference<T> {
+    /// Returns a reference to the currently running process.
+    fn process(&self) -> ProcessRef<T>;
+}
+
+impl<T> SelfReference<T> for T
+where
+    T: AbstractProcess,
+{
+    fn process(&self) -> ProcessRef<T> {
+        unsafe { ProcessRef::from(host::api::process::this()) }
+    }
+}
+
+/// An internal interface that catches failures inside the `init` function of a `AbstractProcess`.
+///
+/// Only "link" functions are provided, because a panic can't be propagated to the parent without a
+/// link. Currently, only the `Supervisor` uses this functionality to check for failures inside of
+/// children.
+pub(crate) trait StartFailableProcess<T>
+where
+    T: AbstractProcess,
+{
+    fn start_link_or_fail(
+        arg: T::Arg,
+        name: Option<&str>,
+    ) -> Result<(ProcessRef<T>, Tag), LinkTrapped>;
+
+    fn start_link_config_or_fail(
+        arg: T::Arg,
+        name: Option<&str>,
+        config: &ProcessConfig,
+    ) -> Result<(ProcessRef<T>, Tag), LinkTrapped>;
+}
+
+impl<T> StartFailableProcess<T> for T
+where
+    T: AbstractProcess,
+{
+    /// Start a linked process.
+    fn start_link_or_fail(
+        arg: T::Arg,
+        name: Option<&str>,
+    ) -> Result<(ProcessRef<T>, Tag), LinkTrapped> {
+        let tag = Tag::new();
+        let proc = start::<T>(arg, name, Some(tag), None)?;
+        Ok((proc, tag))
+    }
+
+    /// Start a linked process with configuration.
+    fn start_link_config_or_fail(
+        arg: T::Arg,
+        name: Option<&str>,
+        config: &ProcessConfig,
+    ) -> Result<(ProcessRef<T>, Tag), LinkTrapped> {
+        let tag = Tag::new();
+        let proc = start::<T>(arg, name, Some(tag), Some(config))?;
+        Ok((proc, tag))
+    }
+}
+
+fn start<T>(
+    arg: T::Arg,
+    name: Option<&str>,
+    link: Option<Tag>,
+    config: Option<&ProcessConfig>,
+) -> Result<ProcessRef<T>, LinkTrapped>
+where
+    T: AbstractProcess,
+{
+    // If a link tag is provided, use the same tag for message matching.
+    let tag = if let Some(tag) = link {
+        tag
+    } else {
+        Tag::new()
+    };
+    let name = name.map(|name| name.to_owned());
+    let parent = unsafe { <Process<(), Bincode> as Resource>::from_id(host::api::process::this()) };
+    let process = if let Some(config) = config {
+        if link.is_some() {
+            Process::<(), Bincode>::spawn_link_config_tag(
+                config,
+                (parent, tag, arg, name, T::init as usize as i32),
+                tag,
+                starter::<T>,
+            )
+        } else {
+            Process::<(), Bincode>::spawn_config(
+                config,
+                (parent, tag, arg, name, T::init as usize as i32),
+                starter::<T>,
+            )
+        }
+    } else if link.is_some() {
+        Process::<(), Bincode>::spawn_link_tag(
+            (parent, tag, arg, name, T::init as usize as i32),
+            tag,
+            starter::<T>,
+        )
+    } else {
+        Process::<(), Bincode>::spawn(
+            (parent, tag, arg, name, T::init as usize as i32),
+            starter::<T>,
+        )
+    };
+
+    // Don't return until `init()` finishes
+    let mailbox: LinkMailbox<(), Bincode> = unsafe { LinkMailbox::new() };
+    let _ = mailbox.tag_receive(Some(&[tag]))?;
+
+    Ok(ProcessRef {
+        process,
+        phantom: PhantomData,
+    })
+}
+
+// Entry point of the process.
+fn starter<T>(
+    (parent, tag, capture, name, entry): (Process<(), Bincode>, Tag, T::Arg, Option<String>, i32),
+    _: Mailbox<(), Bincode>,
+) where
+    T: AbstractProcess,
+{
+    let entry: fn(this: ProcessRef<T>, arg: T::Arg) -> T::State =
+        unsafe { std::mem::transmute(entry) };
+    let this = unsafe { ProcessRef::from(host::api::process::this()) };
+
+    // Register name
+    let name = if let Some(name) = name {
+        // Encode type information in name
+        let name = format!("{} + ProcessRef + {}", name, std::any::type_name::<T>());
+        unsafe { host::api::registry::put(name.as_ptr(), name.len(), this.process.id()) };
+        Some(name)
+    } else {
+        None
+    };
+
+    let mut state = entry(this, capture);
+    // Let parent know that the `init()` call finished
+    parent.tag_send(tag, ());
+
+    let mailbox: LinkMailbox<Sendable, Bincode> = unsafe { LinkMailbox::new() };
+    // Run process forever and respond to requests.
+    loop {
+        let dispatcher = mailbox.tag_receive(None);
+        match dispatcher {
+            Ok(dispatcher) => match dispatcher {
+                Sendable::Message(handler) => {
+                    let handler: fn(state: &mut T::State) = unsafe { std::mem::transmute(handler) };
+                    handler(&mut state);
+                }
+                Sendable::Request(handler, sender) => {
+                    let handler: fn(state: &mut T::State, sender: Process<()>) =
+                        unsafe { std::mem::transmute(handler) };
+                    handler(&mut state, sender);
+                }
+                Sendable::Shutdown => {
+                    T::terminate(state);
+                    break;
+                }
+            },
+            Err(link_trapped) => T::handle_link_trapped(&mut state, link_trapped.tag()),
+        }
+    }
+
+    // Unregister name
+    if let Some(name) = name {
+        unsafe { host::api::registry::remove(name.as_ptr(), name.len()) };
+    }
+}
+
+pub trait Message<M, S>
+where
+    S: Serializer<M>,
+{
+    fn send(&self, message: M);
+}
+
+pub trait Request<M, S>
+where
+    S: Serializer<M>,
+{
+    type Result;
+
+    fn request(&self, request: M) -> Self::Result;
+}
+
+/// A reference to a running process.
+///
+/// `ProcessRef<T>` is different from a `Process` in the ability to handle messages of different
+/// types, as long as the traits `ProcessMessage<M>` or `ProcessRequest<R>` are implemented for T.
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct ProcessRef<T>
+where
+    T: ?Sized,
+{
+    process: Process<()>,
+    phantom: PhantomData<T>,
+}
+
+impl<T> ProcessRef<T> {
+    /// Construct a process from a raw ID.
+    unsafe fn from(id: u64) -> Self {
+        let process = <Process<()> as Resource>::from_id(id);
+        ProcessRef {
+            process,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Returns a globally unique process ID.
+    pub fn uuid(&self) -> u128 {
         let mut uuid: [u8; 16] = [0; 16];
-        unsafe { host_api::process::id(self.id, &mut uuid as *mut [u8; 16]) };
-        f.debug_struct("Process")
-            .field("uuid", &u128::from_le_bytes(uuid))
+        unsafe { host::api::process::id(self.process.id(), &mut uuid as *mut [u8; 16]) };
+        u128::from_le_bytes(uuid)
+    }
+
+    pub fn lookup(name: &str) -> Option<Self> {
+        let name = format!("{} + ProcessRef + {}", name, std::any::type_name::<T>());
+        let mut id = 0;
+        let result = unsafe { host::api::registry::get(name.as_ptr(), name.len(), &mut id) };
+        if result == 0 {
+            unsafe { Some(Self::from(id)) }
+        } else {
+            None
+        }
+    }
+}
+
+impl<T> Clone for ProcessRef<T> {
+    fn clone(&self) -> Self {
+        ProcessRef {
+            process: self.process.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<T> ProcessRef<T>
+where
+    T: AbstractProcess,
+{
+    /// Shut down process
+    pub fn shutdown(&self) {
+        // Create new message buffer.
+        unsafe { host::api::message::create_data(Tag::none().id(), 0) };
+        Bincode::encode(&Sendable::Shutdown).unwrap();
+        // Send the message
+        unsafe { host::api::message::send(self.process.id()) };
+    }
+}
+
+// This is a wrapper around the message/request that is sent to a process.
+//
+// The first `i32` value is a pointer
+#[derive(serde::Serialize, serde::Deserialize)]
+enum Sendable {
+    Message(i32),
+    // The process type can't be carried over as a generic and is set here to `()`, but overwritten
+    // at the time of returning with the correct type.
+    Request(i32, Process<()>),
+    Shutdown,
+}
+
+impl<M, S, T> Message<M, S> for ProcessRef<T>
+where
+    T: AbstractProcess,
+    T: ProcessMessage<M, S>,
+    S: Serializer<M>,
+{
+    /// Send message to the process.
+    fn send(&self, message: M) {
+        fn unpacker<TU, MU, SU>(this: &mut TU::State)
+        where
+            TU: ProcessMessage<MU, SU>,
+            SU: Serializer<MU>,
+        {
+            let message: MU = SU::decode().unwrap();
+            <TU as ProcessMessage<MU, SU>>::handle(this, message);
+        }
+
+        // Create new message buffer.
+        unsafe { host::api::message::create_data(Tag::none().id(), 0) };
+        // First encode the handler inside the message buffer.
+        let handler = unpacker::<T, M, S> as usize as i32;
+        let handler_message = Sendable::Message(handler);
+        Bincode::encode(&handler_message).unwrap();
+        // Then the message itself.
+        S::encode(&message).unwrap();
+        // Send the message
+        unsafe { host::api::message::send(self.process.id()) };
+    }
+}
+
+impl<M, S, T> Request<M, S> for ProcessRef<T>
+where
+    T: AbstractProcess,
+    T: ProcessRequest<M, S>,
+    S: Serializer<M> + Serializer<Sendable> + Serializer<<T as ProcessRequest<M, S>>::Response>,
+{
+    type Result = <T as ProcessRequest<M, S>>::Response;
+
+    /// Send request to the process and block until an answer is received.
+    fn request(&self, request: M) -> Self::Result {
+        fn unpacker<TU, MU, SU>(
+            this: &mut TU::State,
+            sender: Process<<TU as ProcessRequest<MU, SU>>::Response, SU>,
+        ) where
+            TU: ProcessRequest<MU, SU>,
+            SU: Serializer<MU> + Serializer<<TU as ProcessRequest<MU, SU>>::Response>,
+        {
+            // Get content out of message
+            let message: MU = SU::decode().unwrap();
+            // Get tag out of message before the handler function maybe manipulates it.
+            let tag = unsafe { host::api::message::get_tag() };
+            let tag = Tag::from(tag);
+            let result = <TU as ProcessRequest<MU, SU>>::handle(this, message);
+            sender.tag_send(tag, result);
+        }
+
+        let tag = Tag::new();
+        // Create new message buffer.
+        unsafe { host::api::message::create_data(tag.id(), 0) };
+        // Create reference to self
+        let this: Process<()> = unsafe { Process::from_id(host::api::process::this()) };
+        // First encode the handler inside the message buffer.
+        let handler = unpacker::<T, M, S> as usize as i32;
+        let handler_message = Sendable::Request(handler, this);
+        S::encode(&handler_message).unwrap();
+        // Then the message itself.
+        S::encode(&request).unwrap();
+        // Send it & wait on a response!
+        unsafe { host::api::message::send_receive_skip_search(self.process.id(), 0) };
+        S::decode().unwrap()
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct GetChildren;
+impl<T> ProcessRequest<GetChildren> for T
+where
+    T: Supervisor,
+    T: AbstractProcess<State = SupervisorConfig<T>>,
+{
+    type Response = <<T as Supervisor>::Children as Supervisable<T>>::Processes;
+
+    fn handle(state: &mut Self::State, _: GetChildren) -> Self::Response {
+        state.get_children()
+    }
+}
+
+impl<T> ProcessRef<T>
+where
+    T: Supervisor,
+    T: AbstractProcess<State = SupervisorConfig<T>>,
+{
+    pub fn children(&self) -> <<T as Supervisor>::Children as Supervisable<T>>::Processes {
+        self.request(GetChildren)
+    }
+}
+
+// Processes are equal if their UUID is equal.
+impl<T> PartialEq for ProcessRef<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.uuid() == other.uuid()
+    }
+}
+
+impl<T> std::fmt::Debug for ProcessRef<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProcessRef")
+            .field("uuid", &self.uuid())
             .finish()
     }
 }
 
-impl<T: Serialize + DeserializeOwned> Clone for Process<T> {
-    fn clone(&self) -> Self {
-        let id = unsafe { host_api::process::clone_process(self.id) };
-        Process::from(id)
-    }
-}
+#[cfg(test)]
+mod tests {
+    use lunatic_test::test;
+    use std::time::Duration;
 
-impl<T: Serialize + DeserializeOwned> Drop for Process<T> {
-    fn drop(&mut self) {
-        // Only drop process if it's not already consumed
-        if unsafe { !*self.consumed.get() } {
-            unsafe { process::drop_process(self.id) };
-        }
-    }
-}
-impl<T: Serialize + DeserializeOwned> Serialize for Process<T> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        // Mark process as consumed
-        unsafe { *self.consumed.get() = true };
+    use super::*;
+    use crate::sleep;
 
-        let index = unsafe { host_api::message::push_process(self.id) };
-        serializer.serialize_u64(index)
-    }
-}
-struct ProcessVisitor<T> {
-    _phantom: PhantomData<T>,
-}
-impl<'de, T: Serialize + DeserializeOwned> Visitor<'de> for ProcessVisitor<T> {
-    type Value = Process<T>;
+    struct TestServer(i32);
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("an u64 index")
-    }
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct Inc(i32);
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct Count;
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct Panic;
 
-    fn visit_u64<E>(self, index: u64) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        let id = unsafe { host_api::message::take_process(index) };
-        Ok(Process::from(id))
-    }
-}
+    impl AbstractProcess for TestServer {
+        type Arg = ();
+        type State = Self;
 
-impl<'de, T: Serialize + DeserializeOwned> Deserialize<'de> for Process<T> {
-    fn deserialize<D>(deserializer: D) -> Result<Process<T>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_u64(ProcessVisitor {
-            _phantom: PhantomData {},
-        })
-    }
-}
-
-impl<T: Serialize + DeserializeOwned> Process<T> {
-    pub(crate) fn from(id: u64) -> Self {
-        Process {
-            id,
-            consumed: UnsafeCell::new(false),
-            _phantom: PhantomData,
+        fn init(_: ProcessRef<Self>, _: ()) -> Self {
+            TestServer(0)
         }
     }
 
-    pub fn id(&self) -> u128 {
-        let mut uuid: [u8; 16] = [0; 16];
-        unsafe { host_api::process::id(self.id, &mut uuid as *mut [u8; 16]) };
-        u128::from_le_bytes(uuid)
-    }
-
-    /// Send message to process.
-    pub fn send(&self, message: T) {
-        self.send_(None, message)
-    }
-
-    /// Tag a message and send it to a process.
-    pub fn tag_send(&self, tag: Tag, message: T) {
-        self.send_(Some(tag.id()), message)
-    }
-
-    fn send_(&self, tag: Option<i64>, message: T) {
-        let tag = tag.unwrap_or(0);
-        // Create new message
-        unsafe { message::create_data(tag, 0) };
-        // During serialization resources will add themself to the message
-        rmp_serde::encode::write(&mut MessageRw {}, &message).unwrap();
-        // Send it
-        unsafe { message::send(self.id) };
-    }
-
-    /// Links the current process with another one.
-    pub fn link(&self) -> Tag {
-        let tag = Tag::new();
-        unsafe { process::link(tag.id(), self.id) };
-        tag
-    }
-
-    /// Unlinks the current process from another one.
-    pub fn unlink(&self) {
-        unsafe { process::unlink(self.id) };
-    }
-}
-
-impl<T, U> Process<Request<T, U>>
-where
-    T: Serialize + DeserializeOwned,
-    U: Serialize + DeserializeOwned,
-{
-    pub fn request(&self, message: T) -> Result<U, decode::Error> {
-        self.request_(message, None)
-    }
-
-    pub fn request_timeout(&self, message: T, timeout: Duration) -> Result<U, decode::Error> {
-        self.request_(message, Some(timeout))
-    }
-
-    fn request_(&self, message: T, timeout: Option<Duration>) -> Result<U, decode::Error> {
-        let timeout_ms = match timeout {
-            // If waiting time is smaller than 1ms, round it up to 1ms.
-            Some(timeout) => match timeout.as_millis() {
-                0 => 1,
-                other => other as u32,
-            },
-            None => 0,
-        };
-        // The response can be an arbitrary type and doesn't need to match the the current one.
-        let one_time_mailbox = unsafe { Mailbox::<U>::new() };
-        let sender_process = this(&one_time_mailbox);
-        let tag = Tag::new();
-        let request = Request::new(message, tag, sender_process);
-        // Create new message
-        unsafe { message::create_data(tag.id(), 0) };
-        // During serialization resources will add themself to the message
-        rmp_serde::encode::write(&mut MessageRw {}, &request).unwrap();
-        // Send it and wait for an reply
-        unsafe { message::send_receive_skip_search(self.id, timeout_ms) };
-        // Read the message out from the scratch buffer
-        rmp_serde::from_read(MessageRw {})
-    }
-}
-
-/// Returns a handle to the current process.
-pub fn this<T: Serialize + DeserializeOwned, U: TransformMailbox<T>>(_mailbox: &U) -> Process<T> {
-    let id = unsafe { process::this() };
-    Process::from(id)
-}
-
-/// Returns a handle to the current environment.
-pub fn this_env() -> Environment {
-    let id = unsafe { process::this_env() };
-    Environment::from(id)
-}
-
-/// Spawns a new process from a function.
-///
-/// - `function` is the starting point of the new process. The new process doesn't share
-///   memory with its parent, because of this the function can't capture anything from parents.
-pub fn spawn<T: Serialize + DeserializeOwned>(
-    function: fn(Mailbox<T>),
-) -> Result<Process<T>, LunaticError> {
-    // LinkMailbox<T> & Mailbox<T> are marker types and it's safe to cast to Mailbox<T> here if we
-    // set the `link` argument to `false`.
-    let function = unsafe { transmute(function) };
-    spawn_(None, None, Context::<(), _>::Without(function))
-}
-
-/// Spawns a new process from a function and links it to the parent.
-///
-/// - `function` is the starting point of the new process. The new process doesn't share
-///   memory with its parent, because of this the function can't capture anything from parents.
-pub fn spawn_link<T, P, M>(
-    mailbox: M,
-    function: fn(Mailbox<T>),
-) -> Result<(Process<T>, Tag, LinkMailbox<P>), LunaticError>
-where
-    T: Serialize + DeserializeOwned,
-    P: Serialize + DeserializeOwned,
-    M: TransformMailbox<P>,
-{
-    let mailbox = mailbox.catch_link_panic();
-    let tag = Tag::new();
-    let proc = spawn_(None, Some(tag), Context::<(), _>::Without(function))?;
-    Ok((proc, tag, mailbox))
-}
-
-/// Spawns a new process from a function and links it to the parent.
-///
-/// - `function` is the starting point of the new process. The new process doesn't share
-///   memory with its parent, because of this the function can't capture anything from parents.
-///
-/// If the linked process dies, the parent is going to die too.
-pub fn spawn_link_unwrap<T, P, M>(
-    mailbox: M,
-    function: fn(Mailbox<T>),
-) -> Result<(Process<T>, Mailbox<P>), LunaticError>
-where
-    T: Serialize + DeserializeOwned,
-    P: Serialize + DeserializeOwned,
-    M: TransformMailbox<P>,
-{
-    let mailbox = mailbox.panic_if_link_panics();
-    let proc = spawn_(None, Some(Tag::new()), Context::<(), _>::Without(function))?;
-    Ok((proc, mailbox))
-}
-
-/// Spawns a new process from a function and context.
-///
-/// - `context` is  data that we want to pass to the newly spawned process. It needs to impl.
-///    the [`Serialize + DeserializeOwned`] trait.
-///
-/// - `function` is the starting point of the new process. The new process doesn't share
-///   memory with its parent, because of this the function can't capture anything from parents.
-///   The first argument of this function is going to be the received `context`.
-pub fn spawn_with<C: Serialize + DeserializeOwned, T: Serialize + DeserializeOwned>(
-    context: C,
-    function: fn(C, Mailbox<T>),
-) -> Result<Process<T>, LunaticError> {
-    // LinkMailbox<T> & Mailbox<T> are marker types and it's safe to cast to Mailbox<T> here if we
-    //  set the `link` argument to `false`.
-    let function = unsafe { transmute(function) };
-    spawn_(None, None, Context::With(function, context))
-}
-
-/// Spawns a new process from a function and context, and links it to the parent.
-///
-/// - `context` is  data that we want to pass to the newly spawned process. It needs to impl.
-///    the [`Serialize + DeserializeOwned`] trait.
-///
-/// - `function` is the starting point of the new process. The new process doesn't share
-///   memory with its parent, because of this the function can't capture anything from parents.
-///   The first argument of this function is going to be the received `context`.
-pub fn spawn_link_with<C, T, P, M>(
-    mailbox: M,
-    context: C,
-    function: fn(C, Mailbox<T>),
-) -> Result<(Process<T>, Tag, LinkMailbox<P>), LunaticError>
-where
-    C: Serialize + DeserializeOwned,
-    T: Serialize + DeserializeOwned,
-    P: Serialize + DeserializeOwned,
-    M: TransformMailbox<P>,
-{
-    let mailbox = mailbox.catch_link_panic();
-    let tag = Tag::new();
-    let proc = spawn_(None, Some(tag), Context::With(function, context))?;
-    Ok((proc, tag, mailbox))
-}
-
-/// Spawns a new process from a function and context, and links it to the parent.
-///
-/// - `context` is  data that we want to pass to the newly spawned process. It needs to impl.
-///    the [`Serialize + DeserializeOwned`] trait.
-///
-/// - `function` is the starting point of the new process. The new process doesn't share
-///   memory with its parent, because of this the function can't capture anything from parents.
-///   The first argument of this function is going to be the received `context`.
-///
-/// If the linked process dies, the parent is going to die too.
-pub fn spawn_link_unwrap_with<C, T, P, M>(
-    mailbox: M,
-    context: C,
-    function: fn(C, Mailbox<T>),
-) -> Result<(Process<T>, Mailbox<P>), LunaticError>
-where
-    C: Serialize + DeserializeOwned,
-    T: Serialize + DeserializeOwned,
-    P: Serialize + DeserializeOwned,
-    M: TransformMailbox<P>,
-{
-    let mailbox = mailbox.panic_if_link_panics();
-    let proc = spawn_(None, Some(Tag::new()), Context::With(function, context))?;
-    Ok((proc, mailbox))
-}
-
-pub(crate) enum Context<C: Serialize + DeserializeOwned, T: Serialize + DeserializeOwned> {
-    With(fn(C, Mailbox<T>), C),
-    Without(fn(Mailbox<T>)),
-}
-
-// If `module_id` is None it will use the current module & environment.
-pub(crate) fn spawn_<C: Serialize + DeserializeOwned, T: Serialize + DeserializeOwned>(
-    module_id: Option<u64>,
-    link: Option<Tag>,
-    context: Context<C, T>,
-) -> Result<Process<T>, LunaticError> {
-    // Spawning a new process from  the same module is a delicate undertaking.
-    // First of all, the WebAssembly spec only allows us to call exported functions from a module
-    // Therefore we define a module export under the name `_lunatic_spawn_by_index`. This global
-    // function will get 2 arguments:
-    // * A type helper function: `type_helper_wrapper_*`
-    // * The function we want to use as an entry point: `function`
-    // It's obvious why we need the entry function, but what is a type helper function? The entry
-    // entry function contains 2 generic types, one for the context and one for messages, but the
-    // `_lunatic_spawn_by_index` one can't be generic. That's why we use the type helper, to let
-    // us wrap the call to the entry function into the right type signature.
-
-    let (type_helper, func) = match context {
-        Context::With(func, _) => (type_helper_wrapper_context::<C, T> as usize, func as usize),
-        Context::Without(func) => (type_helper_wrapper::<T> as usize, func as usize),
-    };
-    let params = params_to_vec(&[Param::I32(type_helper as i32), Param::I32(func as i32)]);
-    let mut id = 0;
-    let func = "_lunatic_spawn_by_index";
-    let link = match link {
-        Some(tag) => tag.id(),
-        None => 0,
-    };
-    let result = unsafe {
-        match module_id {
-            Some(module_id) => host_api::process::spawn(
-                link,
-                module_id,
-                func.as_ptr(),
-                func.len(),
-                params.as_ptr(),
-                params.len(),
-                &mut id,
-            ),
-            None => host_api::process::inherit_spawn(
-                link,
-                func.as_ptr(),
-                func.len(),
-                params.as_ptr(),
-                params.len(),
-                &mut id,
-            ),
+    impl ProcessMessage<Inc> for TestServer {
+        fn handle(state: &mut Self::State, message: Inc) {
+            state.0 += message.0;
         }
-    };
-    if result == 0 {
-        match context {
-            // If context exists, send it as first message to the new process
-            Context::With(_, context) => {
-                let child = Process {
-                    id,
-                    consumed: UnsafeCell::new(false),
-                    _phantom: PhantomData,
-                };
-                child.send(context);
-                // Processes can only receive one type of messages, but to pass in the context we pretend
-                // for the first message that our process is receiving messages of type `C`.
-                Ok(unsafe { transmute(child) })
-            }
-            Context::Without(_) => Ok(Process {
-                id,
-                consumed: UnsafeCell::new(false),
-                _phantom: PhantomData,
-            }),
-        }
-    } else {
-        Err(LunaticError::from(id))
     }
-}
 
-/// Suspends the current process for `milliseconds`.
-pub fn sleep(milliseconds: u64) {
-    unsafe { host_api::process::sleep_ms(milliseconds) };
-}
+    impl ProcessRequest<Count> for TestServer {
+        type Response = i32;
 
-// Type helper
-fn type_helper_wrapper<T: Serialize + DeserializeOwned>(function: usize) {
-    let mailbox = unsafe { Mailbox::new() };
-    let function: fn(Mailbox<T>) = unsafe { transmute(function) };
-    function(mailbox);
-}
+        fn handle(state: &mut Self::State, _: Count) -> Self::Response {
+            state.0
+        }
+    }
 
-// Type helper with context
-fn type_helper_wrapper_context<C: Serialize + DeserializeOwned, T: Serialize + DeserializeOwned>(
-    function: usize,
-) {
-    let context = unsafe { Mailbox::new() }.receive().unwrap();
-    let mailbox = unsafe { Mailbox::new() };
-    let function: fn(C, Mailbox<T>) = unsafe { transmute(function) };
-    function(context, mailbox);
-}
+    impl ProcessMessage<Panic> for TestServer {
+        fn handle(_: &mut Self::State, _: Panic) {
+            panic!("fail");
+        }
+    }
 
-#[export_name = "_lunatic_spawn_by_index"]
-extern "C" fn _lunatic_spawn_by_index(type_helper: usize, function: usize) {
-    let type_helper: fn(usize) = unsafe { transmute(type_helper) };
-    type_helper(function);
+    #[test]
+    fn spawn_test() {
+        let child = TestServer::start((), None);
+        child.send(Inc(33));
+        child.send(Inc(55));
+        let result = child.request(Count);
+        assert_eq!(result, 88);
+    }
+
+    #[test]
+    #[should_panic]
+    fn spawn_link_test() {
+        let child = TestServer::start_link((), None);
+        child.send(Panic);
+        // This process should fail too before 100ms
+        sleep(Duration::from_millis(100));
+    }
 }
