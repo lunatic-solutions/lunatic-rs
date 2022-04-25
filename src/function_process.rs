@@ -200,6 +200,35 @@ impl<M, S> Process<M, S> {
         unsafe { host::api::process::unlink(self.id) };
     }
 
+    /// Register process under a name.
+    pub fn register(&self, name: &str) {
+        // Encode type information in name
+        let name = format!(
+            "{} + Process + {}/{}",
+            name,
+            std::any::type_name::<M>(),
+            std::any::type_name::<S>()
+        );
+        unsafe { host::api::registry::put(name.as_ptr(), name.len(), self.id) };
+    }
+
+    /// Look up a process.
+    pub fn lookup(name: &str) -> Option<Self> {
+        let name = format!(
+            "{} + Process + {}/{}",
+            name,
+            std::any::type_name::<M>(),
+            std::any::type_name::<S>()
+        );
+        let mut id = 0;
+        let result = unsafe { host::api::registry::get(name.as_ptr(), name.len(), &mut id) };
+        if result == 0 {
+            unsafe { Some(Self::from_id(id)) }
+        } else {
+            None
+        }
+    }
+
     /// Marks the process as consumed.
     ///
     /// Consumed processes don't call the `lunatic::process::drop_process` host function when they

@@ -218,3 +218,32 @@ fn different_state_type() {
         b.send(Inc);
     }
 }
+
+#[test]
+fn lookup() {
+    struct A;
+
+    impl AbstractProcess for A {
+        type Arg = ();
+        type State = A;
+
+        fn init(_: ProcessRef<Self>, _: ()) -> A {
+            A
+        }
+    }
+
+    impl ProcessRequest<()> for A {
+        type Response = ();
+        fn handle(_: &mut Self::State, _: ()) {}
+    }
+
+    let a = A::start_link((), Some("a"));
+    drop(a);
+
+    let a = ProcessRef::<A>::lookup("a").unwrap();
+    a.request(());
+    drop(a);
+
+    let a = ProcessRef::<A>::lookup("b");
+    assert!(a.is_none());
+}

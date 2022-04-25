@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use lunatic::{Mailbox, Process};
+use lunatic::{spawn_link, Mailbox, Process};
 use lunatic_test::test;
 
 #[test]
@@ -62,4 +62,18 @@ fn recursive_count_sub((parent, n): (Process<i32>, i32), mailbox: Mailbox<i32>) 
     } else {
         parent.send(0);
     }
+}
+
+#[test]
+fn lookup(mailbox: Mailbox<i32>) {
+    // Register self under name "hello"
+    let this = mailbox.this();
+    this.register("hello");
+
+    spawn_link!(|| {
+        let parent = Process::<i32>::lookup("hello").unwrap();
+        parent.send(1337);
+    });
+
+    assert_eq!(1337, mailbox.receive());
 }

@@ -56,7 +56,7 @@ fn one_failing_process() {
         fn init(config: &mut SupervisorConfig<Self>, _: ()) {
             config.set_strategy(SupervisorStrategy::OneForOne);
             let starting_state = 4;
-            config.children_args(starting_state);
+            config.children_args((starting_state, None));
         }
     }
 
@@ -94,7 +94,7 @@ fn two_failing_process() {
             config.set_strategy(SupervisorStrategy::OneForOne);
             let starting_state_a = 33;
             let starting_state_b = 44;
-            config.children_args((starting_state_a, starting_state_b));
+            config.children_args(((starting_state_a, None), (starting_state_b, None)));
         }
     }
 
@@ -159,7 +159,18 @@ fn ten_children_sup() {
 
         fn init(config: &mut SupervisorConfig<Self>, _: ()) {
             config.set_strategy(SupervisorStrategy::OneForOne);
-            config.children_args((0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+            config.children_args((
+                (0, None),
+                (0, None),
+                (0, None),
+                (0, None),
+                (0, None),
+                (0, None),
+                (0, None),
+                (0, None),
+                (0, None),
+                (0, None),
+            ));
         }
     }
 
@@ -208,7 +219,7 @@ fn shutdown() {
 
         fn init(config: &mut SupervisorConfig<Self>, _: ()) {
             config.set_strategy(SupervisorStrategy::OneForOne);
-            config.children_args(((), (), (), ()));
+            config.children_args((((), None), ((), None), ((), None), ((), None)));
         }
     }
 
@@ -216,4 +227,43 @@ fn shutdown() {
     sup.shutdown();
 
     sleep(Duration::from_millis(100));
+}
+
+#[test]
+fn lookup_children() {
+    struct Sup;
+    impl Supervisor for Sup {
+        type Arg = ();
+        type Children = (A, A, A);
+
+        fn init(config: &mut SupervisorConfig<Self>, _: ()) {
+            config.set_strategy(SupervisorStrategy::OneForOne);
+            config.children_args((
+                (0, Some("first".to_owned())),
+                (1, Some("second".to_owned())),
+                (2, Some("third".to_owned())),
+            ));
+        }
+    }
+
+    Sup::start_link((), None);
+
+    let first = ProcessRef::<A>::lookup("first").unwrap();
+    assert_eq!(first.request(Count), 0);
+    let second = ProcessRef::<A>::lookup("second").unwrap();
+    assert_eq!(second.request(Count), 1);
+    let third = ProcessRef::<A>::lookup("third").unwrap();
+    assert_eq!(third.request(Count), 2);
+
+    // Kill third and inc count to 4
+    third.send(Panic);
+    // We need to re-acquire reference to child and give a bit of time to the supervisor to re-spawn it.
+    sleep(Duration::from_millis(10));
+    let third = ProcessRef::<A>::lookup("third").unwrap();
+    third.send(Inc);
+    third.send(Inc);
+    assert_eq!(third.request(Count), 4);
+    // Holding multiple references is ok
+    let third = ProcessRef::<A>::lookup("third").unwrap();
+    assert_eq!(third.request(Count), 4);
 }

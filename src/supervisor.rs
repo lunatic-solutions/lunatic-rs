@@ -120,12 +120,12 @@ where
     T1::Arg: Clone,
 {
     type Processes = ProcessRef<T1>;
-    type Args = T1::Arg;
+    type Args = (T1::Arg, Option<String>);
     type Tags = Tag;
 
     fn start_links(config: &mut SupervisorConfig<K>, args: Self::Args) {
         config.children_args = Some(args.clone());
-        let (proc, tag) = match T1::start_link_or_fail(args, None) {
+        let (proc, tag) = match T1::start_link_or_fail(args.0, args.1.as_deref()) {
             Ok(result) => result,
             Err(_) => panic!(
                 "Supervisor failed to start child `{}`",
@@ -146,8 +146,8 @@ where
             SupervisorStrategy::OneForOne => {
                 if tag == config.children_tags.unwrap() {
                     let (proc, tag) = match T1::start_link_or_fail(
-                        config.children_args.as_ref().unwrap().clone(),
-                        None,
+                        config.children_args.as_ref().unwrap().0.clone(),
+                        config.children_args.as_ref().unwrap().1.as_deref(),
                     ) {
                         Ok(result) => result,
                         Err(_) => panic!(
@@ -159,7 +159,7 @@ where
                     *config.children_tags.as_mut().unwrap() = tag;
                 } else {
                     panic!(
-                        "Superviser {} received kill signal",
+                        "Supervisor {} received kill signal",
                         std::any::type_name::<K>()
                     );
                 }
@@ -201,7 +201,7 @@ mod macros {
                 )*
             {
                 type Processes = ($(ProcessRef<$args>,)*);
-                type Args = ($($args ::Arg,)*);
+                type Args = ($(($args ::Arg, Option<String>)),*);
                 type Tags = ($(macros::tag!($args)),*);
 
                 fn start_links(config: &mut SupervisorConfig<K>, args: Self::Args) {
@@ -209,7 +209,7 @@ mod macros {
 
                     $(
                         let (paste::paste!([<proc$i>]),paste::paste!([<tag$i>]))
-                                = match $args ::start_link_or_fail(args.$i, None) {
+                                = match $args ::start_link_or_fail(args.$i.0, args.$i.1.as_deref()) {
                             Ok(result) => result,
                             Err(_) => panic!(
                                 "Supervisor failed to start child `{}`",
@@ -223,9 +223,7 @@ mod macros {
                 }
 
                 fn terminate(config: SupervisorConfig<K>) {
-                    $(
-                        config.children.as_ref().unwrap().$i.shutdown();
-                    )*
+                    $( config.children.as_ref().unwrap().$i.shutdown() );*
                 }
 
                 fn handle_failure(config: &mut SupervisorConfig<K>, tag: Tag) {
@@ -237,8 +235,8 @@ mod macros {
 
                                 if tag == config.children_tags.unwrap().$i {
                                     let (proc, tag) = match $args::start_link_or_fail(
-                                        config.children_args.as_ref().unwrap().$i.clone(),
-                                        None,
+                                        config.children_args.as_ref().unwrap().$i.0.clone(),
+                                        config.children_args.as_ref().unwrap().$i.1.as_deref(),
                                     ) {
                                         Ok(result) => result,
                                         Err(_) => panic!(
@@ -254,7 +252,7 @@ mod macros {
 
                             {
                                 panic!(
-                                    "Superviser {} received kill signal",
+                                    "Supervisor {} received kill signal",
                                     std::any::type_name::<K>()
                                 );
                             }
@@ -299,7 +297,7 @@ mod tests {
         type Children = SimpleServer;
 
         fn init(config: &mut SupervisorConfig<Self>, _: ()) {
-            config.children_args(());
+            config.children_args(((), None));
         }
     }
 

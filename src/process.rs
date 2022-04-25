@@ -173,40 +173,39 @@ where
     } else {
         Tag::new()
     };
+    let name = name.map(|name| name.to_owned());
     let parent = unsafe { <Process<(), Bincode> as Resource>::from_id(host::api::process::this()) };
     let process = if let Some(config) = config {
         if link.is_some() {
             Process::<(), Bincode>::spawn_link_config_tag(
                 config,
-                (parent, tag, arg, T::init as usize as i32),
+                (parent, tag, arg, name, T::init as usize as i32),
                 tag,
                 starter::<T>,
             )
         } else {
             Process::<(), Bincode>::spawn_config(
                 config,
-                (parent, tag, arg, T::init as usize as i32),
+                (parent, tag, arg, name, T::init as usize as i32),
                 starter::<T>,
             )
         }
     } else if link.is_some() {
         Process::<(), Bincode>::spawn_link_tag(
-            (parent, tag, arg, T::init as usize as i32),
+            (parent, tag, arg, name, T::init as usize as i32),
             tag,
             starter::<T>,
         )
     } else {
-        Process::<(), Bincode>::spawn((parent, tag, arg, T::init as usize as i32), starter::<T>)
+        Process::<(), Bincode>::spawn(
+            (parent, tag, arg, name, T::init as usize as i32),
+            starter::<T>,
+        )
     };
 
     // Don't return until `init()` finishes
     let mailbox: LinkMailbox<(), Bincode> = unsafe { LinkMailbox::new() };
     let _ = mailbox.tag_receive(Some(&[tag]))?;
-
-    // If a name is given, register the process under this name
-    if let Some(_name) = name {
-        // TODO: We need to add back the register host function
-    }
 
     Ok(ProcessRef {
         process,
@@ -216,7 +215,7 @@ where
 
 // Entry point of the process.
 fn starter<T>(
-    (parent, tag, capture, entry): (Process<(), Bincode>, Tag, T::Arg, i32),
+    (parent, tag, capture, name, entry): (Process<(), Bincode>, Tag, T::Arg, Option<String>, i32),
     _: Mailbox<(), Bincode>,
 ) where
     T: AbstractProcess,
@@ -224,6 +223,17 @@ fn starter<T>(
     let entry: fn(this: ProcessRef<T>, arg: T::Arg) -> T::State =
         unsafe { std::mem::transmute(entry) };
     let this = unsafe { ProcessRef::from(host::api::process::this()) };
+
+    // Register name
+    let name = if let Some(name) = name {
+        // Encode type information in name
+        let name = format!("{} + ProcessRef + {}", name, std::any::type_name::<T>());
+        unsafe { host::api::registry::put(name.as_ptr(), name.len(), this.process.id()) };
+        Some(name)
+    } else {
+        None
+    };
+
     let mut state = entry(this, capture);
     // Let parent know that the `init()` call finished
     parent.tag_send(tag, ());
@@ -250,6 +260,11 @@ fn starter<T>(
             },
             Err(link_trapped) => T::handle_link_trapped(&mut state, link_trapped.tag()),
         }
+    }
+
+    // Unregister name
+    if let Some(name) = name {
+        unsafe { host::api::registry::remove(name.as_ptr(), name.len()) };
     }
 }
 
@@ -297,6 +312,17 @@ impl<T> ProcessRef<T> {
         let mut uuid: [u8; 16] = [0; 16];
         unsafe { host::api::process::id(self.process.id(), &mut uuid as *mut [u8; 16]) };
         u128::from_le_bytes(uuid)
+    }
+
+    pub fn lookup(name: &str) -> Option<Self> {
+        let name = format!("{} + ProcessRef + {}", name, std::any::type_name::<T>());
+        let mut id = 0;
+        let result = unsafe { host::api::registry::get(name.as_ptr(), name.len(), &mut id) };
+        if result == 0 {
+            unsafe { Some(Self::from(id)) }
+        } else {
+            None
+        }
     }
 }
 
