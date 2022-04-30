@@ -145,3 +145,12 @@ pub mod wasi {
         pub fn config_preopen_dir(config_id: u64, key: *const u8, key_len: usize);
     }
 }
+
+pub mod version {
+    #[link(wasm_import_module = "lunatic::version")]
+    extern "C" {
+        pub fn major() -> u32;
+        pub fn minor() -> u32;
+        pub fn patch() -> u32;
+    }
+}
