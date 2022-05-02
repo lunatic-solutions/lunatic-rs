@@ -20,12 +20,10 @@ pub mod message {
         pub fn get_tag() -> i64;
         #[allow(dead_code)]
         pub fn data_size() -> u64;
-        pub fn push_process(process_id: u64) -> u64;
-        pub fn take_process(index: u64) -> u64;
         pub fn push_tcp_stream(tcp_stream_id: u64) -> u64;
         pub fn take_tcp_stream(index: u64) -> u64;
-        pub fn send(process_id: u64);
-        pub fn send_receive_skip_search(process_id: u64, timeout: u32) -> u32;
+        pub fn send(node_id: u64, process_id: u64);
+        pub fn send_receive_skip_search(node_id: u64, process_id: u64, timeout: u32) -> u32;
         pub fn receive(tag: *const i64, tag_len: usize, timeout: u32) -> u32;
     }
 }
@@ -102,6 +100,7 @@ pub mod process {
         pub fn config_can_spawn_processes(config_id: u64) -> u32;
         pub fn config_set_can_spawn_processes(config_id: u64, can: u32);
         pub fn spawn(
+            node_id: u64,
             link: i64,
             config_id: i64,
             module_id: i64,
@@ -111,14 +110,12 @@ pub mod process {
             params_len: usize,
             id: *mut u64,
         ) -> u32;
-        pub fn drop_process(process_id: u64);
-        pub fn clone_process(process_id: u64) -> u64;
         pub fn sleep_ms(millis: u64);
         pub fn die_when_link_dies(trap: u32);
-        pub fn this() -> u64;
-        pub fn id(process_id: u64, uuid: *mut [u8; 16]);
-        pub fn link(tag: i64, process_id: u64);
-        pub fn unlink(process_id: u64);
+        pub fn process_id() -> u64;
+        pub fn node_id() -> u64;
+        pub fn link(tag: i64, node_id: u64, process_id: u64);
+        pub fn unlink(node_id: u64, process_id: u64);
     }
 }
 

@@ -33,6 +33,7 @@ pub(crate) fn spawn(
     let config_id = config.map_or_else(|| ProcessConfig::inherit().id(), |config| config.id());
     let result = unsafe {
         api::process::spawn(
+            api::process::node_id(),
             link,
             config_id,
             WasmModule::inherit().id(),

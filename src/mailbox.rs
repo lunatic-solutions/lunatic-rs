@@ -4,9 +4,15 @@ use thiserror::Error;
 
 use crate::{
     function_process::{IntoProcess, NoLink},
-    host::{self, api::message},
+    host::{
+        self,
+        api::{
+            message,
+            process::{node_id, process_id},
+        },
+    },
     serializer::{Bincode, DecodeError, Serializer},
-    Process, ProcessConfig, Resource, Tag,
+    Process, ProcessConfig, Tag,
 };
 
 const LINK_TRAPPED: u32 = 1;
@@ -27,7 +33,7 @@ where
 {
     /// Returns a reference to the currently running process
     pub fn this(&self) -> Process<M, S> {
-        unsafe { <Process<M, S> as Resource>::from_id(host::api::process::this()) }
+        unsafe { Process::new(node_id(), process_id()) }
     }
 
     /// Gets next message from process' mailbox.
@@ -233,9 +239,9 @@ where
             Ok(id) => {
                 // If the captured variable is of size 0, we don't need to send it to another process.
                 if std::mem::size_of::<C>() == 0 {
-                    unsafe { Process::from_id(id) }
+                    unsafe { Process::new(node_id(), id) }
                 } else {
-                    let child = unsafe { Process::<C, S>::from_id(id) };
+                    let child = unsafe { Process::<C, S>::new(node_id(), id) };
                     child.send(capture);
                     // Processes can only receive one type of message, but to pass in the captured variable
                     // we pretend for the first message that our process is receiving messages of type `C`.

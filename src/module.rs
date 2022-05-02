@@ -1,6 +1,11 @@
 use std::u128;
 
-use crate::{error::LunaticError, host, serializer::Serializer, Process, Resource};
+use crate::{
+    error::LunaticError,
+    host::{self, api::process::node_id},
+    serializer::Serializer,
+    Process,
+};
 
 /// A compiled instance of a WebAssembly module.
 ///
@@ -71,6 +76,7 @@ impl WasmModule {
         let params: Vec<u8> = params_to_vec(params);
         let result = unsafe {
             host::api::process::spawn(
+                node_id(),
                 0,
                 -1,
                 self.id(),
@@ -83,7 +89,7 @@ impl WasmModule {
         };
 
         if result == 0 {
-            Ok(unsafe { Process::from_id(process_or_error_id) })
+            Ok(unsafe { Process::new(node_id(), process_or_error_id) })
         } else {
             Err(LunaticError::from(process_or_error_id))
         }
@@ -102,6 +108,7 @@ impl WasmModule {
         let params: Vec<u8> = params_to_vec(params);
         let result = unsafe {
             host::api::process::spawn(
+                node_id(),
                 1,
                 -1,
                 self.id(),
@@ -114,7 +121,7 @@ impl WasmModule {
         };
 
         if result == 0 {
-            Ok(unsafe { Process::from_id(process_or_error_id) })
+            Ok(unsafe { Process::new(node_id(), process_or_error_id) })
         } else {
             Err(LunaticError::from(process_or_error_id))
         }

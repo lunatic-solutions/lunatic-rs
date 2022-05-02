@@ -2,9 +2,9 @@ use std::{any::TypeId, marker::PhantomData, mem::ManuallyDrop};
 
 use crate::{
     function_process::IntoProcess,
-    host,
+    host::{self, api::process::node_id},
     serializer::{Bincode, Serializer},
-    Mailbox, Process, ProcessConfig, Resource, Tag,
+    Mailbox, Process, ProcessConfig, Tag,
 };
 
 /// A value that the protocol captures from the parent process.
@@ -26,6 +26,7 @@ pub struct ProtocolCapture<C> {
 /// processes are in the correct order and of the correct type.
 pub struct Protocol<P: 'static, S = Bincode> {
     id: u64,
+    node_id: u64,
     tag: Tag,
     phantom: PhantomData<(P, S)>,
 }
@@ -39,7 +40,6 @@ impl<P: 'static, S> Drop for Protocol<P, S> {
                 std::any::type_name::<P>()
             );
         }
-        unsafe { host::api::process::drop_process(self.id) };
     }
 }
 
@@ -50,6 +50,7 @@ impl<P, S> Protocol<P, S> {
         let process = ManuallyDrop::new(process);
         Self {
             id: process.id(),
+            node_id: process.node_id(),
             tag,
             phantom: PhantomData,
         }
@@ -61,6 +62,7 @@ impl<P, S> Protocol<P, S> {
         let self_ = ManuallyDrop::new(self);
         Protocol {
             id: self_.id,
+            node_id: self_.node_id,
             tag: self_.tag,
             phantom: PhantomData,
         }
@@ -77,7 +79,7 @@ where
         // Don't drop the session yet.
         let self_ = ManuallyDrop::new(self);
         // Temporarily cast to right process type.
-        let process: Process<A, S> = unsafe { Process::from_id(self_.id) };
+        let process: Process<A, S> = Process::new(self_.node_id, self_.id);
         process.tag_send(self_.tag, message);
         Protocol::from_process(process, self_.tag)
     }
@@ -124,7 +126,7 @@ where
         // Don't drop the session yet.
         let self_ = ManuallyDrop::new(self);
         // Temporarily cast to right process type.
-        let process: Process<bool, S> = unsafe { Process::from_id(self_.id) };
+        let process: Process<bool, S> = Process::new(self_.node_id, self_.id);
         process.tag_send(self_.tag, true);
         Protocol::from_process(process, self_.tag)
     }
@@ -135,7 +137,7 @@ where
         // Don't drop the session yet.
         let self_ = ManuallyDrop::new(self);
         // Temporarily cast to right process type.
-        let process: Process<bool, S> = unsafe { Process::from_id(self_.id) };
+        let process: Process<bool, S> = Process::new(self_.node_id, self_.id);
         process.tag_send(self_.tag, false);
         Protocol::from_process(process, self_.tag)
     }
@@ -255,13 +257,14 @@ where
                 // Use unique tag so that protocol messages are separated from regular messages.
                 let tag = Tag::new();
                 // Create reference to self
-                let this = unsafe { Process::<()>::from_id(host::api::process::this()) };
+                let this =
+                    unsafe { Process::<()>::new(node_id(), host::api::process::process_id()) };
                 let capture = ProtocolCapture {
                     process: this,
                     tag,
                     capture,
                 };
-                let child = unsafe { Process::<ProtocolCapture<C>, S>::from_id(id) };
+                let child = unsafe { Process::<ProtocolCapture<C>, S>::new(node_id(), id) };
 
                 child.send(capture);
                 Protocol::from_process(child, tag)

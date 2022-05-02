@@ -203,7 +203,7 @@ fn shutdown() {
         type State = A;
 
         fn init(proc: ProcessRef<Self>, _: ()) -> A {
-            println!("{}", proc.uuid());
+            println!("{}", proc.id());
             A
         }
 
