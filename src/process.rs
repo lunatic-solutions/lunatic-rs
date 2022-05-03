@@ -279,7 +279,14 @@ fn starter<T>(
     let name = if let Some(name) = name {
         // Encode type information in name
         let name = format!("{} + ProcessRef + {}", name, std::any::type_name::<T>());
-        unsafe { host::api::registry::put(name.as_ptr(), name.len(), this.process.id()) };
+        unsafe {
+            host::api::registry::put(
+                name.as_ptr(),
+                name.len(),
+                this.process.node_id(),
+                this.process.id(),
+            )
+        };
         Some(name)
     } else {
         None
@@ -366,10 +373,11 @@ impl<T> ProcessRef<T> {
     pub fn lookup(name: &str) -> Option<Self> {
         let name = format!("{} + ProcessRef + {}", name, std::any::type_name::<T>());
         let mut id = 0;
-        let result = unsafe { host::api::registry::get(name.as_ptr(), name.len(), &mut id) };
-        // TODO !!!
+        let mut node_id = 0;
+        let result =
+            unsafe { host::api::registry::get(name.as_ptr(), name.len(), &mut node_id, &mut id) };
         if result == 0 {
-            unsafe { Some(Self::new(0, result as u64)) }
+            unsafe { Some(Self::new(node_id, id)) }
         } else {
             None
         }

@@ -222,7 +222,7 @@ impl<M, S> Process<M, S> {
             std::any::type_name::<M>(),
             std::any::type_name::<S>()
         );
-        unsafe { host::api::registry::put(name.as_ptr(), name.len(), self.id) };
+        unsafe { host::api::registry::put(name.as_ptr(), name.len(), self.node_id, self.id) };
     }
 
     /// Look up a process.
@@ -234,12 +234,13 @@ impl<M, S> Process<M, S> {
             std::any::type_name::<S>()
         );
         let mut id = 0;
-        let result = unsafe { host::api::registry::get(name.as_ptr(), name.len(), &mut id) };
-        // TODO !!!!!! registry should return id and node id
+        let mut node_id = 0;
+        let result =
+            unsafe { host::api::registry::get(name.as_ptr(), name.len(), &mut node_id, &mut id) };
         if result == 0 {
             Some(Self {
-                node_id: 0,        // TODO
-                id: result as u64, // TODO
+                node_id,
+                id,
                 serializer_type: PhantomData,
             })
         } else {

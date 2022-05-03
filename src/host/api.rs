@@ -122,8 +122,13 @@ pub mod process {
 pub mod registry {
     #[link(wasm_import_module = "lunatic::registry")]
     extern "C" {
-        pub fn put(name: *const u8, name_len: usize, process_id: u64);
-        pub fn get(name: *const u8, name_len: usize, process_id: *mut u64) -> u32;
+        pub fn put(name: *const u8, name_len: usize, node_id: u64, process_id: u64);
+        pub fn get(
+            name: *const u8,
+            name_len: usize,
+            node_id: *mut u64,
+            process_id: *mut u64,
+        ) -> u32;
         pub fn remove(name: *const u8, name_len: usize);
     }
 }
