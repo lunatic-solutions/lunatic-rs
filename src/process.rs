@@ -1,15 +1,20 @@
 use std::marker::PhantomData;
 
 use crate::{
-    host::{
-        self,
-        api::process::{node_id, process_id},
-    },
+    host::{self, api},
     mailbox::{LinkMailbox, LinkTrapped},
     serializer::{Bincode, Serializer},
     supervisor::{Supervisable, Supervisor, SupervisorConfig},
     Mailbox, Process, ProcessConfig, Tag,
 };
+
+pub fn process_id() -> u64 {
+    unsafe { api::process::process_id() }
+}
+
+pub fn node_id() -> u64 {
+    unsafe { api::process::node_id() }
+}
 
 /// Types that implement the `AbstractProcess` trait can be started as processes.
 ///
@@ -220,7 +225,7 @@ where
         Tag::new()
     };
     let name = name.map(|name| name.to_owned());
-    let parent = unsafe { <Process<(), Bincode>>::new(node_id(), process_id()) };
+    let parent = <Process<(), Bincode>>::new(node_id(), process_id());
     let process = if let Some(config) = config {
         if link.is_some() {
             Process::<(), Bincode>::spawn_link_config_tag(
@@ -466,7 +471,7 @@ where
         // Create new message buffer.
         unsafe { host::api::message::create_data(tag.id(), 0) };
         // Create reference to self
-        let this: Process<()> = unsafe { Process::new(node_id(), process_id()) };
+        let this: Process<()> = Process::new(node_id(), process_id());
         // First encode the handler inside the message buffer.
         let handler = unpacker::<T, M, S> as usize as i32;
         let handler_message = Sendable::Request(handler, this);

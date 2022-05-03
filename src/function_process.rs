@@ -6,7 +6,7 @@ use std::marker::PhantomData;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    host,
+    host::{self},
     protocol::ProtocolCapture,
     serializer::{Bincode, Serializer},
     ProcessConfig, Tag,
