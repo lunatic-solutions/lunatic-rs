@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use lunatic::{spawn_link, Mailbox, Process};
+use lunatic::{spawn_link, Mailbox, Process, ProcessConfig};
 use lunatic_test::test;
 
 #[test]
@@ -76,4 +76,29 @@ fn lookup(mailbox: Mailbox<i32>) {
     });
 
     assert_eq!(1337, mailbox.receive());
+}
+
+#[test]
+fn spawn_config_doesnt_link() {
+    let mut config = ProcessConfig::new();
+    config.set_max_memory(5_000_000);
+    config.set_can_spawn_processes(true);
+
+    Process::spawn_config(&config, (), |_, _: Mailbox<()>| panic!());
+
+    // Give enough time to fail
+    lunatic::sleep(Duration::from_millis(500));
+}
+
+#[test]
+#[should_panic]
+fn spawn_link_config_does_link() {
+    let mut config = ProcessConfig::new();
+    config.set_max_memory(5_000_000);
+    config.set_can_spawn_processes(true);
+
+    Process::spawn_link_config(&config, (), |_, _: Mailbox<()>| panic!());
+
+    // Give enough time to fail
+    lunatic::sleep(Duration::from_millis(100));
 }
