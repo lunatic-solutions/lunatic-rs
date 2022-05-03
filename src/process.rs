@@ -367,6 +367,18 @@ impl<T> ProcessRef<T> {
             None
         }
     }
+
+    /// Link process to the one currently running.
+    pub fn link(&self) {
+        // Don't use tags because a process' [`Mailbox`] can't differentiate between regular
+        // messages and signals. Both processes should almost always die when a link is broken.
+        unsafe { host::api::process::link(0, self.process.id()) };
+    }
+
+    /// Unlink processes from the caller.
+    pub fn unlink(&self) {
+        unsafe { host::api::process::unlink(self.process.id()) };
+    }
 }
 
 impl<T> Clone for ProcessRef<T> {

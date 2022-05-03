@@ -247,3 +247,59 @@ fn lookup() {
     let a = ProcessRef::<A>::lookup("b");
     assert!(a.is_none());
 }
+
+#[test]
+#[should_panic]
+fn linked_process_fails() {
+    struct A;
+
+    impl AbstractProcess for A {
+        type Arg = ();
+        type State = A;
+
+        fn init(_: ProcessRef<Self>, _: ()) -> A {
+            A
+        }
+    }
+
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct Panic;
+    impl ProcessMessage<Panic> for A {
+        fn handle(_state: &mut Self::State, _: Panic) {
+            panic!();
+        }
+    }
+
+    let a = A::start_link((), None);
+    a.link();
+    a.send(Panic);
+    sleep(Duration::from_millis(100));
+}
+
+#[test]
+fn unlinked_process_doesnt_fail() {
+    struct A;
+
+    impl AbstractProcess for A {
+        type Arg = ();
+        type State = A;
+
+        fn init(_: ProcessRef<Self>, _: ()) -> A {
+            A
+        }
+    }
+
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct Panic;
+    impl ProcessMessage<Panic> for A {
+        fn handle(_state: &mut Self::State, _: Panic) {
+            panic!();
+        }
+    }
+
+    let a = A::start_link((), None);
+    a.link();
+    a.unlink();
+    a.send(Panic);
+    sleep(Duration::from_millis(100));
+}
