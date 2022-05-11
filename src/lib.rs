@@ -95,6 +95,7 @@ mod mailbox;
 mod module;
 mod tag;
 
+pub mod distributed;
 pub mod host;
 pub mod net;
 pub mod process;

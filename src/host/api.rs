@@ -147,3 +147,12 @@ pub mod wasi {
         pub fn config_preopen_dir(config_id: u64, key: *const u8, key_len: usize);
     }
 }
+
+pub mod distributed {
+    #[link(wasm_import_module = "lunatic::distributed")]
+    extern "C" {
+        pub fn get_nodes(nodes_ptr: *mut u64, nodes_len: u32) -> u32;
+
+        pub fn nodes_count() -> u32;
+    }
+}
