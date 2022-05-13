@@ -1,4 +1,6 @@
-use lunatic::spawn_link;
+use std::time::Duration;
+
+use lunatic::{sleep, spawn_link};
 use lunatic_test::test;
 
 #[test]
@@ -33,4 +35,11 @@ fn recursive_count_sub(n: i32) -> i32 {
     } else {
         0
     }
+}
+
+#[test]
+fn timeout_task() {
+    let task = spawn_link!(@task || sleep(Duration::from_millis(25)));
+    let result = task.result_timeout(Duration::from_millis(10));
+    assert!(result.is_err());
 }
