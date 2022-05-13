@@ -1,11 +1,11 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, time::Duration};
 
 use crate::{
     host,
     mailbox::{LinkMailbox, LinkTrapped},
     serializer::{Bincode, Serializer},
     supervisor::{Supervisable, Supervisor, SupervisorConfig},
-    Mailbox, Process, ProcessConfig, Resource, Tag,
+    Mailbox, Process, ProcessConfig, ReceiveError, Resource, Tag,
 };
 
 /// Types that implement the `AbstractProcess` trait can be started as processes.
@@ -324,7 +324,13 @@ where
 {
     type Result;
 
-    fn request(&self, request: M) -> Self::Result;
+    fn request(&self, request: M) -> Self::Result {
+        self.request_timeout(request, Duration::new(0, 0))
+            .expect("no timeout specified")
+    }
+
+    fn request_timeout(&self, request: M, duration: Duration)
+        -> Result<Self::Result, ReceiveError>;
 }
 
 /// A reference to a running process.
@@ -454,8 +460,13 @@ where
 {
     type Result = <T as ProcessRequest<M, S>>::Response;
 
-    /// Send request to the process and block until an answer is received.
-    fn request(&self, request: M) -> Self::Result {
+    /// Send request to the process. If duration is 0 block until an answer is received,
+    /// else wait for the supplied duration.
+    fn request_timeout(
+        &self,
+        request: M,
+        duration: Duration,
+    ) -> Result<Self::Result, ReceiveError> {
         fn unpacker<TU, MU, SU>(
             this: &mut TU::State,
             sender: Process<<TU as ProcessRequest<MU, SU>>::Response, SU>,
@@ -484,8 +495,16 @@ where
         // Then the message itself.
         S::encode(&request).unwrap();
         // Send it & wait on a response!
-        unsafe { host::api::message::send_receive_skip_search(self.process.id(), 0) };
-        S::decode().unwrap()
+        unsafe {
+            let result = host::api::message::send_receive_skip_search(
+                self.process.id(),
+                duration.as_millis() as u32,
+            );
+            if result == 9027 {
+                return Err(ReceiveError::Timeout);
+            }
+        };
+        Ok(S::decode().unwrap())
     }
 }
 

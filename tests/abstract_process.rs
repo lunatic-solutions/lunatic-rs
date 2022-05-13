@@ -303,3 +303,32 @@ fn unlinked_process_doesnt_fail() {
     a.send(Panic);
     sleep(Duration::from_millis(100));
 }
+
+#[test]
+fn request_timeout() {
+    struct A;
+
+    impl AbstractProcess for A {
+        type Arg = ();
+        type State = A;
+
+        fn init(_: ProcessRef<Self>, _: ()) -> A {
+            A
+        }
+    }
+
+    impl ProcessRequest<String> for A {
+        type Response = String;
+
+        fn handle(_state: &mut Self::State, mut request: String) -> String {
+            sleep(Duration::from_millis(25));
+            request.push_str(" world");
+            request
+        }
+    }
+
+    let a = A::start_link((), None);
+    let response = a.request_timeout("Hello".to_owned(), Duration::from_millis(10));
+
+    assert!(response.is_err());
+}
