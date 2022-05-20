@@ -385,6 +385,11 @@ impl<T> ProcessRef<T> {
     pub fn unlink(&self) {
         unsafe { host::api::process::unlink(self.process.id()) };
     }
+
+    /// Kill this process
+    pub fn kill(&self) {
+        unsafe { host::api::process::kill(self.process.id()) };
+    }
 }
 
 impl<T> Clone for ProcessRef<T> {

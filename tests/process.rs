@@ -102,3 +102,13 @@ fn spawn_link_config_does_link() {
     // Give enough time to fail
     lunatic::sleep(Duration::from_millis(100));
 }
+
+#[test]
+#[should_panic]
+fn kill_process() {
+    let process = Process::spawn_link((), |_, _: Mailbox<()>| {});
+    process.kill();
+
+    // Give enough time to fail
+    lunatic::sleep(Duration::from_millis(100));
+}
