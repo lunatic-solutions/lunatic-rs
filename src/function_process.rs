@@ -202,6 +202,11 @@ impl<M, S> Process<M, S> {
         unsafe { host::api::process::unlink(self.id) };
     }
 
+    /// Kill this process
+    pub fn kill(&self) {
+        unsafe { host::api::process::kill(self.id) };
+    }
+
     /// Register process under a name.
     pub fn register(&self, name: &str) {
         // Encode type information in name

@@ -119,6 +119,7 @@ pub mod process {
         pub fn id(process_id: u64, uuid: *mut [u8; 16]);
         pub fn link(tag: i64, process_id: u64);
         pub fn unlink(process_id: u64);
+        pub fn kill(process_id: u64);
     }
 }
 
