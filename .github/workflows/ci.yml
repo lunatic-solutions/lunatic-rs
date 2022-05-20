@@ -11,10 +11,7 @@ jobs:
       - name: "Check out repository"
         uses: actions/checkout@v1
       - name: "Install lunatic"
-        run: |
-          wget https://github.com/lunatic-solutions/lunatic/releases/download/v0.9.0/lunatic-linux-amd64.tar.gz
-          tar -xf lunatic-linux-amd64.tar.gz
-          echo $PWD >> $GITHUB_PATH
+        run: cargo install --git https://github.com/lunatic-solutions/lunatic
       - name: Install rust
         uses: actions-rs/toolchain@v1
         with:
