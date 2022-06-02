@@ -30,6 +30,14 @@ pub mod message {
     }
 }
 
+pub mod timer {
+    #[link(wasm_import_module = "lunatic::timer")]
+    extern "C" {
+        pub fn send_after(process_id: u64, duration: u64) -> u64;
+        pub fn cancel_timer(timer_id: u64) -> u32;
+    }
+}
+
 pub mod networking {
     #[link(wasm_import_module = "lunatic::networking")]
     extern "C" {

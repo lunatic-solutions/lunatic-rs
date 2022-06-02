@@ -1,12 +1,13 @@
 //! As the name suggests, a "function" process can be spawned just from a function. Opposite of a
 //! `AbstractProcess` that requires a `struct`.
 
-use std::{cell::UnsafeCell, marker::PhantomData};
+use std::{cell::UnsafeCell, marker::PhantomData, time::Duration};
 
 use crate::{
     host,
     protocol::ProtocolCapture,
     serializer::{Bincode, Serializer},
+    timer::TimerRef,
     ProcessConfig, Resource, Tag,
 };
 
@@ -264,6 +265,23 @@ where
         S::encode(&message).unwrap();
         // Send it!
         unsafe { host::api::message::send(self.id) };
+    }
+
+    /// Send a message to the process after the specified duration has passed.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the received message can't be serialized into `M`
+    /// with serializer `S`.
+    pub fn send_after(&self, message: M, duration: Duration) -> TimerRef {
+        // Create new message.
+        unsafe { host::api::message::create_data(Tag::none().id(), 0) };
+        // During serialization resources will add themself to the message.
+        S::encode(&message).unwrap();
+        // Send it!
+        let timer_id =
+            unsafe { host::api::timer::send_after(self.id, duration.as_millis() as u64) };
+        TimerRef::new(timer_id)
     }
 
     /// Send message to process with a specific tag.
