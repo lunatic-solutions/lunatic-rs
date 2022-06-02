@@ -103,6 +103,7 @@ pub mod process;
 pub mod protocol;
 pub mod serializer;
 pub mod supervisor;
+pub mod timer;
 
 pub use config::ProcessConfig;
 pub use error::LunaticError;
