@@ -51,7 +51,9 @@ fn mailbox_timeout(m: Mailbox<i32>) {
 
 #[test]
 fn recursive_count(mailbox: Mailbox<i32>) {
-    Process::spawn_link((mailbox.this(), 1000), recursive_count_sub);
+    let mut config = ProcessConfig::new();
+    config.set_can_spawn_processes(true);
+    Process::spawn_link_config(&config, (mailbox.this(), 1000), recursive_count_sub);
     assert_eq!(500500, mailbox.receive());
 }
 

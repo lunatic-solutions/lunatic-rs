@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use lunatic::{sleep, spawn_link};
+use lunatic::{sleep, spawn_link, ProcessConfig};
 use lunatic_test::test;
 
 #[test]
@@ -25,7 +25,9 @@ fn result_must_be_called() {
 
 #[test]
 fn recursive_count() {
-    let task = spawn_link!(@task |n = 1_000| recursive_count_sub(n));
+    let mut config = ProcessConfig::new();
+    config.set_can_spawn_processes(true);
+    let task = spawn_link!(@task &config, |n = 1_000| recursive_count_sub(n));
     assert_eq!(500500, task.result());
 }
 
