@@ -20,6 +20,9 @@ impl TcpServer {
             local_address: local_address.to_owned(),
         }
     }
+    fn spawn(self) {
+        spawn_link!(|input = self| listen(input));
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -30,14 +33,14 @@ struct TcpPeer {
 
 #[lunatic::main]
 fn main(_: Mailbox<()>) {
-    let local_addrs = vec![
-        TcpServer::new("127.0.0.1:6666"),
-        TcpServer::new("127.0.0.1:6667"),
-    ];
+//    let local_addrs = vec![
+        TcpServer::new("127.0.0.1:6666").spawn();
+        TcpServer::new("127.0.0.1:6667").spawn();
+//    ];
 
-    for l in local_addrs {
-        spawn_link!(|input = l| listen(input));
-    }
+//    for l in local_addrs {
+//        spawn_link!(|input = l| listen(input));
+//    }
 
     loop {
         // Mainloop every 10s
