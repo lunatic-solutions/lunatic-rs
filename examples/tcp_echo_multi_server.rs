@@ -5,9 +5,8 @@
 //! 3) To implement simple linebuffer echo back
 //! 4) With ability to listen on multiple local addresses
 //!
-use lunatic::{net, sleep, spawn_link, Mailbox};
+use lunatic::{net, spawn_link, Mailbox};
 use std::io::{BufRead, BufReader, Write};
-use std::time::Duration;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct TcpServer {
@@ -32,14 +31,12 @@ struct TcpPeer {
 }
 
 #[lunatic::main]
-fn main(_: Mailbox<()>) {
+fn main(mailbox: Mailbox<()>) {
     TcpServer::new("127.0.0.1:6666").spawn();
     TcpServer::new("127.0.0.1:6667").spawn();
 
-    loop {
-        // Mainloop every 10s
-        sleep(Duration::from_millis(10000));
-    }
+    // This will block forever
+    let _ = mailbox.receive();
 }
 
 // Creates a TcpServer Listener that spawns TcpPeers upon accept
