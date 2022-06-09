@@ -41,7 +41,7 @@ fn main(_: Mailbox<()>) {
     }
 }
 
-// Creates a TcpListen Listener
+// Creates a TcpServer Listener that spawns TcpPeers upon accept
 fn listen(input: TcpServer) {
     let listener = net::TcpListener::bind(input.local_address.clone()).unwrap();
     println!("Listening on addr: {}", listener.local_addr().unwrap());
