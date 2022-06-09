@@ -33,14 +33,8 @@ struct TcpPeer {
 
 #[lunatic::main]
 fn main(_: Mailbox<()>) {
-//    let local_addrs = vec![
-        TcpServer::new("127.0.0.1:6666").spawn();
-        TcpServer::new("127.0.0.1:6667").spawn();
-//    ];
-
-//    for l in local_addrs {
-//        spawn_link!(|input = l| listen(input));
-//    }
+    TcpServer::new("127.0.0.1:6666").spawn();
+    TcpServer::new("127.0.0.1:6667").spawn();
 
     loop {
         // Mainloop every 10s
