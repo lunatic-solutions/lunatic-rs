@@ -1,7 +1,7 @@
 use std::{any::TypeId, marker::PhantomData, mem::ManuallyDrop, time::Duration};
 
 use crate::{
-    function_process::IntoProcess,
+    function::process::IntoProcess,
     host,
     serializer::{Bincode, Serializer},
     Mailbox, Process, ProcessConfig, ReceiveError, Resource, Tag,

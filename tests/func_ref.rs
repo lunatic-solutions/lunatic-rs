@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use lunatic::function_reference::FuncRef;
+use lunatic::function::FuncRef;
 use lunatic_test::test;
 
 #[test]
