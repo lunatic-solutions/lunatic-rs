@@ -97,6 +97,7 @@ mod mailbox;
 mod module;
 mod tag;
 
+pub mod function_reference;
 pub mod host;
 pub mod net;
 pub mod process;
