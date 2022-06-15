@@ -60,8 +60,18 @@ pub mod networking {
             scope_id: u32,
             id: *mut u64,
         ) -> u32;
+        pub fn udp_bind(
+            addr_type: u32,
+            addr: *const u8,
+            port: u32,
+            flow_info: u32,
+            scope_id: u32,
+            id: *mut u64
+        ) -> u32;
         pub fn drop_tcp_listener(tcp_listener_id: u64);
+        pub fn drop_udp_socket(udp_socket_id: u64);
         pub fn tcp_local_addr(tcp_listener_id: u64, addr_dns_iter: *mut u64) -> u32;
+        pub fn udp_local_addr(udp_socket_id: u64, addr_dns_iter: *mut u64) -> u32;        
         pub fn tcp_accept(listener_id: u64, id: *mut u64, peer_dns_iter: *mut u64) -> u32;
         pub fn tcp_connect(
             addr_type: u32,
