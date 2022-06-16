@@ -5,6 +5,7 @@ use crate::{
     mailbox::{LinkMailbox, LinkTrapped},
     serializer::{Bincode, Serializer},
     supervisor::{Supervisable, Supervisor, SupervisorConfig},
+    timer::TimerRef,
     Mailbox, Process, ProcessConfig, ReceiveError, Resource, Tag,
 };
 
@@ -316,6 +317,7 @@ where
     S: Serializer<M>,
 {
     fn send(&self, message: M);
+    fn send_after(&self, message: M, duration: Duration) -> TimerRef;
 }
 
 pub trait Request<M, S>
@@ -454,6 +456,31 @@ where
         S::encode(&message).unwrap();
         // Send the message
         unsafe { host::api::message::send(self.process.id()) };
+    }
+
+    /// Send message to the process after the specified duration has passed.
+    fn send_after(&self, message: M, duration: Duration) -> TimerRef {
+        fn unpacker<TU, MU, SU>(this: &mut TU::State)
+        where
+            TU: ProcessMessage<MU, SU>,
+            SU: Serializer<MU>,
+        {
+            let message: MU = SU::decode().unwrap();
+            <TU as ProcessMessage<MU, SU>>::handle(this, message);
+        }
+
+        // Create new message buffer.
+        unsafe { host::api::message::create_data(Tag::none().id(), 0) };
+        // First encode the handler inside the message buffer.
+        let handler = unpacker::<T, M, S> as usize as i32;
+        let handler_message = Sendable::Message(handler);
+        Bincode::encode(&handler_message).unwrap();
+        // Then the message itself.
+        S::encode(&message).unwrap();
+        // Send the message
+        let timer_id =
+            unsafe { host::api::timer::send_after(self.process.id(), duration.as_millis() as u64) };
+        TimerRef::new(timer_id)
     }
 }
 

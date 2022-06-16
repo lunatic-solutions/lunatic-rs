@@ -108,6 +108,8 @@ impl TcpListener {
 
     /// Accepts a new incoming connection.
     ///
+    /// This will block and typically needs its own dedicated child process loop.
+    ///
     /// Returns a TCP stream and the peer address.
     pub fn accept(&self) -> Result<(TcpStream, SocketAddr)> {
         let mut tcp_stream_or_error_id = 0;
