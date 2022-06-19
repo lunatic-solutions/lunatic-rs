@@ -167,12 +167,12 @@ impl TcpStream {
                     unsafe {
                         host::api::networking::tcp_connect(
                             4,
-                            ip.as_ptr(),
+                            ip.as_ptr() as u32,
                             port,
                             0,
                             0,
                             timeout_ms,
-                            &mut id as *mut u64,
+                            &mut id as *mut u64 as u64,
                         )
                     }
                 }
@@ -184,12 +184,12 @@ impl TcpStream {
                     unsafe {
                         host::api::networking::tcp_connect(
                             6,
-                            ip.as_ptr(),
+                            ip.as_ptr() as u32,
                             port,
                             flow_info,
                             scope_id,
                             timeout_ms,
-                            &mut id as *mut u64,
+                            &mut id as *mut u64 as u64,
                         )
                     }
                 }
@@ -214,10 +214,10 @@ impl Write for TcpStream {
         let result = unsafe {
             host::api::networking::tcp_write_vectored(
                 self.id,
-                bufs.as_ptr() as *const u32,
-                bufs.len(),
+                bufs.as_ptr() as u32,
+                bufs.len() as u32,
                 self.write_timeout,
-                &mut nwritten_or_error_id as *mut u64,
+                &mut nwritten_or_error_id as *mut u64 as u64,
             )
         };
         if result == 0 {
@@ -230,7 +230,8 @@ impl Write for TcpStream {
 
     fn flush(&mut self) -> Result<()> {
         let mut error_id = 0;
-        match unsafe { host::api::networking::tcp_flush(self.id, &mut error_id as *mut u64) } {
+        match unsafe { host::api::networking::tcp_flush(self.id, &mut error_id as *mut u64 as u64) }
+        {
             0 => Ok(()),
             _ => {
                 let lunatic_error = LunaticError::from(error_id);
@@ -246,10 +247,10 @@ impl Read for TcpStream {
         let result = unsafe {
             host::api::networking::tcp_read(
                 self.id,
-                buf.as_mut_ptr(),
-                buf.len(),
+                buf.as_mut_ptr() as u32,
+                buf.len() as u32,
                 self.read_timeout,
-                &mut nread_or_error_id as *mut u64,
+                &mut nread_or_error_id as *mut u64 as u64,
             )
         };
         if result == 0 {

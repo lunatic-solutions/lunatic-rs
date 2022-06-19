@@ -1,0 +1,3 @@
+put: func(name: u32, name-len: u32, process-id: u64)
+get: func(name: u32, name-len: u32, process-id: u32) -> u32
+remove: func(name: u32, name-len: u32)

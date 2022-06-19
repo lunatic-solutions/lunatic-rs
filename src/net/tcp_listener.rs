@@ -73,11 +73,11 @@ impl TcpListener {
                     unsafe {
                         host::api::networking::tcp_bind(
                             4,
-                            ip.as_ptr(),
+                            ip.as_ptr() as u32,
                             port,
                             0,
                             0,
-                            &mut id as *mut u64,
+                            &mut id as *mut u64 as u64,
                         )
                     }
                 }
@@ -89,11 +89,11 @@ impl TcpListener {
                     unsafe {
                         host::api::networking::tcp_bind(
                             6,
-                            ip.as_ptr(),
+                            ip.as_ptr() as u32,
                             port,
                             flow_info,
                             scope_id,
-                            &mut id as *mut u64,
+                            &mut id as *mut u64 as u64,
                         )
                     }
                 }
@@ -117,8 +117,8 @@ impl TcpListener {
         let result = unsafe {
             host::api::networking::tcp_accept(
                 self.id,
-                &mut tcp_stream_or_error_id as *mut u64,
-                &mut dns_iter_id as *mut u64,
+                &mut tcp_stream_or_error_id as *mut u64 as u64,
+                &mut dns_iter_id as *mut u64 as u64,
             )
         };
         if result == 0 {
@@ -138,7 +138,10 @@ impl TcpListener {
     pub fn local_addr(&self) -> Result<SocketAddr> {
         let mut dns_iter_or_error_id = 0;
         let result = unsafe {
-            host::api::networking::tcp_local_addr(self.id, &mut dns_iter_or_error_id as *mut u64)
+            host::api::networking::tcp_local_addr(
+                self.id,
+                &mut dns_iter_or_error_id as *mut u64 as u64,
+            )
         };
         if result == 0 {
             let mut dns_iter = SocketAddrIterator::from(dns_iter_or_error_id);

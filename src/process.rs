@@ -272,7 +272,9 @@ fn starter<T>(
     let name = if let Some(name) = name {
         // Encode type information in name
         let name = format!("{} + ProcessRef + {}", name, std::any::type_name::<T>());
-        unsafe { host::api::registry::put(name.as_ptr(), name.len(), this.process.id()) };
+        unsafe {
+            host::api::registry::put(name.as_ptr() as u32, name.len() as u32, this.process.id())
+        };
         Some(name)
     } else {
         None
@@ -308,7 +310,7 @@ fn starter<T>(
 
     // Unregister name
     if let Some(name) = name {
-        unsafe { host::api::registry::remove(name.as_ptr(), name.len()) };
+        unsafe { host::api::registry::remove(name.as_ptr() as u32, name.len() as u32) };
     }
 }
 
@@ -361,14 +363,20 @@ impl<T> ProcessRef<T> {
     /// Returns a globally unique process ID.
     pub fn uuid(&self) -> u128 {
         let mut uuid: [u8; 16] = [0; 16];
-        unsafe { host::api::process::id(self.process.id(), &mut uuid as *mut [u8; 16]) };
+        unsafe { host::api::process::id(self.process.id(), &mut uuid as *mut [u8; 16] as u32) };
         u128::from_le_bytes(uuid)
     }
 
     pub fn lookup(name: &str) -> Option<Self> {
         let name = format!("{} + ProcessRef + {}", name, std::any::type_name::<T>());
         let mut id = 0;
-        let result = unsafe { host::api::registry::get(name.as_ptr(), name.len(), &mut id) };
+        let result = unsafe {
+            host::api::registry::get(
+                name.as_ptr() as u32,
+                name.len() as u32,
+                &mut id as *mut u64 as u32,
+            )
+        };
         if result == 0 {
             unsafe { Some(Self::from(id)) }
         } else {

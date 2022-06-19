@@ -1,0 +1,3 @@
+string-size : func(caller: u64) -> u32
+to-string   : func(error-id: u64, error-str: u32)
+drop        : func(error-id: u64)

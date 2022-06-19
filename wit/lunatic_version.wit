@@ -1,0 +1,3 @@
+major: func() -> u32
+minor: func() -> u32
+patch: func() -> u32

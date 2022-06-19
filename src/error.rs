@@ -37,7 +37,7 @@ impl Debug for LunaticError {
             LunaticError::Error(id) => {
                 let size = unsafe { error::string_size(*id) };
                 let mut buff = vec![0; size as usize];
-                unsafe { error::to_string(*id, buff.as_mut_ptr()) };
+                unsafe { error::to_string(*id, buff.as_mut_ptr() as u32) };
                 let error = std::str::from_utf8(&buff).unwrap();
                 write!(f, "{}", error)
             }
@@ -52,7 +52,7 @@ impl Display for LunaticError {
             LunaticError::Error(id) => {
                 let size = unsafe { error::string_size(*id) };
                 let mut buff = vec![0; size as usize];
-                unsafe { error::to_string(*id, buff.as_mut_ptr()) };
+                unsafe { error::to_string(*id, buff.as_mut_ptr() as u32) };
                 let error = std::str::from_utf8(&buff).unwrap();
                 write!(f, "{}", error)
             }

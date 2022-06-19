@@ -1,0 +1,9 @@
+config-add-environment-variable: func(
+  config-id: u64,
+  key: u32,
+  key-len: u32,
+  value: u32,
+  value-len: u32,
+)
+config-add-command-line-argument: func(config-id: u64, key: u32, key-len: u32)
+config-preopen-dir: func(config-id: u64, key: u32, key-len: u32)

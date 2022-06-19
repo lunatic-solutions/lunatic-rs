@@ -36,11 +36,11 @@ pub(crate) fn spawn(
             link,
             config_id,
             WasmModule::inherit().id(),
-            func.as_ptr(),
-            func.len(),
-            params.as_ptr(),
-            params.len(),
-            &mut id,
+            func.as_ptr() as u32,
+            func.len() as u32,
+            params.as_ptr() as u32,
+            params.len() as u32,
+            &mut id as *mut u64 as u32,
         )
     };
     if result == 0 {

@@ -31,9 +31,9 @@ impl WasmModule {
 
         let result = unsafe {
             host::api::process::compile_module(
-                data.as_ptr(),
-                data.len(),
-                &mut module_or_error_id as *mut u64,
+                data.as_ptr() as u32,
+                data.len() as u32,
+                &mut module_or_error_id as *mut u64 as u32,
             )
         };
         if result == -1 {
@@ -72,13 +72,13 @@ impl WasmModule {
         let result = unsafe {
             host::api::process::spawn(
                 0,
-                -1,
+                -1i64,
                 self.id(),
-                function.as_ptr(),
-                function.len(),
-                params.as_ptr(),
-                params.len(),
-                &mut process_or_error_id as *mut u64,
+                function.as_ptr() as u32,
+                function.len() as u32,
+                params.as_ptr() as u32,
+                params.len() as u32,
+                &mut process_or_error_id as *mut u64 as u32,
             )
         };
 
@@ -103,13 +103,13 @@ impl WasmModule {
         let result = unsafe {
             host::api::process::spawn(
                 1,
-                -1,
+                -1i64,
                 self.id(),
-                function.as_ptr(),
-                function.len(),
-                params.as_ptr(),
-                params.len(),
-                &mut process_or_error_id as *mut u64,
+                function.as_ptr() as u32,
+                function.len() as u32,
+                params.as_ptr() as u32,
+                params.len() as u32,
+                &mut process_or_error_id as *mut u64 as u32,
             )
         };
 

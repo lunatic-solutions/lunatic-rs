@@ -1,0 +1,2 @@
+send-after   : func(process-id: u64, duration: u64) -> u64
+cancel-timer : func(timer-id: u64) -> u32

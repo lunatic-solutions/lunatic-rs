@@ -125,10 +125,10 @@ impl ProcessConfig {
         unsafe {
             host::api::wasi::config_add_environment_variable(
                 self.id() as u64,
-                key.as_ptr(),
-                key.len(),
-                value.as_ptr(),
-                value.len(),
+                key.as_ptr() as u32,
+                key.len() as u32,
+                value.as_ptr() as u32,
+                value.len() as u32,
             )
         }
     }
@@ -138,15 +138,21 @@ impl ProcessConfig {
         unsafe {
             host::api::wasi::config_add_command_line_argument(
                 self.id() as u64,
-                argument.as_ptr(),
-                argument.len(),
+                argument.as_ptr() as u32,
+                argument.len() as u32,
             )
         }
     }
 
     /// Mark a directory as preopened.
     pub fn preopen_dir(&self, dir: &str) {
-        unsafe { host::api::wasi::config_preopen_dir(self.id() as u64, dir.as_ptr(), dir.len()) }
+        unsafe {
+            host::api::wasi::config_preopen_dir(
+                self.id() as u64,
+                dir.as_ptr() as u32,
+                dir.len() as u32,
+            )
+        }
     }
 }
 

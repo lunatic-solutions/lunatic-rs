@@ -187,7 +187,7 @@ impl<M, S> Process<M, S> {
     /// Returns a globally unique process ID.
     pub fn uuid(&self) -> u128 {
         let mut uuid: [u8; 16] = [0; 16];
-        unsafe { host::api::process::id(self.id, &mut uuid as *mut [u8; 16]) };
+        unsafe { host::api::process::id(self.id, &mut uuid as *mut [u8; 16] as u32) };
         u128::from_le_bytes(uuid)
     }
 
@@ -217,7 +217,7 @@ impl<M, S> Process<M, S> {
             std::any::type_name::<M>(),
             std::any::type_name::<S>()
         );
-        unsafe { host::api::registry::put(name.as_ptr(), name.len(), self.id) };
+        unsafe { host::api::registry::put(name.as_ptr() as u32, name.len() as u32, self.id) };
     }
 
     /// Look up a process.
@@ -229,7 +229,13 @@ impl<M, S> Process<M, S> {
             std::any::type_name::<S>()
         );
         let mut id = 0;
-        let result = unsafe { host::api::registry::get(name.as_ptr(), name.len(), &mut id) };
+        let result = unsafe {
+            host::api::registry::get(
+                name.as_ptr() as u32,
+                name.len() as u32,
+                &mut id as *mut u64 as u32,
+            )
+        };
         if result == 0 {
             unsafe { Some(Self::from_id(id)) }
         } else {
