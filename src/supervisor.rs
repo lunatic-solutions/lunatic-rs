@@ -61,7 +61,7 @@ where
 
     fn init(_: ProcessRef<Self>, arg: T::Arg) -> Self::State {
         // Supervisor shouldn't die if the children die
-        unsafe { host::api::process::die_when_link_dies(0) };
+        host::api::process::die_when_link_dies(0);
 
         let mut config = SupervisorConfig::default();
         <T as Supervisor>::init(&mut config, arg);

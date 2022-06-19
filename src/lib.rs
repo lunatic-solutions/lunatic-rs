@@ -130,5 +130,5 @@ pub trait Resource {
 
 /// Suspends the current process for `duration` of time.
 pub fn sleep(duration: std::time::Duration) {
-    unsafe { host::api::process::sleep_ms(duration.as_millis() as u64) };
+    host::api::process::sleep_ms(duration.as_millis() as u64);
 }

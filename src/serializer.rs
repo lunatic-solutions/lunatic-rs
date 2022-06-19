@@ -160,13 +160,13 @@ pub struct MessageRw {}
 
 impl std::io::Read for MessageRw {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        Ok(unsafe { message::read_data(buf.as_mut_ptr() as u32, buf.len() as u32) as usize })
+        Ok(message::read_data(buf.as_mut_ptr() as u32, buf.len() as u32) as usize)
     }
 }
 
 impl std::io::Write for MessageRw {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        Ok(unsafe { message::write_data(buf.as_ptr() as u32, buf.len() as u32) as usize })
+        Ok(message::write_data(buf.as_ptr() as u32, buf.len() as u32) as usize)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {

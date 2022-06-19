@@ -11,6 +11,6 @@ impl TimerRef {
 
     /// Cancel the timer, blocking until the timer is canceled.
     pub fn cancel(self) -> bool {
-        unsafe { host::api::timer::cancel_timer(self.0) == 1 }
+        host::api::timer::cancel_timer(self.0) == 1
     }
 }

@@ -272,9 +272,7 @@ fn starter<T>(
     let name = if let Some(name) = name {
         // Encode type information in name
         let name = format!("{} + ProcessRef + {}", name, std::any::type_name::<T>());
-        unsafe {
-            host::api::registry::put(name.as_ptr() as u32, name.len() as u32, this.process.id())
-        };
+        host::api::registry::put(name.as_ptr() as u32, name.len() as u32, this.process.id());
         Some(name)
     } else {
         None
@@ -310,7 +308,7 @@ fn starter<T>(
 
     // Unregister name
     if let Some(name) = name {
-        unsafe { host::api::registry::remove(name.as_ptr() as u32, name.len() as u32) };
+        host::api::registry::remove(name.as_ptr() as u32, name.len() as u32);
     }
 }
 
@@ -363,20 +361,18 @@ impl<T> ProcessRef<T> {
     /// Returns a globally unique process ID.
     pub fn uuid(&self) -> u128 {
         let mut uuid: [u8; 16] = [0; 16];
-        unsafe { host::api::process::id(self.process.id(), &mut uuid as *mut [u8; 16] as u32) };
+        host::api::process::id(self.process.id(), &mut uuid as *mut [u8; 16] as u32);
         u128::from_le_bytes(uuid)
     }
 
     pub fn lookup(name: &str) -> Option<Self> {
         let name = format!("{} + ProcessRef + {}", name, std::any::type_name::<T>());
         let mut id = 0;
-        let result = unsafe {
-            host::api::registry::get(
-                name.as_ptr() as u32,
-                name.len() as u32,
-                &mut id as *mut u64 as u32,
-            )
-        };
+        let result = host::api::registry::get(
+            name.as_ptr() as u32,
+            name.len() as u32,
+            &mut id as *mut u64 as u32,
+        );
         if result == 0 {
             unsafe { Some(Self::from(id)) }
         } else {
@@ -388,17 +384,17 @@ impl<T> ProcessRef<T> {
     pub fn link(&self) {
         // Don't use tags because a process' [`Mailbox`] can't differentiate between regular
         // messages and signals. Both processes should almost always die when a link is broken.
-        unsafe { host::api::process::link(0, self.process.id()) };
+        host::api::process::link(0, self.process.id());
     }
 
     /// Unlink processes from the caller.
     pub fn unlink(&self) {
-        unsafe { host::api::process::unlink(self.process.id()) };
+        host::api::process::unlink(self.process.id());
     }
 
     /// Kill this process
     pub fn kill(&self) {
-        unsafe { host::api::process::kill(self.process.id()) };
+        host::api::process::kill(self.process.id());
     }
 }
 
@@ -418,10 +414,10 @@ where
     /// Shut down process
     pub fn shutdown(&self) {
         // Create new message buffer.
-        unsafe { host::api::message::create_data(Tag::none().id(), 0) };
+        host::api::message::create_data(Tag::none().id(), 0);
         Bincode::encode(&Sendable::Shutdown).unwrap();
         // Send the message
-        unsafe { host::api::message::send(self.process.id()) };
+        host::api::message::send(self.process.id());
     }
 }
 
@@ -455,7 +451,7 @@ where
         }
 
         // Create new message buffer.
-        unsafe { host::api::message::create_data(Tag::none().id(), 0) };
+        host::api::message::create_data(Tag::none().id(), 0);
         // First encode the handler inside the message buffer.
         let handler = unpacker::<T, M, S> as usize as i32;
         let handler_message = Sendable::Message(handler);
@@ -463,7 +459,7 @@ where
         // Then the message itself.
         S::encode(&message).unwrap();
         // Send the message
-        unsafe { host::api::message::send(self.process.id()) };
+        host::api::message::send(self.process.id());
     }
 
     /// Send message to the process after the specified duration has passed.
@@ -478,7 +474,7 @@ where
         }
 
         // Create new message buffer.
-        unsafe { host::api::message::create_data(Tag::none().id(), 0) };
+        host::api::message::create_data(Tag::none().id(), 0);
         // First encode the handler inside the message buffer.
         let handler = unpacker::<T, M, S> as usize as i32;
         let handler_message = Sendable::Message(handler);
@@ -486,8 +482,7 @@ where
         // Then the message itself.
         S::encode(&message).unwrap();
         // Send the message
-        let timer_id =
-            unsafe { host::api::timer::send_after(self.process.id(), duration.as_millis() as u64) };
+        let timer_id = host::api::timer::send_after(self.process.id(), duration.as_millis() as u64);
         TimerRef::new(timer_id)
     }
 }
@@ -517,7 +512,7 @@ where
             // Get content out of message
             let message: MU = SU::decode().unwrap();
             // Get tag out of message before the handler function maybe manipulates it.
-            let tag = unsafe { host::api::message::get_tag() };
+            let tag = host::api::message::get_tag();
             let tag = Tag::from(tag);
             let result = <TU as ProcessRequest<MU, SU>>::handle(this, message);
             sender.tag_send(tag, result);
@@ -525,7 +520,7 @@ where
 
         let tag = Tag::new();
         // Create new message buffer.
-        unsafe { host::api::message::create_data(tag.id(), 0) };
+        host::api::message::create_data(tag.id(), 0);
         // Create reference to self
         let this: Process<()> = unsafe { Process::from_id(host::api::process::this()) };
         // First encode the handler inside the message buffer.
@@ -535,15 +530,14 @@ where
         // Then the message itself.
         S::encode(&request).unwrap();
         // Send it & wait on a response!
-        unsafe {
-            let result = host::api::message::send_receive_skip_search(
-                self.process.id(),
-                duration.as_millis() as u32,
-            );
-            if result == 9027 {
-                return Err(ReceiveError::Timeout);
-            }
-        };
+
+        let result = host::api::message::send_receive_skip_search(
+            self.process.id(),
+            duration.as_millis() as u32,
+        );
+        if result == 9027 {
+            return Err(ReceiveError::Timeout);
+        }
         Ok(S::decode().unwrap())
     }
 }

@@ -39,7 +39,7 @@ impl<P: 'static, S> Drop for Protocol<P, S> {
                 std::any::type_name::<P>()
             );
         }
-        unsafe { host::api::process::drop_process(self.id) };
+        host::api::process::drop_process(self.id);
     }
 }
 

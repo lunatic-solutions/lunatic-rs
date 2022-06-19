@@ -91,8 +91,7 @@ where
             },
             None => 0,
         };
-        let message_type =
-            unsafe { message::receive(tags.as_ptr() as u32, tags.len() as u32, timeout_ms) };
+        let message_type = message::receive(tags.as_ptr() as u32, tags.len() as u32, timeout_ms);
         // Mailbox can't receive LINK_TRAPPED messages.
         assert_ne!(message_type, LINK_TRAPPED);
         // In case of timeout, return error.
@@ -182,11 +181,10 @@ where
             },
             None => 0,
         };
-        let message_type =
-            unsafe { message::receive(tags.as_ptr() as u32, tags.len() as u32, timeout_ms) };
+        let message_type = message::receive(tags.as_ptr() as u32, tags.len() as u32, timeout_ms);
         // If we received a LINK_TRAPPED message return
         if message_type == LINK_TRAPPED {
-            return Ok(Err(LinkTrapped(Tag::from(unsafe { message::get_tag() }))));
+            return Ok(Err(LinkTrapped(Tag::from(message::get_tag()))));
         }
         // In case of timeout, return error.
         if message_type == TIMEOUT {
