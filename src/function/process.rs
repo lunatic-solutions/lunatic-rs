@@ -187,7 +187,7 @@ impl<M, S> Process<M, S> {
     /// Returns a globally unique process ID.
     pub fn uuid(&self) -> u128 {
         let mut uuid: [u8; 16] = [0; 16];
-        unsafe { host::api::process::id(self.id, &mut uuid as *mut [u8; 16]) };
+        host::api::process::id(self.id, &mut uuid as *mut [u8; 16] as u32);
         u128::from_le_bytes(uuid)
     }
 
@@ -195,17 +195,17 @@ impl<M, S> Process<M, S> {
     pub fn link(&self) {
         // Don't use tags because a process' [`Mailbox`] can't differentiate between regular
         // messages and signals. Both processes should almost always die when a link is broken.
-        unsafe { host::api::process::link(0, self.id) };
+        host::api::process::link(0, self.id);
     }
 
     /// Unlink processes from the caller.
     pub fn unlink(&self) {
-        unsafe { host::api::process::unlink(self.id) };
+        host::api::process::unlink(self.id);
     }
 
     /// Kill this process
     pub fn kill(&self) {
-        unsafe { host::api::process::kill(self.id) };
+        host::api::process::kill(self.id);
     }
 
     /// Register process under a name.
@@ -217,7 +217,7 @@ impl<M, S> Process<M, S> {
             std::any::type_name::<M>(),
             std::any::type_name::<S>()
         );
-        unsafe { host::api::registry::put(name.as_ptr(), name.len(), self.id) };
+        host::api::registry::put(name.as_ptr() as u32, name.len() as u32, self.id);
     }
 
     /// Look up a process.
@@ -229,7 +229,11 @@ impl<M, S> Process<M, S> {
             std::any::type_name::<S>()
         );
         let mut id = 0;
-        let result = unsafe { host::api::registry::get(name.as_ptr(), name.len(), &mut id) };
+        let result = host::api::registry::get(
+            name.as_ptr() as u32,
+            name.len() as u32,
+            &mut id as *mut u64 as u32,
+        );
         if result == 0 {
             unsafe { Some(Self::from_id(id)) }
         } else {
@@ -260,11 +264,11 @@ where
     /// with serializer `S`.
     pub fn send(&self, message: M) {
         // Create new message.
-        unsafe { host::api::message::create_data(Tag::none().id(), 0) };
+        host::api::message::create_data(Tag::none().id(), 0);
         // During serialization resources will add themself to the message.
         S::encode(&message).unwrap();
         // Send it!
-        unsafe { host::api::message::send(self.id) };
+        host::api::message::send(self.id);
     }
 
     /// Send a message to the process after the specified duration has passed.
@@ -275,12 +279,11 @@ where
     /// with serializer `S`.
     pub fn send_after(&self, message: M, duration: Duration) -> TimerRef {
         // Create new message.
-        unsafe { host::api::message::create_data(Tag::none().id(), 0) };
+        host::api::message::create_data(Tag::none().id(), 0);
         // During serialization resources will add themself to the message.
         S::encode(&message).unwrap();
         // Send it!
-        let timer_id =
-            unsafe { host::api::timer::send_after(self.id, duration.as_millis() as u64) };
+        let timer_id = host::api::timer::send_after(self.id, duration.as_millis() as u64);
         TimerRef::new(timer_id)
     }
 
@@ -292,11 +295,11 @@ where
     /// with serializer `S`.
     pub fn tag_send(&self, tag: Tag, message: M) {
         // Create new message.
-        unsafe { host::api::message::create_data(tag.id(), 0) };
+        host::api::message::create_data(tag.id(), 0);
         // During serialization resources will add themself to the message.
         S::encode(&message).unwrap();
         // Send it!
-        unsafe { host::api::message::send(self.id) };
+        host::api::message::send(self.id);
     }
 }
 
@@ -331,7 +334,7 @@ impl<M, S> std::fmt::Debug for Process<M, S> {
 
 impl<M, S> Clone for Process<M, S> {
     fn clone(&self) -> Self {
-        let id = unsafe { host::api::process::clone_process(self.id) };
+        let id = host::api::process::clone_process(self.id);
         unsafe { Process::from_id(id) }
     }
 }
@@ -340,7 +343,7 @@ impl<M, S> Drop for Process<M, S> {
     fn drop(&mut self) {
         // Only drop a process if it's not already consumed.
         if unsafe { !*self.consumed.get() } {
-            unsafe { host::api::process::drop_process(self.id) };
+            host::api::process::drop_process(self.id);
         }
     }
 }
@@ -353,7 +356,7 @@ impl<M, S> serde::Serialize for Process<M, S> {
         // Mark process as consumed.
         unsafe { self.consume() };
 
-        let index = unsafe { host::api::message::push_process(self.id) };
+        let index = host::api::message::push_process(self.id);
         serializer.serialize_u64(index)
     }
 }
@@ -373,7 +376,7 @@ impl<'de, M, S> serde::de::Visitor<'de> for ProcessVisitor<M, S> {
     where
         E: serde::de::Error,
     {
-        let id = unsafe { host::api::message::take_process(index) };
+        let id = host::api::message::take_process(index);
         Ok(unsafe { Process::from_id(id) })
     }
 }

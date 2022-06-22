@@ -1,0 +1,33 @@
+compile-module: func(data: u32, data-len: u32, id: u32) -> s32
+drop-module: func(config-id: u64)
+create-config: func() -> u64
+drop-config: func(config-id: u64)
+config-set-max-memory: func(config-id: u64, max-memory: u64)
+config-get-max-memory: func(config-id: u64) -> u64
+config-set-max-fuel: func(config-id: u64, max-fuel: u64)
+config-get-max-fuel: func(config-id: u64) -> u64
+config-can-compile-modules: func(config-id: u64) -> u32
+config-set-can-compile-modules: func(config-id: u64, can: u32)
+config-can-create-configs: func(config-id: u64) -> u32
+config-set-can-create-configs: func(config-id: u64, can: u32)
+config-can-spawn-processes: func(config-id: u64) -> u32
+config-set-can-spawn-processes: func(config-id: u64, can: u32)
+spawn: func(
+  link: s64,
+  config-id: s64,
+  module-id: s64,
+  function: u32,
+  function-len: u32,
+  params: u32,
+  params-len: u32,
+  id: u32,
+) -> u32
+drop-process: func(process-id: u64)
+clone-process: func(process-id: u64) -> u64
+sleep-ms: func(millis: u64)
+die-when-link-dies: func(trap: u32)
+this: func() -> u64
+id: func(process-id: u64, uuid: u32)
+link: func(tag: s64, process-id: u64)
+unlink: func(process-id: u64)
+kill: func(process-id: u64)

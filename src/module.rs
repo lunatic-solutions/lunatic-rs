@@ -14,7 +14,7 @@ impl Drop for WasmModule {
     fn drop(&mut self) {
         match self {
             WasmModule::Module(id) => {
-                unsafe { host::api::process::drop_module(*id) };
+                host::api::process::drop_module(*id);
             }
             WasmModule::Inherit => (),
         }
@@ -29,13 +29,11 @@ impl WasmModule {
     pub fn new(data: &[u8]) -> Result<Self, LunaticError> {
         let mut module_or_error_id: u64 = 0;
 
-        let result = unsafe {
-            host::api::process::compile_module(
-                data.as_ptr(),
-                data.len(),
-                &mut module_or_error_id as *mut u64,
-            )
-        };
+        let result = host::api::process::compile_module(
+            data.as_ptr() as u32,
+            data.len() as u32,
+            &mut module_or_error_id as *mut u64 as u32,
+        );
         if result == -1 {
             Err(LunaticError::PermissionDenied)
         } else if result != 0 {
@@ -69,18 +67,16 @@ impl WasmModule {
     {
         let mut process_or_error_id = 0;
         let params: Vec<u8> = params_to_vec(params);
-        let result = unsafe {
-            host::api::process::spawn(
-                0,
-                -1,
-                self.id(),
-                function.as_ptr(),
-                function.len(),
-                params.as_ptr(),
-                params.len(),
-                &mut process_or_error_id as *mut u64,
-            )
-        };
+        let result = host::api::process::spawn(
+            0,
+            -1i64,
+            self.id(),
+            function.as_ptr() as u32,
+            function.len() as u32,
+            params.as_ptr() as u32,
+            params.len() as u32,
+            &mut process_or_error_id as *mut u64 as u32,
+        );
 
         if result == 0 {
             Ok(unsafe { Process::from_id(process_or_error_id) })
@@ -100,18 +96,16 @@ impl WasmModule {
     {
         let mut process_or_error_id = 0;
         let params: Vec<u8> = params_to_vec(params);
-        let result = unsafe {
-            host::api::process::spawn(
-                1,
-                -1,
-                self.id(),
-                function.as_ptr(),
-                function.len(),
-                params.as_ptr(),
-                params.len(),
-                &mut process_or_error_id as *mut u64,
-            )
-        };
+        let result = host::api::process::spawn(
+            1,
+            -1i64,
+            self.id(),
+            function.as_ptr() as u32,
+            function.len() as u32,
+            params.as_ptr() as u32,
+            params.len() as u32,
+            &mut process_or_error_id as *mut u64 as u32,
+        );
 
         if result == 0 {
             Ok(unsafe { Process::from_id(process_or_error_id) })

@@ -31,18 +31,16 @@ pub(crate) fn spawn(
         None => 0,
     };
     let config_id = config.map_or_else(|| ProcessConfig::inherit().id(), |config| config.id());
-    let result = unsafe {
-        api::process::spawn(
-            link,
-            config_id,
-            WasmModule::inherit().id(),
-            func.as_ptr(),
-            func.len(),
-            params.as_ptr(),
-            params.len(),
-            &mut id,
-        )
-    };
+    let result = api::process::spawn(
+        link,
+        config_id,
+        WasmModule::inherit().id(),
+        func.as_ptr() as u32,
+        func.len() as u32,
+        params.as_ptr() as u32,
+        params.len() as u32,
+        &mut id as *mut u64 as u32,
+    );
     if result == 0 {
         Ok(id)
     } else {

@@ -39,14 +39,14 @@ impl Drop for TcpStream {
     fn drop(&mut self) {
         // Only drop stream if it's not already consumed
         if unsafe { !*self.consumed.get() } {
-            unsafe { host::api::networking::drop_tcp_stream(self.id) };
+            host::api::networking::drop_tcp_stream(self.id);
         }
     }
 }
 
 impl Clone for TcpStream {
     fn clone(&self) -> Self {
-        let id = unsafe { host::api::networking::clone_tcp_stream(self.id) };
+        let id = host::api::networking::clone_tcp_stream(self.id);
         Self {
             id,
             read_timeout: self.read_timeout,
@@ -64,7 +64,7 @@ impl Serialize for TcpStream {
         // Mark process as consumed
         unsafe { *self.consumed.get() = true };
         // TODO: Timeout info is not serialized
-        let index = unsafe { host::api::message::push_tcp_stream(self.id) };
+        let index = host::api::message::push_tcp_stream(self.id);
         serializer.serialize_u64(index)
     }
 }
@@ -80,7 +80,7 @@ impl<'de> Visitor<'de> for TcpStreamVisitor {
     where
         E: de::Error,
     {
-        let id = unsafe { host::api::message::take_tcp_stream(index) };
+        let id = host::api::message::take_tcp_stream(index);
         Ok(TcpStream::from(id))
     }
 }
@@ -164,34 +164,30 @@ impl TcpStream {
                 SocketAddr::V4(v4_addr) => {
                     let ip = v4_addr.ip().octets();
                     let port = v4_addr.port() as u32;
-                    unsafe {
-                        host::api::networking::tcp_connect(
-                            4,
-                            ip.as_ptr(),
-                            port,
-                            0,
-                            0,
-                            timeout_ms,
-                            &mut id as *mut u64,
-                        )
-                    }
+                    host::api::networking::tcp_connect(
+                        4,
+                        ip.as_ptr() as u32,
+                        port,
+                        0,
+                        0,
+                        timeout_ms,
+                        &mut id as *mut u64 as u64,
+                    )
                 }
                 SocketAddr::V6(v6_addr) => {
                     let ip = v6_addr.ip().octets();
                     let port = v6_addr.port() as u32;
                     let flow_info = v6_addr.flowinfo();
                     let scope_id = v6_addr.scope_id();
-                    unsafe {
-                        host::api::networking::tcp_connect(
-                            6,
-                            ip.as_ptr(),
-                            port,
-                            flow_info,
-                            scope_id,
-                            timeout_ms,
-                            &mut id as *mut u64,
-                        )
-                    }
+                    host::api::networking::tcp_connect(
+                        6,
+                        ip.as_ptr() as u32,
+                        port,
+                        flow_info,
+                        scope_id,
+                        timeout_ms,
+                        &mut id as *mut u64 as u64,
+                    )
                 }
             };
             if result == 0 {
@@ -211,15 +207,13 @@ impl Write for TcpStream {
 
     fn write_vectored(&mut self, bufs: &[IoSlice<'_>]) -> Result<usize> {
         let mut nwritten_or_error_id: u64 = 0;
-        let result = unsafe {
-            host::api::networking::tcp_write_vectored(
-                self.id,
-                bufs.as_ptr() as *const u32,
-                bufs.len(),
-                self.write_timeout,
-                &mut nwritten_or_error_id as *mut u64,
-            )
-        };
+        let result = host::api::networking::tcp_write_vectored(
+            self.id,
+            bufs.as_ptr() as u32,
+            bufs.len() as u32,
+            self.write_timeout,
+            &mut nwritten_or_error_id as *mut u64 as u64,
+        );
         if result == 0 {
             Ok(nwritten_or_error_id as usize)
         } else {
@@ -230,7 +224,7 @@ impl Write for TcpStream {
 
     fn flush(&mut self) -> Result<()> {
         let mut error_id = 0;
-        match unsafe { host::api::networking::tcp_flush(self.id, &mut error_id as *mut u64) } {
+        match host::api::networking::tcp_flush(self.id, &mut error_id as *mut u64 as u64) {
             0 => Ok(()),
             _ => {
                 let lunatic_error = LunaticError::from(error_id);
@@ -243,15 +237,13 @@ impl Write for TcpStream {
 impl Read for TcpStream {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         let mut nread_or_error_id: u64 = 0;
-        let result = unsafe {
-            host::api::networking::tcp_read(
-                self.id,
-                buf.as_mut_ptr(),
-                buf.len(),
-                self.read_timeout,
-                &mut nread_or_error_id as *mut u64,
-            )
-        };
+        let result = host::api::networking::tcp_read(
+            self.id,
+            buf.as_mut_ptr() as u32,
+            buf.len() as u32,
+            self.read_timeout,
+            &mut nread_or_error_id as *mut u64 as u64,
+        );
         if result == 0 {
             Ok(nread_or_error_id as usize)
         } else {

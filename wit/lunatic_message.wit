@@ -1,0 +1,13 @@
+create-data              : func(tag: s64, capacity: u64)
+write-data               : func(data: u32, data-len: u32) -> u32
+read-data                : func(data: u32, data-len: u32) -> u32
+seek-data                : func(position: u64)
+get-tag                  : func() -> s64
+data-size                : func() -> u64
+push-process             : func(process-id: u64) -> u64
+take-process             : func(index: u64) -> u64
+push-tcp-stream          : func(tcp-stream-id: u64) -> u64
+take-tcp-stream          : func(index: u64) -> u64
+send                     : func(process-id: u64)
+send-receive-skip-search : func(process-id: u64, timeout: u32) -> u32
+receive                  : func(tag: u32, tag-len: u32, timeout: u32) -> u32

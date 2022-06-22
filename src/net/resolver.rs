@@ -19,9 +19,7 @@ impl SocketAddrIterator {
 
 impl Drop for SocketAddrIterator {
     fn drop(&mut self) {
-        unsafe {
-            host::api::networking::drop_dns_iterator(self.id);
-        }
+        host::api::networking::drop_dns_iterator(self.id);
     }
 }
 
@@ -34,16 +32,14 @@ impl Iterator for SocketAddrIterator {
         let mut port: u16 = 0;
         let mut flowinfo: u32 = 0;
         let mut scope_id: u32 = 0;
-        let next = unsafe {
-            host::api::networking::resolve_next(
-                self.id,
-                &mut addr_type as *mut u32,
-                addr.as_mut_ptr(),
-                &mut port as *mut u16,
-                &mut flowinfo as *mut u32,
-                &mut scope_id as *mut u32,
-            )
-        };
+        let next = host::api::networking::resolve_next(
+            self.id,
+            &mut addr_type as *mut u32 as u32,
+            addr.as_mut_ptr() as u32,
+            &mut port as *mut u16 as u16,
+            &mut flowinfo as *mut u32 as u32,
+            &mut scope_id as *mut u32 as u32,
+        );
 
         if next == 0 {
             match addr_type {
@@ -91,14 +87,12 @@ fn resolve_timeout_(
         },
         None => 0,
     };
-    let result = unsafe {
-        host::api::networking::resolve(
-            name.as_ptr(),
-            name.len(),
-            timeout_ms,
-            &mut dns_iter_or_error_id as *mut u64,
-        )
-    };
+    let result = host::api::networking::resolve(
+        name.as_ptr() as u32,
+        name.len() as u32,
+        timeout_ms,
+        &mut dns_iter_or_error_id as *mut u64 as u64,
+    );
     if result != 0 {
         Err(LunaticError::from(dns_iter_or_error_id))
     } else {

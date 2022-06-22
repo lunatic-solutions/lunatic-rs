@@ -18,7 +18,7 @@ impl Drop for LunaticError {
     fn drop(&mut self) {
         match self {
             LunaticError::Error(id) => {
-                unsafe { error::drop(*id) };
+                error::drop(*id);
             }
             LunaticError::PermissionDenied => (),
         }
@@ -35,9 +35,9 @@ impl Debug for LunaticError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             LunaticError::Error(id) => {
-                let size = unsafe { error::string_size(*id) };
+                let size = error::string_size(*id);
                 let mut buff = vec![0; size as usize];
-                unsafe { error::to_string(*id, buff.as_mut_ptr()) };
+                error::to_string(*id, buff.as_mut_ptr() as u32);
                 let error = std::str::from_utf8(&buff).unwrap();
                 write!(f, "{}", error)
             }
@@ -50,9 +50,9 @@ impl Display for LunaticError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             LunaticError::Error(id) => {
-                let size = unsafe { error::string_size(*id) };
+                let size = error::string_size(*id);
                 let mut buff = vec![0; size as usize];
-                unsafe { error::to_string(*id, buff.as_mut_ptr()) };
+                error::to_string(*id, buff.as_mut_ptr() as u32);
                 let error = std::str::from_utf8(&buff).unwrap();
                 write!(f, "{}", error)
             }

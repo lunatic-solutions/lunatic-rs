@@ -1,0 +1,62 @@
+resolve: func(
+  name-str: u32, 
+  name-str-len: u32, 
+  timeout: u32, 
+  id: u64)
+  -> u32
+drop-dns-iterator: func(dns-iter-id: u64)
+resolve-next: func(
+  dns-iter-id: u64,
+  addr-type: u32,
+  addr: u32,
+  port: u16,
+  flow-info: u32,
+  scope-id: u32,
+) -> u32
+tcp-bind: func(
+  addr-type: u32,
+  addr: u32,
+  port: u32,
+  flow-info: u32,
+  scope-id: u32,
+  id: u64,
+) -> u32
+udp-bind: func(
+  addr-type: u32,
+  addr: u32,
+  port: u32,
+  flow-info: u32,
+  scope-id: u32,
+  id: u64,
+) -> u32
+drop-tcp-listener: func(tcp-listener-id: u64)
+drop-udp-socket: func(udp-socket-id: u64)
+tcp-local-addr: func(tcp-listener-id: u64, addr-dns-iter: u64) -> u32
+udp-local-addr: func(udp-socket-id: u64, addr-dns-iter: u64) -> u32
+tcp-accept: func(listener-id: u64, id: u64, peer-dns-iter: u64) -> u32
+tcp-connect: func(
+  addr-type: u32,
+  addr: u32,
+  port: u32,
+  flow-info: u32,
+  scope-id: u32,
+  timeout: u32,
+  id: u64,
+) -> u32
+drop-tcp-stream: func(tcp-stream-id: u64)
+clone-tcp-stream: func(tcp-stream-id: u64) -> u64
+tcp-write-vectored: func(
+  tcp-stream-id: u64,
+  ciovec-array: u32,
+  ciovec-array-len: u32,
+  timeout: u32,
+  opaque: u64,
+) -> u32
+tcp-read: func(
+  tcp-stream-id: u64,
+  buffer: u32,
+  buffer-len: u32,
+  timeout: u32,
+  opaque: u64,
+) -> u32
+tcp-flush: func(tcp-stream-id: u64, error-id: u64) -> u32
