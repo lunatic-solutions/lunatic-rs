@@ -6,10 +6,7 @@ use crate::{
     function_process::{IntoProcess, NoLink},
     host::{
         self,
-        api::{
-            message,
-            process::{node_id, process_id},
-        },
+        api::{distributed::node_id, message, process::process_id},
     },
     serializer::{Bincode, DecodeError, Serializer},
     Process, ProcessConfig, Tag,

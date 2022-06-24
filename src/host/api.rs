@@ -100,7 +100,6 @@ pub mod process {
         pub fn config_can_spawn_processes(config_id: u64) -> u32;
         pub fn config_set_can_spawn_processes(config_id: u64, can: u32);
         pub fn spawn(
-            node_id: u64,
             link: i64,
             config_id: i64,
             module_id: i64,
@@ -113,9 +112,8 @@ pub mod process {
         pub fn sleep_ms(millis: u64);
         pub fn die_when_link_dies(trap: u32);
         pub fn process_id() -> u64;
-        pub fn node_id() -> u64;
-        pub fn link(tag: i64, node_id: u64, process_id: u64);
-        pub fn unlink(node_id: u64, process_id: u64);
+        pub fn link(tag: i64, process_id: u64);
+        pub fn unlink(process_id: u64);
     }
 }
 
@@ -152,7 +150,18 @@ pub mod distributed {
     #[link(wasm_import_module = "lunatic::distributed")]
     extern "C" {
         pub fn get_nodes(nodes_ptr: *mut u64, nodes_len: u32) -> u32;
-
         pub fn nodes_count() -> u32;
+        pub fn node_id() -> u64;
+        pub fn module_id() -> u64;
+        pub fn spawn(
+            node_id: u64,
+            module_id: u64,
+            function: *const u8,
+            function_len: usize,
+            params: *const u8,
+            params_len: usize,
+            id: *mut u64,
+        ) -> u32;
+
     }
 }

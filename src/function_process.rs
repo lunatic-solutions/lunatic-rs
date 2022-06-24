@@ -205,12 +205,12 @@ impl<M, S> Process<M, S> {
     pub fn link(&self) {
         // Don't use tags because a process' [`Mailbox`] can't differentiate between regular
         // messages and signals. Both processes should almost always die when a link is broken.
-        unsafe { host::api::process::link(0, self.node_id, self.id) };
+        unsafe { host::api::process::link(0, self.id) };
     }
 
     /// Unlink processes from the caller.
     pub fn unlink(&self) {
-        unsafe { host::api::process::unlink(self.node_id, self.id) };
+        unsafe { host::api::process::unlink(self.id) };
     }
 
     /// Register process under a name.

@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::{
+    distributed::node_id,
     host::{self, api},
     mailbox::{LinkMailbox, LinkTrapped},
     serializer::{Bincode, Serializer},
@@ -10,10 +11,6 @@ use crate::{
 
 pub fn process_id() -> u64 {
     unsafe { api::process::process_id() }
-}
-
-pub fn node_id() -> u64 {
-    unsafe { api::process::node_id() }
 }
 
 /// Types that implement the `AbstractProcess` trait can be started as processes.

@@ -2,7 +2,7 @@ use std::{any::TypeId, marker::PhantomData, mem::ManuallyDrop};
 
 use crate::{
     function_process::IntoProcess,
-    host::{self, api::process::node_id},
+    host::{self, api::distributed::node_id},
     serializer::{Bincode, Serializer},
     Mailbox, Process, ProcessConfig, Tag,
 };
