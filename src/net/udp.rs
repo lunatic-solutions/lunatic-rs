@@ -131,7 +131,7 @@ impl UdpSocket {
     /// function of a UDP socket is not a useful thing to do: The OS will be
     /// unable to determine whether something is listening on the remote
     /// address without the application sending data.    
-    pub fn connect<A>(&self, addr: A) -> Result<()>
+    pub fn connect<A>(&mut self, addr: A) -> Result<()>
     where
         A: super::ToSocketAddrs,
     {
@@ -174,6 +174,7 @@ impl UdpSocket {
                 }
             };
             if result == 0 {
+                self.id = id;
                 return Ok(());
             }
         }
