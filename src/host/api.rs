@@ -83,6 +83,7 @@ pub mod networking {
             id: *mut u64,
         ) -> u32;
         pub fn udp_connect(
+            udp_socket_id: u64,
             addr_type: u32,
             addr: *const u8,
             port: u32,

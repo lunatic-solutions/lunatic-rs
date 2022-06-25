@@ -135,7 +135,7 @@ impl UdpSocket {
     where
         A: super::ToSocketAddrs,
     {
-        let mut id = self.id;
+        let mut id = 0;
         for addr in addr.to_socket_addrs()? {
             let result = match addr {
                 SocketAddr::V4(v4_addr) => {
@@ -143,6 +143,7 @@ impl UdpSocket {
                     let port = v4_addr.port() as u32;
                     unsafe {
                         host::api::networking::udp_connect(
+                            self.id,
                             4,
                             ip.as_ptr(),
                             port,
@@ -160,6 +161,7 @@ impl UdpSocket {
                     let scope_id = v6_addr.scope_id();
                     unsafe {
                         host::api::networking::udp_connect(
+                            self.id,
                             6,
                             ip.as_ptr(),
                             port,
