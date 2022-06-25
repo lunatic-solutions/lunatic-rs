@@ -195,12 +195,12 @@ impl UdpSocket {
     /// socket.connect("127.0.0.1:8080").expect("connect function failed");
     /// socket.send(&[0, 1, 2]).expect("couldn't send message");
     /// ```
-    pub fn send(&mut self, buf: &mut [u8]) -> Result<usize> {
+    pub fn send(&mut self, buf: &[u8]) -> Result<usize> {
         let mut nsend_or_error_id: u64 = 0;
         let result = unsafe {
             host::api::networking::udp_send(
                 self.id,
-                buf.as_mut_ptr(),
+                buf.as_ptr(),
                 buf.len(),
                 0, // self.write_timeout ?
                 &mut nsend_or_error_id as *mut u64,
