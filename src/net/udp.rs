@@ -254,4 +254,44 @@ impl UdpSocket {
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
+    /// Receives a single datagram message on the socket. On success, returns the number
+    /// of bytes read and the origin.
+    ///
+    /// The function must be called with valid byte array `buf` of sufficient size to
+    /// hold the message bytes. If a message is too long to fit in the supplied buffer,
+    /// excess bytes may be discarded.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use lunatic::net::UdpSocket;
+    ///
+    /// let socket = UdpSocket::bind("127.0.0.1:34254").expect("couldn't bind to address");
+    /// let mut buf = [0; 10];
+    /// let (number_of_bytes, src_addr) = socket.recv_from(&mut buf)
+    ///                                         .expect("Didn't receive data");
+    /// let filled_buf = &mut buf[..number_of_bytes];
+    /// ```
+    pub fn recv_from(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
+        let mut dns_iter_id = 0;
+        let mut nrecv_or_error_id: u64 = 0;
+        let result = unsafe {
+            host::api::networking::udp_receive_from(
+                self.id,
+                buf.as_mut_ptr(),
+                buf.len(),
+                0, // self.read_timeout ?
+                &mut nrecv_or_error_id as *mut u64,
+                &mut dns_iter_id as *mut u64,
+            )
+        };
+        if result == 0 {
+            let mut dns_iter = SocketAddrIterator::from(dns_iter_id);
+            let peer = dns_iter.next().expect("must contain one element"); 
+            Ok((nrecv_or_error_id as usize, peer))
+        } else {
+            let lunatic_error = LunaticError::from(nrecv_or_error_id);
+            Err(Error::new(ErrorKind::Other, lunatic_error))
+        }
+    }
 }
