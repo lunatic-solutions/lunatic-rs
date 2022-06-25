@@ -181,4 +181,77 @@ impl UdpSocket {
         let lunatic_error = LunaticError::from(id);
         Err(Error::new(ErrorKind::Other, lunatic_error))
     }
+    /// Sends data on the socket to the remote address to which it is connected.
+    ///
+    /// [`UdpSocket::connect`] will connect this socket to a remote address. This
+    /// method will fail if the socket is not connected.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use lunatic::net::UdpSocket;
+    ///
+    /// let socket = UdpSocket::bind("127.0.0.1:34254").expect("couldn't bind to address");
+    /// socket.connect("127.0.0.1:8080").expect("connect function failed");
+    /// socket.send(&[0, 1, 2]).expect("couldn't send message");
+    /// ```
+    pub fn send(&mut self, buf: &mut [u8]) -> Result<usize> {
+        let mut nsend_or_error_id: u64 = 0;
+        let result = unsafe {
+            host::api::networking::udp_send(
+                self.id,
+                buf.as_mut_ptr(),
+                buf.len(),
+                0, // self.write_timeout ?
+                &mut nsend_or_error_id as *mut u64,
+            )
+        };
+        if result == 0 {
+            Ok(nsend_or_error_id as usize)
+        } else {
+            let lunatic_error = LunaticError::from(nsend_or_error_id);
+            Err(Error::new(ErrorKind::Other, lunatic_error))
+        }
+    }
+    /// Receives a single datagram message on the socket from the remote address to
+    /// which it is connected. On success, returns the number of bytes read.
+    ///
+    /// The function must be called with valid byte array `buf` of sufficient size to
+    /// hold the message bytes. If a message is too long to fit in the supplied buffer,
+    /// excess bytes may be discarded.
+    ///
+    /// [`UdpSocket::connect`] will connect this socket to a remote address. This
+    /// method will fail if the socket is not connected.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use lunatic::net::UdpSocket;
+    ///
+    /// let socket = UdpSocket::bind("127.0.0.1:34254").expect("couldn't bind to address");
+    /// socket.connect("127.0.0.1:8080").expect("connect function failed");
+    /// let mut buf = [0; 10];
+    /// match socket.recv(&mut buf) {
+    ///     Ok(received) => println!("received {received} bytes {:?}", &buf[..received]),
+    ///     Err(e) => println!("recv function failed: {e:?}"),
+    /// }
+    /// ```
+    pub fn recv(&mut self, buf: &mut [u8]) -> Result<usize> {
+        let mut nrecv_or_error_id: u64 = 0;
+        let result = unsafe {
+            host::api::networking::udp_receive(
+                self.id,
+                buf.as_mut_ptr(),
+                buf.len(),
+                0, // self.write_timeout ?
+                &mut nrecv_or_error_id as *mut u64,
+            )
+        };
+        if result == 0 {
+            Ok(nrecv_or_error_id as usize)
+        } else {
+            let lunatic_error = LunaticError::from(nrecv_or_error_id);
+            Err(Error::new(ErrorKind::Other, lunatic_error))
+        }
+    }
 }

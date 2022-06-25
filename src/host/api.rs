@@ -108,6 +108,20 @@ pub mod networking {
             timeout: u32,
             opaque: *mut u64,
         ) -> u32;
+        pub fn udp_send(
+            udp_socket_id: u64,
+            buffer: *mut u8,
+            buffer_len: usize,
+            timeout: u32,
+            opaque: *mut u64,
+        ) -> u32;
+        pub fn udp_receive(
+            udp_socket_id: u64,
+            buffer: *mut u8,
+            buffer_len: usize,
+            timeout: u32,
+            opaque: *mut u64,
+        ) -> u32;
         pub fn tcp_flush(tcp_stream_id: u64, error_id: *mut u64) -> u32;
     }
 }
