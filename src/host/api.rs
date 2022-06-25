@@ -82,6 +82,15 @@ pub mod networking {
             timeout: u32,
             id: *mut u64,
         ) -> u32;
+        pub fn udp_connect(
+            addr_type: u32,
+            addr: *const u8,
+            port: u32,
+            flow_info: u32,
+            scope_id: u32,
+            timeout: u32,
+            id: *mut u64,
+        ) -> u32;
         pub fn drop_tcp_stream(tcp_stream_id: u64);
         pub fn clone_tcp_stream(tcp_stream_id: u64) -> u64;
         pub fn tcp_write_vectored(
