@@ -287,7 +287,7 @@ impl UdpSocket {
         };
         if result == 0 {
             let mut dns_iter = SocketAddrIterator::from(dns_iter_id);
-            let peer = dns_iter.next().expect("must contain one element"); 
+            let peer = dns_iter.next().expect("must contain one element");
             Ok((nrecv_or_error_id as usize, peer))
         } else {
             let lunatic_error = LunaticError::from(nrecv_or_error_id);
