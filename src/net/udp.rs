@@ -131,7 +131,7 @@ impl UdpSocket {
     /// function of a UDP socket is not a useful thing to do: The OS will be
     /// unable to determine whether something is listening on the remote
     /// address without the application sending data.    
-    pub fn connect<A>(&mut self, addr: A) -> Result<()>
+    pub fn connect<A>(&self, addr: A) -> Result<()>
     where
         A: super::ToSocketAddrs,
     {
@@ -174,7 +174,7 @@ impl UdpSocket {
                 }
             };
             if result == 0 {
-                self.id = id;
+                //self.id = id;
                 return Ok(());
             }
         }
@@ -195,7 +195,7 @@ impl UdpSocket {
     /// socket.connect("127.0.0.1:8080").expect("connect function failed");
     /// socket.send(&[0, 1, 2]).expect("couldn't send message");
     /// ```
-    pub fn send(&mut self, buf: &[u8]) -> Result<usize> {
+    pub fn send(&self, buf: &[u8]) -> Result<usize> {
         let mut nsend_or_error_id: u64 = 0;
         let result = unsafe {
             host::api::networking::udp_send(
@@ -236,7 +236,7 @@ impl UdpSocket {
     ///     Err(e) => println!("recv function failed: {e:?}"),
     /// }
     /// ```
-    pub fn recv(&mut self, buf: &mut [u8]) -> Result<usize> {
+    pub fn recv(&self, buf: &mut [u8]) -> Result<usize> {
         let mut nrecv_or_error_id: u64 = 0;
         let result = unsafe {
             host::api::networking::udp_receive(
