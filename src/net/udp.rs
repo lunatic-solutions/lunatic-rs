@@ -243,7 +243,7 @@ impl UdpSocket {
                 self.id,
                 buf.as_mut_ptr(),
                 buf.len(),
-                0, // self.write_timeout ?
+                0, // self.read_timeout ?
                 &mut nrecv_or_error_id as *mut u64,
             )
         };
