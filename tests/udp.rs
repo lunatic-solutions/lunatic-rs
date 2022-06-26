@@ -37,3 +37,13 @@ fn udp_ping_recv_from_send_to_main() {
     assert_eq!(addr_in, sender_addr);
     assert_eq!(buf, "P2NG".as_bytes());
 }
+
+#[test]
+fn udp_ttl_setter_getter() {
+    let sender = net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    // set_ttl has no error
+    sender.set_ttl(42).unwrap();
+    let cur_ttl = sender.ttl().unwrap();
+
+    assert_eq!(cur_ttl, 42);
+}
