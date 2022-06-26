@@ -115,6 +115,18 @@ pub mod networking {
             timeout: u32,
             opaque: *mut u64,
         ) -> u32;
+        pub fn udp_send_to(
+            udp_socket_id: u64,
+            buffer: *const u8,
+            buffer_len: usize,
+            addr_type: u32,
+            addr: *const u8,
+            port: u32,
+            flow_info: u32,
+            scope_id: u32,
+            timeout: u32,
+            opaque: *mut u64,
+        ) -> u32;
         pub fn udp_receive(
             udp_socket_id: u64,
             buffer: *mut u8,

@@ -213,6 +213,79 @@ impl UdpSocket {
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
+    /// Sends data on the socket to the given address. On success, returns the
+    /// number of bytes written.
+    ///
+    /// Address type can be any implementor of [`ToSocketAddrs`] trait. See its
+    /// documentation for concrete examples.
+    ///
+    /// It is possible for `addr` to yield multiple addresses, but `send_to`
+    /// will only send data to the first address yielded by `addr`.
+    ///
+    /// This will return an error when the IP version of the local socket
+    /// does not match that returned from [`ToSocketAddrs`].
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use lunatic::net::UdpSocket;
+    ///
+    /// let socket = UdpSocket::bind("127.0.0.1:34254").expect("couldn't bind to address");
+    /// socket.send_to(&[0; 10], "127.0.0.1:4242").expect("couldn't send data");
+    /// ```
+    pub fn send_to<A>(&self, addr: A, buf: &[u8]) -> Result<usize>
+    where
+        A: super::ToSocketAddrs,
+    {
+        let mut nsend_or_error_id = 0;
+        for addr in addr.to_socket_addrs()? {
+            let result = match addr {
+                SocketAddr::V4(v4_addr) => {
+                    let ip = v4_addr.ip().octets();
+                    let port = v4_addr.port() as u32;
+                    unsafe {
+                        host::api::networking::udp_send_to(
+                            self.id,
+                            buf.as_ptr(),
+                            buf.len(),
+                            4,
+                            ip.as_ptr(),
+                            port,
+                            0,
+                            0,
+                            0, // timeout_ms
+                            &mut nsend_or_error_id as *mut u64,
+                        )
+                    }
+                }
+                SocketAddr::V6(v6_addr) => {
+                    let ip = v6_addr.ip().octets();
+                    let port = v6_addr.port() as u32;
+                    let flow_info = v6_addr.flowinfo();
+                    let scope_id = v6_addr.scope_id();
+                    unsafe {
+                        host::api::networking::udp_send_to(
+                            self.id,
+                            buf.as_ptr(),
+                            buf.len(),
+                            6,
+                            ip.as_ptr(),
+                            port,
+                            flow_info,
+                            scope_id,
+                            0, // timeout_ms
+                            &mut nsend_or_error_id as *mut u64,
+                        )
+                    }
+                }
+            };
+            if result == 0 {
+                return Ok(nsend_or_error_id as usize);
+            }
+        }
+        let lunatic_error = LunaticError::from(nsend_or_error_id);
+        Err(Error::new(ErrorKind::Other, lunatic_error))
+    }
     /// Receives a single datagram message on the socket from the remote address to
     /// which it is connected. On success, returns the number of bytes read.
     ///
