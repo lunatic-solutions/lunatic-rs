@@ -2,6 +2,7 @@ use std::{
     cell::UnsafeCell,
     io::{Error, ErrorKind, Result},
     net::SocketAddr,
+    time::Duration,
 };
 
 use super::SocketAddrIterator;
@@ -12,8 +13,8 @@ pub struct UdpSocket {
     id: u64,
 
     // Issue - https://github.com/lunatic-solutions/lunatic/issues/95
-    // read_timeout: u32,  // ms
-    // write_timeout: u32, // ms
+    read_timeout: u32,  // ms
+    write_timeout: u32, // ms
 
     // If the UDP Socket is serialized it will be removed from our resources, so we can't call
     // `drop_udp_socket()` anymore on it.
@@ -30,6 +31,50 @@ impl Drop for UdpSocket {
 }
 
 impl UdpSocket {
+    /// Sets the read timeout.
+    ///
+    /// If the value specified is `None`, then read calls will block indefinitely.
+    pub fn set_read_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
+        match duration {
+            None => self.read_timeout = 0,
+            Some(duration) => self.read_timeout = duration.as_millis() as u32,
+        };
+
+        Ok(())
+    }
+    /// Gets the read timeout.
+    ///
+    /// If the value returned is `None`, then read calls will block indefinitely.
+    pub fn read_timeout(&self) -> Result<Option<Duration>> {
+        let result = match self.read_timeout {
+            0 => None,
+            _ => Some(Duration::from_millis(self.read_timeout.into())),
+        };
+
+        Ok(result)
+    }
+    /// Sets the write timeout.
+    ///
+    /// If the value specified is `None`, then write calls will block indefinitely.
+    pub fn set_write_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
+        match duration {
+            None => self.write_timeout = 0,
+            Some(duration) => self.write_timeout = duration.as_millis() as u32,
+        };
+
+        Ok(())
+    }
+    /// Sets the write timeout.
+    ///
+    /// If the value specified is `None`, then write calls will block indefinitely.
+    pub fn write_timeout(&self) -> Result<Option<Duration>> {
+        let result = match self.write_timeout {
+            0 => None,
+            _ => Some(Duration::from_millis(self.write_timeout.into())),
+        };
+
+        Ok(result)
+    }
     /// Creates a new [`UdpSocket`] bound to the given address.
     ///
     /// Binding with a port number of 0 will request that the operating system assigns an available
@@ -79,6 +124,8 @@ impl UdpSocket {
             if result == 0 {
                 return Ok(Self {
                     id,
+                    read_timeout: 0,
+                    write_timeout: 0,
                     consumed: UnsafeCell::new(false),
                 });
             }
@@ -202,7 +249,7 @@ impl UdpSocket {
                 self.id,
                 buf.as_ptr(),
                 buf.len(),
-                0, // self.write_timeout ?
+                self.write_timeout,
                 &mut nsend_or_error_id as *mut u64,
             )
         };
@@ -253,7 +300,7 @@ impl UdpSocket {
                             port,
                             0,
                             0,
-                            0, // timeout_ms
+                            self.write_timeout,
                             &mut nsend_or_error_id as *mut u64,
                         )
                     }
@@ -273,7 +320,7 @@ impl UdpSocket {
                             port,
                             flow_info,
                             scope_id,
-                            0, // timeout_ms
+                            self.write_timeout,
                             &mut nsend_or_error_id as *mut u64,
                         )
                     }
@@ -316,7 +363,7 @@ impl UdpSocket {
                 self.id,
                 buf.as_mut_ptr(),
                 buf.len(),
-                0, // self.read_timeout ?
+                self.read_timeout,
                 &mut nrecv_or_error_id as *mut u64,
             )
         };
@@ -353,7 +400,7 @@ impl UdpSocket {
                 self.id,
                 buf.as_mut_ptr(),
                 buf.len(),
-                0, // self.read_timeout ?
+                self.read_timeout,
                 &mut nrecv_or_error_id as *mut u64,
                 &mut dns_iter_id as *mut u64,
             )
