@@ -367,4 +367,45 @@ impl UdpSocket {
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
+    /// Sets the value for the `IP_TTL` option on this socket.
+    ///
+    /// This value sets the time-to-live field that is used in every packet sent
+    /// from this socket.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use lunatic::net::UdpSocket;
+    ///
+    /// let socket = UdpSocket::bind("127.0.0.1:34254").expect("couldn't bind to address");
+    /// socket.set_ttl(42).expect("set_ttl call failed");
+    /// ```
+    pub fn set_ttl(&self, ttl: u32) -> Result<()> {
+        // no result for this? it's () ?
+        unsafe {
+            host::api::networking::set_udp_socket_ttl(self.id, ttl)
+        };
+        // there is no error for this?
+        Ok(())
+    }
+    /// Gets the value of the `IP_TTL` option for this socket.
+    ///
+    /// For more information about this option, see [`UdpSocket::set_ttl`].
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use lunatic::net::UdpSocket;
+    ///
+    /// let socket = UdpSocket::bind("127.0.0.1:34254").expect("couldn't bind to address");
+    /// socket.set_ttl(42).expect("set_ttl call failed");
+    /// assert_eq!(socket.ttl().unwrap(), 42);
+    /// ```
+    pub fn ttl(&self) -> Result<u32> {
+        // there is no error for this?
+        let result = unsafe {
+            host::api::networking::get_udp_socket_ttl(self.id)
+        };
+        Ok(result)
+    }
 }
