@@ -541,4 +541,27 @@ impl UdpSocket {
             _ => Ok(true),
         }
     }
+    /// Creates a new independently owned handle to the underlying socket.
+    ///
+    /// The returned `UdpSocket` is a reference to the same socket that this
+    /// object references. Both handles will read and write the same port, and
+    /// options set on one socket will be propagated to the other.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use lunatic::net::UdpSocket;
+    ///
+    /// let socket = UdpSocket::bind("127.0.0.1:34254").expect("couldn't bind to address");
+    /// let socket_clone = socket.try_clone().expect("couldn't clone the socket");
+    /// ```
+    pub fn try_clone(&self) -> Result<UdpSocket> {
+        let result = unsafe { host::api::networking::clone_udp_socket(self.id) };
+        Ok(Self {
+            id: result,
+            read_timeout: 0,
+            write_timeout: 0,
+            consumed: UnsafeCell::new(false),
+        })
+    }
 }
