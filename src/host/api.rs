@@ -143,7 +143,9 @@ pub mod networking {
             dns_iter_ptr: *mut u64,
         ) -> u32;
         pub fn set_udp_socket_ttl(udp_socket_id: u64, ttl: u32) -> ();
+        pub fn set_udp_socket_broadcast(udp_socket_id: u64, broadcast: u32) -> ();
         pub fn get_udp_socket_ttl(udp_socket_id: u64) -> u32;
+        pub fn get_udp_socket_broadcast(udp_socket_id: u64) -> i32;
         pub fn tcp_flush(tcp_stream_id: u64, error_id: *mut u64) -> u32;
     }
 }

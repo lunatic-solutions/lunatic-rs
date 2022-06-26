@@ -430,7 +430,30 @@ impl UdpSocket {
     pub fn set_ttl(&self, ttl: u32) -> Result<()> {
         // no result for this? it's () ?
         unsafe { host::api::networking::set_udp_socket_ttl(self.id, ttl) };
-        // there is no error for this?
+        // there is no error for this
+        Ok(())
+    }
+    /// Sets the value of the `SO_BROADCAST` option for this socket.
+    ///
+    /// When enabled, this socket is allowed to send packets to a broadcast
+    /// address.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use lunatic::net::UdpSocket;
+    ///
+    /// let socket = UdpSocket::bind("127.0.0.1:34254").expect("couldn't bind to address");
+    /// socket.set_broadcast(false).expect("set_broadcast call failed");
+    /// ```
+    pub fn set_broadcast(&self, broadcast: bool) -> Result<()> {
+        // no result for this? it's () ?
+        let api_broadcast = match broadcast {
+            true => 1,
+            false => 0,
+        };
+        unsafe { host::api::networking::set_udp_socket_broadcast(self.id, api_broadcast) };
+        // there is no error for this
         Ok(())
     }
     /// Gets the value of the `IP_TTL` option for this socket.
@@ -450,5 +473,25 @@ impl UdpSocket {
         // there is no error for this?
         let result = unsafe { host::api::networking::get_udp_socket_ttl(self.id) };
         Ok(result)
+    }
+    /// Gets the value of the `SO_BROADCAST` option for this socket.
+    ///
+    /// For more information about this option, see [`UdpSocket::set_broadcast`].
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use lunatic::net::UdpSocket;
+    ///
+    /// let socket = UdpSocket::bind("127.0.0.1:34254").expect("couldn't bind to address");
+    /// socket.set_broadcast(false).expect("set_broadcast call failed");
+    /// assert_eq!(socket.broadcast().unwrap(), false);
+    /// ```
+    pub fn broadcast(&self) -> Result<bool> {
+        let result = unsafe { host::api::networking::get_udp_socket_broadcast(self.id) };
+        match result {
+            0 => Ok(false),
+            _ => Ok(true),
+        }
     }
 }

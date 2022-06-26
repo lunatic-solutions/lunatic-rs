@@ -41,9 +41,27 @@ fn udp_ping_recv_from_send_to_main() {
 #[test]
 fn udp_ttl_setter_getter() {
     let sender = net::UdpSocket::bind("127.0.0.1:0").unwrap();
-    // set_ttl has no error
     sender.set_ttl(42).unwrap();
     let cur_ttl = sender.ttl().unwrap();
 
     assert_eq!(cur_ttl, 42);
+}
+
+#[test]
+fn udp_broadcast_setter_getter_true() {
+    let sender = net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    sender.set_broadcast(true).unwrap();
+    let cur_broadcast = sender.broadcast().unwrap();
+
+    assert_eq!(cur_broadcast, true);
+}
+
+#[test]
+fn udp_broadcast_setter_getter_false() {
+    let sender = net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    sender.set_broadcast(true).unwrap();
+    sender.set_broadcast(false).unwrap();
+    let cur_broadcast = sender.broadcast().unwrap();
+
+    assert_eq!(cur_broadcast, false);
 }
