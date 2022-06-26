@@ -564,4 +564,12 @@ impl UdpSocket {
             consumed: UnsafeCell::new(false),
         })
     }
+    /// Dummy fn - This is just to make porting from std easier?
+    pub fn set_nonblocking(&self, _: bool) -> Result<()> {
+        Ok(())
+    }
+    /// Dummy fn - This is just to make porting from std easier?
+    pub fn take_error(&self) -> Result<Option<LunaticError>> {
+        Ok(None)
+    }
 }
