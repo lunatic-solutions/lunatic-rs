@@ -39,6 +39,46 @@ fn udp_ping_recv_from_send_to_main() {
 }
 
 #[test]
+fn udp_ping_sender_clone() {
+    let sender = net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    let sender2 = sender.try_clone().unwrap();
+
+    let receiver = net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    let receiver_addr = receiver.local_addr().unwrap();
+
+    sender2.connect(receiver_addr).expect("couldn't connect");
+    sender2
+        .send("P1NG".as_bytes())
+        .expect("couldn't send message");
+
+    let mut buf = [0; 4];
+    let len_in = receiver.recv(&mut buf).unwrap();
+
+    assert_eq!(len_in, 4);
+    assert_eq!(buf, "P1NG".as_bytes());
+}
+
+#[test]
+fn udp_ping_receiver_clone() {
+    let sender = net::UdpSocket::bind("127.0.0.1:0").unwrap();
+
+    let receiver = net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    let receiver2 = receiver.try_clone().unwrap();
+    let receiver_addr = receiver2.local_addr().unwrap();
+
+    sender.connect(receiver_addr).expect("couldn't connect");
+    sender
+        .send("P1NG".as_bytes())
+        .expect("couldn't send message");
+
+    let mut buf = [0; 4];
+    let len_in = receiver2.recv(&mut buf).unwrap();
+
+    assert_eq!(len_in, 4);
+    assert_eq!(buf, "P1NG".as_bytes());
+}
+
+#[test]
 fn udp_ttl_setter_getter() {
     let sender = net::UdpSocket::bind("127.0.0.1:0").unwrap();
     sender.set_ttl(42).unwrap();
