@@ -382,9 +382,7 @@ impl UdpSocket {
     /// ```
     pub fn set_ttl(&self, ttl: u32) -> Result<()> {
         // no result for this? it's () ?
-        unsafe {
-            host::api::networking::set_udp_socket_ttl(self.id, ttl)
-        };
+        unsafe { host::api::networking::set_udp_socket_ttl(self.id, ttl) };
         // there is no error for this?
         Ok(())
     }
@@ -403,9 +401,7 @@ impl UdpSocket {
     /// ```
     pub fn ttl(&self) -> Result<u32> {
         // there is no error for this?
-        let result = unsafe {
-            host::api::networking::get_udp_socket_ttl(self.id)
-        };
+        let result = unsafe { host::api::networking::get_udp_socket_ttl(self.id) };
         Ok(result)
     }
 }
