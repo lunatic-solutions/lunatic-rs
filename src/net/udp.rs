@@ -8,6 +8,53 @@ use std::{
 use super::SocketAddrIterator;
 use crate::{error::LunaticError, host};
 
+/// A UDP socket.
+///
+/// After creating a `UdpSocket` by [`bind`]ing it to a socket address, data can be
+/// [sent to] and [received from] any other socket address.
+///
+/// Although UDP is a connectionless protocol, this implementation provides an interface
+/// to set an address where data should be sent and received from. After setting a remote
+/// address with [`connect`], data can be sent to and received from that address with
+/// [`send`] and [`recv`].
+///
+/// As stated in the User Datagram Protocol's specification in [IETF RFC 768], UDP is
+/// an unordered, unreliable protocol; refer to [`TcpListener`] and [`TcpStream`] for TCP
+/// primitives.
+///
+/// [`bind`]: UdpSocket::bind
+/// [`connect`]: UdpSocket::connect
+/// [IETF RFC 768]: https://tools.ietf.org/html/rfc768
+/// [`recv`]: UdpSocket::recv
+/// [received from]: UdpSocket::recv_from
+/// [`send`]: UdpSocket::send
+/// [sent to]: UdpSocket::send_to
+/// [`TcpListener`]: crate::net::TcpListener
+/// [`TcpStream`]: crate::net::TcpStream
+///
+/// # Examples
+///
+/// ```no_run
+/// use lunatic::net::UdpSocket;
+///
+/// #[lunatic::main]
+/// fn main(_: Mailbox<()>) -> std::io::Result<()> {
+///     {
+///         let socket = UdpSocket::bind("127.0.0.1:34254")?;
+///
+///         // Receives a single datagram message on the socket. If `buf` is too small to hold
+///         // the message, it will be cut off.
+///         let mut buf = [0; 10];
+///         let (amt, src) = socket.recv_from(&mut buf)?;
+///
+///         // Redeclare `buf` as slice of the received data and send reverse data back to origin.
+///         let buf = &mut buf[..amt];
+///         buf.reverse();
+///         socket.send_to(buf, &src)?;
+///     } // the socket is closed here
+///     Ok(())
+/// }
+/// ```
 #[derive(Debug)]
 pub struct UdpSocket {
     id: u64,
@@ -263,14 +310,14 @@ impl UdpSocket {
     /// Sends data on the socket to the given address. On success, returns the
     /// number of bytes written.
     ///
-    /// Address type can be any implementor of [`ToSocketAddrs`] trait. See its
+    /// Address type can be any implementor of [`super::ToSocketAddrs`] trait. See its
     /// documentation for concrete examples.
     ///
     /// It is possible for `addr` to yield multiple addresses, but `send_to`
     /// will only send data to the first address yielded by `addr`.
     ///
     /// This will return an error when the IP version of the local socket
-    /// does not match that returned from [`ToSocketAddrs`].
+    /// does not match that returned from [`super::ToSocketAddrs`].
     ///
     /// # Examples
     ///
