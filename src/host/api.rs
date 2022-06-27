@@ -22,8 +22,8 @@ pub mod message {
         pub fn data_size() -> u64;
         pub fn push_tcp_stream(tcp_stream_id: u64) -> u64;
         pub fn take_tcp_stream(index: u64) -> u64;
-        pub fn send(node_id: u64, process_id: u64);
-        pub fn send_receive_skip_search(node_id: u64, process_id: u64, timeout: u32) -> u32;
+        pub fn send(process_id: u64);
+        pub fn send_receive_skip_search(process_id: u64, timeout: u32) -> u32;
         pub fn receive(tag: *const i64, tag_len: usize, timeout: u32) -> u32;
     }
 }
@@ -153,6 +153,8 @@ pub mod distributed {
         pub fn nodes_count() -> u32;
         pub fn node_id() -> u64;
         pub fn module_id() -> u64;
+        pub fn send(node_id: u64, process_id: u64);
+        pub fn send_receive_skip_search(node_id: u64, process_id: u64, timeout: u32) -> u32;
         pub fn spawn(
             node_id: u64,
             module_id: u64,

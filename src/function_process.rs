@@ -23,6 +23,7 @@ pub trait IntoProcess<M, S> {
         entry: fn(C, Self),
         link: Option<Tag>,
         config: Option<&ProcessConfig>,
+        node: Option<u64>,
     ) -> Self::Process
     where
         S: Serializer<C> + Serializer<ProtocolCapture<C>>;
@@ -131,7 +132,17 @@ impl<M, S> Process<M, S> {
         T: IntoProcess<M, S>,
         T: NoLink,
     {
-        T::spawn(capture, entry, None, None)
+        T::spawn(capture, entry, None, None, None)
+    }
+
+    /// Spawn a process.
+    pub fn spawn_node<C, T>(node_id: u64, capture: C, entry: fn(C, T)) -> T::Process
+    where
+        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        T: IntoProcess<M, S>,
+        T: NoLink,
+    {
+        T::spawn(capture, entry, None, None, Some(node_id))
     }
 
     /// Spawn a linked process.
@@ -140,7 +151,7 @@ impl<M, S> Process<M, S> {
         S: Serializer<C> + Serializer<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
     {
-        T::spawn(capture, entry, Some(Tag::new()), None)
+        T::spawn(capture, entry, Some(Tag::new()), None, None)
     }
 
     /// Spawn a linked process with a tag.
@@ -151,7 +162,7 @@ impl<M, S> Process<M, S> {
         S: Serializer<C> + Serializer<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
     {
-        T::spawn(capture, entry, Some(tag), None)
+        T::spawn(capture, entry, Some(tag), None, None)
     }
 
     /// Spawn a process with a custom configuration.
@@ -161,7 +172,7 @@ impl<M, S> Process<M, S> {
         T: IntoProcess<M, S>,
         T: NoLink,
     {
-        T::spawn(capture, entry, None, Some(config))
+        T::spawn(capture, entry, None, Some(config), None)
     }
 
     /// Spawn a linked process with a custom configuration.
@@ -174,7 +185,7 @@ impl<M, S> Process<M, S> {
         S: Serializer<C> + Serializer<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
     {
-        T::spawn(capture, entry, Some(Tag::new()), Some(config))
+        T::spawn(capture, entry, Some(Tag::new()), Some(config), None)
     }
 
     /// Spawn a linked process with a custom configuration & provide tag for linking.
@@ -188,7 +199,7 @@ impl<M, S> Process<M, S> {
         S: Serializer<C> + Serializer<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
     {
-        T::spawn(capture, entry, Some(tag), Some(config))
+        T::spawn(capture, entry, Some(tag), Some(config), None)
     }
 
     /// Returns a local node process ID.
@@ -262,10 +273,10 @@ where
     pub fn send(&self, message: M) {
         // Create new message.
         unsafe { host::api::message::create_data(Tag::none().id(), 0) };
-        // During serialization resources will add themself to the message.
+        // During serialization resources will add themselves to the message.
         S::encode(&message).unwrap();
         // Send it!
-        unsafe { host::api::message::send(self.node_id, self.id) };
+        host::send(self.node_id, self.id);
     }
 
     /// Send message to process with a specific tag.
@@ -277,10 +288,10 @@ where
     pub fn tag_send(&self, tag: Tag, message: M) {
         // Create new message.
         unsafe { host::api::message::create_data(tag.id(), 0) };
-        // During serialization resources will add themself to the message.
+        // During serialization resources will add themselves to the message.
         S::encode(&message).unwrap();
         // Send it!
-        unsafe { host::api::message::send(self.node_id, self.id) };
+        host::send(self.node_id, self.id);
     }
 }
 

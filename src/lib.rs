@@ -16,7 +16,7 @@ function.
 
 * **[`Process`]** - A process that can receive messages through a [`Mailbox`] or
     [`Protocol`](protocol::Protocol).
-* **[`AbstractProcess`](process::AbstractProcess)** - Abstracts state managment and message/request
+* **[`AbstractProcess`](process::AbstractProcess)** - Abstracts state management and message/request
     handling.
 * **[`Supervisor`](supervisor::Supervisor)** - A process that can supervise others and re-spawn
     them if they fail.

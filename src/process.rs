@@ -118,6 +118,7 @@ where
     fn start_config(arg: T::Arg, name: Option<&str>, config: &ProcessConfig) -> ProcessRef<T>;
     fn start_link(arg: T::Arg, name: Option<&str>) -> ProcessRef<T>;
     fn start_link_config(arg: T::Arg, name: Option<&str>, config: &ProcessConfig) -> ProcessRef<T>;
+    fn start_node(arg: T::Arg, name: Option<&str>, node: u64) -> ProcessRef<T>;
 }
 
 impl<T> StartProcess<T> for T
@@ -126,22 +127,30 @@ where
 {
     /// Start a process.
     fn start(arg: T::Arg, name: Option<&str>) -> ProcessRef<T> {
-        start::<T>(arg, name, None, None).unwrap()
+        start::<T>(arg, name, None, None, None).unwrap()
     }
 
     /// Start a process with configuration.
     fn start_config(arg: T::Arg, name: Option<&str>, config: &ProcessConfig) -> ProcessRef<T> {
-        start::<T>(arg, name, None, Some(config)).unwrap()
+        start::<T>(arg, name, None, Some(config), None).unwrap()
     }
 
     /// Start a linked process.
     fn start_link(arg: T::Arg, name: Option<&str>) -> ProcessRef<T> {
-        start::<T>(arg, name, Some(Tag::new()), None).unwrap()
+        start::<T>(arg, name, Some(Tag::new()), None, None).unwrap()
     }
 
     /// Start a linked process with configuration.
     fn start_link_config(arg: T::Arg, name: Option<&str>, config: &ProcessConfig) -> ProcessRef<T> {
-        start::<T>(arg, name, Some(Tag::new()), Some(config)).unwrap()
+        start::<T>(arg, name, Some(Tag::new()), Some(config), None).unwrap()
+    }
+
+    fn start_node(
+        arg: <T as AbstractProcess>::Arg,
+        name: Option<&str>,
+        node: u64,
+    ) -> ProcessRef<T> {
+        start::<T>(arg, name, None, None, Some(node)).unwrap()
     }
 }
 
@@ -190,7 +199,7 @@ where
         name: Option<&str>,
     ) -> Result<(ProcessRef<T>, Tag), LinkTrapped> {
         let tag = Tag::new();
-        let proc = start::<T>(arg, name, Some(tag), None)?;
+        let proc = start::<T>(arg, name, Some(tag), None, None)?;
         Ok((proc, tag))
     }
 
@@ -201,7 +210,7 @@ where
         config: &ProcessConfig,
     ) -> Result<(ProcessRef<T>, Tag), LinkTrapped> {
         let tag = Tag::new();
-        let proc = start::<T>(arg, name, Some(tag), Some(config))?;
+        let proc = start::<T>(arg, name, Some(tag), Some(config), None)?;
         Ok((proc, tag))
     }
 }
@@ -211,6 +220,7 @@ fn start<T>(
     name: Option<&str>,
     link: Option<Tag>,
     config: Option<&ProcessConfig>,
+    node: Option<u64>,
 ) -> Result<ProcessRef<T>, LinkTrapped>
 where
     T: AbstractProcess,
@@ -223,7 +233,14 @@ where
     };
     let name = name.map(|name| name.to_owned());
     let parent = <Process<(), Bincode>>::new(node_id(), process_id());
-    let process = if let Some(config) = config {
+    let process = if let Some(node) = node {
+        // no link or config
+        Process::<(), Bincode>::spawn_node(
+            node,
+            (parent, tag, arg, name, T::init as usize as i32),
+            starter::<T>,
+        )
+    } else if let Some(config) = config {
         if link.is_some() {
             Process::<(), Bincode>::spawn_link_config_tag(
                 config,
@@ -400,7 +417,7 @@ where
         unsafe { host::api::message::create_data(Tag::none().id(), 0) };
         Bincode::encode(&Sendable::Shutdown).unwrap();
         // Send the message
-        unsafe { host::api::message::send(self.process.node_id(), self.process.id()) };
+        host::send(self.process.node_id(), self.process.id());
     }
 }
 
@@ -442,7 +459,7 @@ where
         // Then the message itself.
         S::encode(&message).unwrap();
         // Send the message
-        unsafe { host::api::message::send(self.process.node_id(), self.process.id()) };
+        host::send(self.process.node_id(), self.process.id());
     }
 }
 
@@ -484,13 +501,7 @@ where
         // Then the message itself.
         S::encode(&request).unwrap();
         // Send it & wait on a response!
-        unsafe {
-            host::api::message::send_receive_skip_search(
-                self.process.node_id(),
-                self.process.id(),
-                0,
-            )
-        };
+        host::send_receive_skip_search(self.process.node_id(), self.process.id(), 0);
         S::decode().unwrap()
     }
 }
