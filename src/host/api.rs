@@ -82,6 +82,16 @@ pub mod networking {
             timeout: u32,
             id: *mut u64,
         ) -> u32;
+        pub fn udp_connect(
+            udp_socket_id: u64,
+            addr_type: u32,
+            addr: *const u8,
+            port: u32,
+            flow_info: u32,
+            scope_id: u32,
+            timeout: u32,
+            id: *mut u64,
+        ) -> u32;
         pub fn drop_tcp_stream(tcp_stream_id: u64);
         pub fn clone_tcp_stream(tcp_stream_id: u64) -> u64;
         pub fn tcp_write_vectored(
@@ -98,6 +108,45 @@ pub mod networking {
             timeout: u32,
             opaque: *mut u64,
         ) -> u32;
+        pub fn udp_send(
+            udp_socket_id: u64,
+            buffer: *const u8,
+            buffer_len: usize,
+            timeout: u32,
+            opaque: *mut u64,
+        ) -> u32;
+        pub fn udp_send_to(
+            udp_socket_id: u64,
+            buffer: *const u8,
+            buffer_len: usize,
+            addr_type: u32,
+            addr: *const u8,
+            port: u32,
+            flow_info: u32,
+            scope_id: u32,
+            timeout: u32,
+            opaque: *mut u64,
+        ) -> u32;
+        pub fn udp_receive(
+            udp_socket_id: u64,
+            buffer: *mut u8,
+            buffer_len: usize,
+            timeout: u32,
+            opaque: *mut u64,
+        ) -> u32;
+        pub fn udp_receive_from(
+            udp_socket_id: u64,
+            buffer: *mut u8,
+            buffer_len: usize,
+            timeout: u32,
+            opaque: *mut u64,
+            dns_iter_ptr: *mut u64,
+        ) -> u32;
+        pub fn set_udp_socket_ttl(udp_socket_id: u64, ttl: u32);
+        pub fn set_udp_socket_broadcast(udp_socket_id: u64, broadcast: u32);
+        pub fn get_udp_socket_ttl(udp_socket_id: u64) -> u32;
+        pub fn get_udp_socket_broadcast(udp_socket_id: u64) -> i32;
+        pub fn clone_udp_socket(udp_socket_id: u64) -> u64;
         pub fn tcp_flush(tcp_stream_id: u64, error_id: *mut u64) -> u32;
     }
 }
