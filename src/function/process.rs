@@ -1,14 +1,14 @@
 //! As the name suggests, a "function" process can be spawned just from a function. Opposite of a
 //! `AbstractProcess` that requires a `struct`.
 
-use std::marker::PhantomData;
-
 use serde::{Deserialize, Serialize};
+use std::{marker::PhantomData, time::Duration};
 
 use crate::{
     host::{self},
     protocol::ProtocolCapture,
     serializer::{Bincode, Serializer},
+    timer::TimerRef,
     ProcessConfig, Tag,
 };
 
@@ -224,6 +224,11 @@ impl<M, S> Process<M, S> {
         unsafe { host::api::process::unlink(self.id) };
     }
 
+    /// Kill this process
+    pub fn kill(&self) {
+        unsafe { host::api::process::kill(self.id) };
+    }
+
     /// Register process under a name.
     pub fn register(&self, name: &str) {
         // Encode type information in name
@@ -277,6 +282,23 @@ where
         S::encode(&message).unwrap();
         // Send it!
         host::send(self.node_id, self.id);
+    }
+
+    /// Send a message to the process after the specified duration has passed.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the received message can't be serialized into `M`
+    /// with serializer `S`.
+    pub fn send_after(&self, message: M, duration: Duration) -> TimerRef {
+        // Create new message.
+        unsafe { host::api::message::create_data(Tag::none().id(), 0) };
+        // During serialization resources will add themselves to the message.
+        S::encode(&message).unwrap();
+        // Send it!
+        let timer_id =
+            unsafe { host::api::timer::send_after(self.id, duration.as_millis() as u64) };
+        TimerRef::new(timer_id)
     }
 
     /// Send message to process with a specific tag.

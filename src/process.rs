@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, time::Duration};
 
 use crate::{
     distributed::node_id,
@@ -6,7 +6,8 @@ use crate::{
     mailbox::{LinkMailbox, LinkTrapped},
     serializer::{Bincode, Serializer},
     supervisor::{Supervisable, Supervisor, SupervisorConfig},
-    Mailbox, Process, ProcessConfig, Tag,
+    timer::TimerRef,
+    Mailbox, Process, ProcessConfig, ReceiveError, Tag,
 };
 
 pub fn process_id() -> u64 {
@@ -345,6 +346,7 @@ where
     S: Serializer<M>,
 {
     fn send(&self, message: M);
+    fn send_after(&self, message: M, duration: Duration) -> TimerRef;
 }
 
 pub trait Request<M, S>
@@ -353,7 +355,13 @@ where
 {
     type Result;
 
-    fn request(&self, request: M) -> Self::Result;
+    fn request(&self, request: M) -> Self::Result {
+        self.request_timeout(request, Duration::new(0, 0))
+            .expect("no timeout specified")
+    }
+
+    fn request_timeout(&self, request: M, duration: Duration)
+        -> Result<Self::Result, ReceiveError>;
 }
 
 /// A reference to a running process.
@@ -395,6 +403,23 @@ impl<T> ProcessRef<T> {
         } else {
             None
         }
+    }
+
+    /// Link process to the one currently running.
+    pub fn link(&self) {
+        // Don't use tags because a process' [`Mailbox`] can't differentiate between regular
+        // messages and signals. Both processes should almost always die when a link is broken.
+        unsafe { host::api::process::link(0, self.process.id()) };
+    }
+
+    /// Unlink processes from the caller.
+    pub fn unlink(&self) {
+        unsafe { host::api::process::unlink(self.process.id()) };
+    }
+
+    /// Kill this process
+    pub fn kill(&self) {
+        unsafe { host::api::process::kill(self.process.id()) };
     }
 }
 
@@ -461,6 +486,31 @@ where
         // Send the message
         host::send(self.process.node_id(), self.process.id());
     }
+
+    /// Send message to the process after the specified duration has passed.
+    fn send_after(&self, message: M, duration: Duration) -> TimerRef {
+        fn unpacker<TU, MU, SU>(this: &mut TU::State)
+        where
+            TU: ProcessMessage<MU, SU>,
+            SU: Serializer<MU>,
+        {
+            let message: MU = SU::decode().unwrap();
+            <TU as ProcessMessage<MU, SU>>::handle(this, message);
+        }
+
+        // Create new message buffer.
+        unsafe { host::api::message::create_data(Tag::none().id(), 0) };
+        // First encode the handler inside the message buffer.
+        let handler = unpacker::<T, M, S> as usize as i32;
+        let handler_message = Sendable::Message(handler);
+        Bincode::encode(&handler_message).unwrap();
+        // Then the message itself.
+        S::encode(&message).unwrap();
+        // Send the message
+        let timer_id =
+            unsafe { host::api::timer::send_after(self.process.id(), duration.as_millis() as u64) };
+        TimerRef::new(timer_id)
+    }
 }
 
 impl<M, S, T> Request<M, S> for ProcessRef<T>
@@ -471,8 +521,13 @@ where
 {
     type Result = <T as ProcessRequest<M, S>>::Response;
 
-    /// Send request to the process and block until an answer is received.
-    fn request(&self, request: M) -> Self::Result {
+    /// Send request to the process. If duration is 0 block until an answer is received,
+    /// else wait for the supplied duration.
+    fn request_timeout(
+        &self,
+        request: M,
+        duration: Duration,
+    ) -> Result<Self::Result, ReceiveError> {
         fn unpacker<TU, MU, SU>(
             this: &mut TU::State,
             sender: Process<<TU as ProcessRequest<MU, SU>>::Response, SU>,
@@ -501,8 +556,15 @@ where
         // Then the message itself.
         S::encode(&request).unwrap();
         // Send it & wait on a response!
-        host::send_receive_skip_search(self.process.node_id(), self.process.id(), 0);
-        S::decode().unwrap()
+        let result = host::send_receive_skip_search(
+            self.process.node_id(),
+            self.process.id(),
+            duration.as_millis() as u32,
+        );
+        if result == 9027 {
+            return Err(ReceiveError::Timeout);
+        };
+        Ok(S::decode().unwrap())
     }
 }
 

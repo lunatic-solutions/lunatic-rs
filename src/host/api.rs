@@ -28,6 +28,14 @@ pub mod message {
     }
 }
 
+pub mod timer {
+    #[link(wasm_import_module = "lunatic::timer")]
+    extern "C" {
+        pub fn send_after(process_id: u64, duration: u64) -> u64;
+        pub fn cancel_timer(timer_id: u64) -> u32;
+    }
+}
+
 pub mod networking {
     #[link(wasm_import_module = "lunatic::networking")]
     extern "C" {
@@ -50,10 +58,30 @@ pub mod networking {
             scope_id: u32,
             id: *mut u64,
         ) -> u32;
+        pub fn udp_bind(
+            addr_type: u32,
+            addr: *const u8,
+            port: u32,
+            flow_info: u32,
+            scope_id: u32,
+            id: *mut u64,
+        ) -> u32;
         pub fn drop_tcp_listener(tcp_listener_id: u64);
+        pub fn drop_udp_socket(udp_socket_id: u64);
         pub fn tcp_local_addr(tcp_listener_id: u64, addr_dns_iter: *mut u64) -> u32;
+        pub fn udp_local_addr(udp_socket_id: u64, addr_dns_iter: *mut u64) -> u32;
         pub fn tcp_accept(listener_id: u64, id: *mut u64, peer_dns_iter: *mut u64) -> u32;
         pub fn tcp_connect(
+            addr_type: u32,
+            addr: *const u8,
+            port: u32,
+            flow_info: u32,
+            scope_id: u32,
+            timeout: u32,
+            id: *mut u64,
+        ) -> u32;
+        pub fn udp_connect(
+            udp_socket_id: u64,
             addr_type: u32,
             addr: *const u8,
             port: u32,
@@ -78,6 +106,45 @@ pub mod networking {
             timeout: u32,
             opaque: *mut u64,
         ) -> u32;
+        pub fn udp_send(
+            udp_socket_id: u64,
+            buffer: *const u8,
+            buffer_len: usize,
+            timeout: u32,
+            opaque: *mut u64,
+        ) -> u32;
+        pub fn udp_send_to(
+            udp_socket_id: u64,
+            buffer: *const u8,
+            buffer_len: usize,
+            addr_type: u32,
+            addr: *const u8,
+            port: u32,
+            flow_info: u32,
+            scope_id: u32,
+            timeout: u32,
+            opaque: *mut u64,
+        ) -> u32;
+        pub fn udp_receive(
+            udp_socket_id: u64,
+            buffer: *mut u8,
+            buffer_len: usize,
+            timeout: u32,
+            opaque: *mut u64,
+        ) -> u32;
+        pub fn udp_receive_from(
+            udp_socket_id: u64,
+            buffer: *mut u8,
+            buffer_len: usize,
+            timeout: u32,
+            opaque: *mut u64,
+            dns_iter_ptr: *mut u64,
+        ) -> u32;
+        pub fn set_udp_socket_ttl(udp_socket_id: u64, ttl: u32);
+        pub fn set_udp_socket_broadcast(udp_socket_id: u64, broadcast: u32);
+        pub fn get_udp_socket_ttl(udp_socket_id: u64) -> u32;
+        pub fn get_udp_socket_broadcast(udp_socket_id: u64) -> i32;
+        pub fn clone_udp_socket(udp_socket_id: u64) -> u64;
         pub fn tcp_flush(tcp_stream_id: u64, error_id: *mut u64) -> u32;
     }
 }
@@ -114,6 +181,7 @@ pub mod process {
         pub fn process_id() -> u64;
         pub fn link(tag: i64, process_id: u64);
         pub fn unlink(process_id: u64);
+        pub fn kill(process_id: u64);
     }
 }
 
@@ -164,6 +232,14 @@ pub mod distributed {
             params_len: usize,
             id: *mut u64,
         ) -> u32;
+    }
+}
 
+pub mod version {
+    #[link(wasm_import_module = "lunatic::version")]
+    extern "C" {
+        pub fn major() -> u32;
+        pub fn minor() -> u32;
+        pub fn patch() -> u32;
     }
 }

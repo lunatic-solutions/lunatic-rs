@@ -1,10 +1,10 @@
-use std::{any::TypeId, marker::PhantomData, mem::ManuallyDrop};
+use std::{any::TypeId, marker::PhantomData, mem::ManuallyDrop, time::Duration};
 
 use crate::{
-    function_process::IntoProcess,
+    function::process::IntoProcess,
     host,
     serializer::{Bincode, Serializer},
-    Mailbox, Process, ProcessConfig, Tag,
+    Mailbox, Process, ProcessConfig, ReceiveError, Tag,
 };
 
 /// A value that the protocol captures from the parent process.
@@ -111,6 +111,16 @@ where
         // Temporarily cast to right mailbox type.
         let mailbox: Mailbox<A, S> = unsafe { Mailbox::new() };
         let result = mailbox.tag_receive(Some(&[self.tag]));
+        let _: Protocol<TaskEnd, S> = self.cast(); // Only `End` protocols can be dropped
+        result
+    }
+
+    /// A task is a special case of a protocol spawned with the `spawn!(@task ...)` macro.
+    /// It only returns one value.
+    pub fn result_timeout(self, duration: Duration) -> Result<A, ReceiveError> {
+        // Temporarily cast to right mailbox type.
+        let mailbox: Mailbox<A, S> = unsafe { Mailbox::new() };
+        let result = mailbox.tag_receive_timeout(Some(&[self.tag]), duration);
         let _: Protocol<TaskEnd, S> = self.cast(); // Only `End` protocols can be dropped
         result
     }

@@ -3,6 +3,7 @@
 mod resolver;
 mod tcp_listener;
 mod tcp_stream;
+mod udp;
 
 use std::io::{Error, ErrorKind, Result};
 use std::iter::Cloned;
@@ -13,6 +14,7 @@ use std::slice::Iter;
 pub use resolver::{resolve, resolve_timeout, SocketAddrIterator};
 pub use tcp_listener::TcpListener;
 pub use tcp_stream::TcpStream;
+pub use udp::UdpSocket;
 
 /// A trait for objects which can be converted or resolved to one or more
 /// [`SocketAddr`] values.

@@ -3,7 +3,7 @@ use std::{marker::PhantomData, time::Duration};
 use thiserror::Error;
 
 use crate::{
-    function_process::{IntoProcess, NoLink},
+    function::process::{IntoProcess, NoLink},
     host::{self, api::message},
     serializer::{Bincode, DecodeError, Serializer},
     Process, ProcessConfig, Tag,

@@ -30,7 +30,9 @@ To spawn a linked process use the [`spawn_link`] function.
 
 ### Process configuration
 
-Most `spawn` func
+Spawn functions have a variant that takes a [`ProcessConfig`]. This configuration can be used
+to set a memory or CPU limit on the newly spawned process. It can also be used to control file
+and network access permissions of processes.
 
 ### Setup
 
@@ -89,23 +91,24 @@ directory for examples.
 
 mod config;
 mod error;
-mod function_process;
 mod macros;
 mod mailbox;
 mod module;
 mod tag;
 
 pub mod distributed;
+pub mod function;
 pub mod host;
 pub mod net;
 pub mod process;
 pub mod protocol;
 pub mod serializer;
 pub mod supervisor;
+pub mod timer;
 
 pub use config::ProcessConfig;
 pub use error::LunaticError;
-pub use function_process::Process;
+pub use function::process::Process;
 pub use mailbox::{Mailbox, ReceiveError};
 pub use module::WasmModule;
 pub use tag::Tag;
