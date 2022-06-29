@@ -19,7 +19,7 @@ pub fn nodes() -> Vec<u64> {
     nodes
 }
 
-pub fn spawn(node_id: u64, entry: fn(i32), arg: i32) -> Result<u64, LunaticError> {
+pub fn spawn(node_id: u64, config_id: i64, entry: fn(i32), arg: i32) -> Result<u64, LunaticError> {
     let entry = entry as usize as i32;
     let params = params_to_vec(&[Param::I32(entry), Param::I32(arg)]);
     let mut id = 0;
@@ -27,6 +27,7 @@ pub fn spawn(node_id: u64, entry: fn(i32), arg: i32) -> Result<u64, LunaticError
     let result = unsafe {
         api::distributed::spawn(
             node_id,
+            config_id,
             module_id(),
             func.as_ptr(),
             func.len(),

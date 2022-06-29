@@ -47,4 +47,5 @@ fn hello(start: u32, mailbox: Mailbox<u32>) {
     println!("Hi from {}", node_id());
     let m = mailbox.receive();
     println!("{start} + {m} = {}", start + m);
+    sleep(Duration::from_millis(2000));
 }

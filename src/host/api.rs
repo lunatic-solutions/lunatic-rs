@@ -225,6 +225,7 @@ pub mod distributed {
         pub fn send_receive_skip_search(node_id: u64, process_id: u64, timeout: u32) -> u32;
         pub fn spawn(
             node_id: u64,
+            config_id: i64,
             module_id: u64,
             function: *const u8,
             function_len: usize,

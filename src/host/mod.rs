@@ -36,6 +36,7 @@ pub(crate) fn spawn(
         if let Some(node) = node {
             api::distributed::spawn(
                 node,
+                config_id,
                 api::distributed::module_id(),
                 func.as_ptr(),
                 func.len(),
