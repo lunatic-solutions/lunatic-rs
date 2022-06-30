@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::process::{AbstractProcess, ProcessRef, StartFailableProcess};
+use crate::process::{AbstractProcess, ProcessRef, StartFailableProcess, Subscriber};
 use crate::{host, Tag};
 
 /// A `Supervisor` can detect failures (panics) inside [`AbstractProcesses`](AbstractProcess) and
@@ -98,6 +98,7 @@ where
     children: Option<<<T as Supervisor>::Children as Supervisable<T>>::Processes>,
     children_args: Option<<<T as Supervisor>::Children as Supervisable<T>>::Args>,
     children_tags: Option<<<T as Supervisor>::Children as Supervisable<T>>::Tags>,
+    terminate_subscribers: Vec<Subscriber>,
     phantom: PhantomData<T>,
 }
 
@@ -120,7 +121,14 @@ where
     }
 
     fn terminate(self) {
+        self.terminate_subscribers
+            .iter()
+            .for_each(|sub| sub.notify());
         T::Children::terminate(self);
+    }
+
+    pub(crate) fn subscribe_shutdown(&mut self, subscriber: Subscriber) {
+        self.terminate_subscribers.push(subscriber);
     }
 }
 
@@ -134,6 +142,7 @@ where
             children: None,
             children_args: None,
             children_tags: None,
+            terminate_subscribers: vec![],
             strategy: SupervisorStrategy::OneForOne,
         }
     }

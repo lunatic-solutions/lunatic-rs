@@ -249,7 +249,7 @@ where
 
     // Don't return until `init()` finishes
     let mailbox: LinkMailbox<(), Bincode> = unsafe { LinkMailbox::new() };
-    let _ = mailbox.tag_receive(Some(&[tag]))?;
+    mailbox.tag_receive(Some(&[tag]))?;
 
     Ok(ProcessRef {
         process,
@@ -537,6 +537,63 @@ where
             }
         };
         Ok(S::decode().unwrap())
+    }
+}
+
+/// Subscriber represents a process that can be notified by a tagged message with the same tag that
+/// is used when registering the subscription.
+#[derive(Debug)]
+pub(crate) struct Subscriber {
+    process: Process<(), Bincode>,
+    tag: Tag,
+}
+
+impl Subscriber {
+    pub fn new(process: Process<(), Bincode>, tag: Tag) -> Self {
+        Self { process, tag }
+    }
+
+    pub fn notify(&self) {
+        self.process.tag_send(self.tag, ());
+    }
+}
+
+impl<T> ProcessRef<T>
+where
+    T: Supervisor,
+    T: AbstractProcess<State = SupervisorConfig<T>>,
+{
+    /// Block until the Supervisor shuts down.
+    ///
+    /// A tagged message will be sent to the supervisor process as a [`Request`](Sendable::Request)
+    /// and the subscription will be registered. When the supervisor process shuts down, the
+    /// subscribers will be each notified by a response message and therefore be unblocked
+    /// after having received the awaited message.
+    pub fn block_until_shutdown(&self) {
+        fn unpacker<TU>(this: &mut TU::State, sender: Process<(), Bincode>)
+        where
+            TU: Supervisor,
+            TU: AbstractProcess<State = SupervisorConfig<TU>>,
+        {
+            let tag = unsafe { host::api::message::get_tag() };
+            let tag = Tag::from(tag);
+
+            this.subscribe_shutdown(Subscriber::new(sender, tag));
+        }
+
+        let tag = Tag::new();
+        // Create new message buffer.
+        unsafe { host::api::message::create_data(tag.id(), 0) };
+        // Create reference to self
+        let this: Process<()> = unsafe { Process::from_id(host::api::process::this()) };
+        // First encode the handler inside the message buffer.
+        let handler = unpacker::<T> as usize as i32;
+        let handler_message = Sendable::Request(handler, this);
+        Bincode::encode(&handler_message).unwrap();
+        // Send it & wait on a response!
+        unsafe {
+            host::api::message::send_receive_skip_search(self.process.id(), 0);
+        };
     }
 }
 
