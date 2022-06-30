@@ -249,7 +249,7 @@ where
 
     // Don't return until `init()` finishes
     let mailbox: LinkMailbox<(), Bincode> = unsafe { LinkMailbox::new() };
-    let _ = mailbox.tag_receive(Some(&[tag]))?;
+    mailbox.tag_receive(Some(&[tag]))?;
 
     Ok(ProcessRef {
         process,
