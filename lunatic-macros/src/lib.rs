@@ -6,7 +6,10 @@ use quote::quote;
 
 #[proc_macro_attribute]
 pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
-    let input = syn::parse_macro_input!(item as syn::ItemFn);
+    let input: syn::ItemFn = match syn::parse(item.clone()) {
+        Ok(it) => it,
+        Err(e) => return token_stream_with_error(item, e),
+    };
 
     if input.sig.ident != "main" || input.sig.inputs.len() != 1 {
         let msg = "must be on a `main` function with 1 argument of type Mailbox<T>";
@@ -28,4 +31,9 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
     .into()
+}
+
+fn token_stream_with_error(mut tokens: TokenStream, error: syn::Error) -> TokenStream {
+    tokens.extend(TokenStream::from(error.into_compile_error()));
+    tokens
 }
