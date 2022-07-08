@@ -88,6 +88,7 @@ where
 
 pub enum SupervisorStrategy {
     OneForOne,
+    OneForAll,
 }
 
 pub struct SupervisorConfig<T>
@@ -190,8 +191,9 @@ where
 
     fn handle_failure(config: &mut SupervisorConfig<K>, tag: Tag) {
         match config.strategy {
-            // After a failure, just restart the same process.
-            SupervisorStrategy::OneForOne => {
+            // Since there is only one children process, the behavior is the same for both
+            // strategies -- after a failure, restart the child process
+            SupervisorStrategy::OneForOne | SupervisorStrategy::OneForAll => {
                 if tag == config.children_tags.unwrap() {
                     let (proc, tag) = match T1::start_link_or_fail(
                         config.children_args.as_ref().unwrap().0.clone(),
@@ -304,6 +306,31 @@ mod macros {
                                     std::any::type_name::<K>()
                                 );
                             }
+                        }
+                        // After a failure, reset all children
+                        SupervisorStrategy::OneForAll => {
+
+                            $(
+
+                                // shutdown the children that are still running
+                                if tag != config.children_tags.unwrap().$i {
+                                    config.children.as_ref().unwrap().$i.shutdown();
+                                }
+
+                                let (proc, tag) = match $args::start_link_or_fail(
+                                    config.children_args.as_ref().unwrap().$i.0.clone(),
+                                    config.children_args.as_ref().unwrap().$i.1.as_deref(),
+                                ) {
+                                    Ok(result) => result,
+                                    Err(_) => panic!(
+                                        "Supervisor failed to start child `{}`",
+                                        std::any::type_name::<$args>()
+                                    ),
+                                };
+                                (*config.children.as_mut().unwrap()).$i = proc;
+                                (*config.children_tags.as_mut().unwrap()).$i = tag;
+
+                            )*
                         }
                     }
                 }

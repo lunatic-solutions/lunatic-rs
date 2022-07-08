@@ -84,7 +84,7 @@ fn one_failing_process() {
 }
 
 #[test]
-fn two_failing_process() {
+fn two_failing_process_one_for_one() {
     struct Sup;
     impl Supervisor for Sup {
         type Arg = ();
@@ -145,6 +145,73 @@ fn two_failing_process() {
     }
     // But b should
     for i in 66..100 {
+        assert_eq!(i, b.request(Count));
+        b.send(Inc);
+    }
+}
+
+#[test]
+fn two_failing_process_one_for_all() {
+    struct Sup;
+    impl Supervisor for Sup {
+        type Arg = ();
+        type Children = (A, A);
+
+        fn init(config: &mut SupervisorConfig<Self>, _: ()) {
+            config.set_strategy(SupervisorStrategy::OneForAll);
+            let starting_state_a = 33;
+            let starting_state_b = 44;
+            config.children_args(((starting_state_a, None), (starting_state_b, None)));
+        }
+    }
+
+    let sup = Sup::start((), None);
+
+    let (a, b) = sup.children();
+
+    // Starting state should be 33 for a
+    for i in 33..36 {
+        assert_eq!(i, a.request(Count));
+        a.send(Inc);
+    }
+    // Starting state should be 44 for b
+    for i in 44..88 {
+        assert_eq!(i, b.request(Count));
+        b.send(Inc);
+    }
+
+    // Panicking b is going to restart the count
+    b.send(Panic);
+
+    // We need to re-acquire reference to child and give a bit of time to the supervisor to re-spawn it.
+    sleep(Duration::from_millis(10));
+    let (a, b) = sup.children();
+
+    // The state for a should be restarted.
+    for i in 33..36 {
+        assert_eq!(i, a.request(Count));
+        a.send(Inc);
+    }
+    // So should b
+    for i in 44..66 {
+        assert_eq!(i, b.request(Count));
+        b.send(Inc);
+    }
+
+    // Panicking a is going to restart the count
+    a.send(Panic);
+
+    // We need to re-acquire reference to child and give a bit of time to the supervisor to re-spawn it.
+    sleep(Duration::from_millis(10));
+    let (a, b) = sup.children();
+
+    // The state for a should be restarted.
+    for i in 33..50 {
+        assert_eq!(i, a.request(Count));
+        a.send(Inc);
+    }
+    // So should a
+    for i in 44..66 {
         assert_eq!(i, b.request(Count));
         b.send(Inc);
     }
