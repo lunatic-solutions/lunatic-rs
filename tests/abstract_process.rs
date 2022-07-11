@@ -332,3 +332,26 @@ fn request_timeout() {
 
     assert!(response.is_err());
 }
+
+#[test]
+fn shutdown_timeout() {
+    struct A;
+
+    impl AbstractProcess for A {
+        type Arg = ();
+        type State = A;
+
+        fn init(_: ProcessRef<Self>, _: ()) -> A {
+            A
+        }
+
+        fn terminate(_: Self::State) {
+            sleep(Duration::from_millis(25));
+        }
+    }
+
+    let a = A::start_link((), None);
+    let response = a.shutdown_timeout(Duration::from_millis(10));
+
+    assert!(response.is_err());
+}
