@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::{marker::PhantomData, time::Duration};
 
 use crate::{
-    host::{self},
+    host::{self, node_id, process_id},
     protocol::ProtocolCapture,
     serializer::{Bincode, Serializer},
     timer::TimerRef,
@@ -124,6 +124,10 @@ impl<M, S> Process<M, S> {
             id: process_id,
             serializer_type: PhantomData,
         }
+    }
+
+    pub fn this() -> Self {
+        Self::new(node_id(), process_id())
     }
     /// Spawn a process.
     pub fn spawn<C, T>(capture: C, entry: fn(C, T)) -> T::Process

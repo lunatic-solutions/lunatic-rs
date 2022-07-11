@@ -613,7 +613,7 @@ where
         // Create new message buffer.
         unsafe { host::api::message::create_data(tag.id(), 0) };
         // Create reference to self
-        let this: Process<()> = unsafe { Process::from_id(host::api::process::this()) };
+        let this: Process<()> = Process::this();
         // First encode the handler inside the message buffer.
         let handler = unpacker::<T> as usize as i32;
         let handler_message = Sendable::Request(handler, this);
