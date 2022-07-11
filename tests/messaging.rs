@@ -60,6 +60,14 @@ fn message_resource(mailbox: Mailbox<Proc>) {
 }
 
 #[test]
+fn message_dead_process() {
+    let child = Process::spawn((), |_, _: Mailbox<()>| {});
+    // Give enough time to finish
+    lunatic::sleep(Duration::from_millis(100));
+    child.send(());
+}
+
+#[test]
 fn request_reply(mailbox: Mailbox<u64>) {
     struct Adder;
     impl AbstractProcess for Adder {
