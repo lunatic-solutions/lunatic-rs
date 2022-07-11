@@ -27,8 +27,6 @@ fn shutdown() {
 
     let a = A::start_link((), None);
     a.shutdown();
-
-    sleep(Duration::from_millis(100));
 }
 
 #[test]
