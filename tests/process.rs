@@ -114,3 +114,11 @@ fn kill_process() {
     // Give enough time to fail
     lunatic::sleep(Duration::from_millis(100));
 }
+
+#[test]
+fn unlink_shouldnt_fail_on_dead_process() {
+    let child = Process::spawn_link((), |_, _: Mailbox<()>| {});
+    // Give enough time for process to finish
+    lunatic::sleep(Duration::from_millis(100));
+    child.unlink();
+}

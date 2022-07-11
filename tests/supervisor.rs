@@ -4,7 +4,7 @@ use lunatic::{
     process::{
         AbstractProcess, Message, ProcessMessage, ProcessRef, ProcessRequest, Request, StartProcess,
     },
-    sleep,
+    sleep, spawn,
     supervisor::{Supervisor, SupervisorConfig, SupervisorStrategy},
     test,
 };
@@ -266,4 +266,31 @@ fn lookup_children() {
     // Holding multiple references is ok
     let third = ProcessRef::<A>::lookup("third").unwrap();
     assert_eq!(third.request(Count), 4);
+}
+
+#[test]
+fn block_until_shutdown() {
+    struct Sup;
+    impl Supervisor for Sup {
+        type Arg = ();
+        type Children = A;
+
+        fn init(config: &mut SupervisorConfig<Self>, _: ()) {
+            config.set_strategy(SupervisorStrategy::OneForOne);
+            config.children_args((0, None));
+        }
+    }
+
+    let sup = Sup::start_link((), None);
+    let sup_cloned = sup.clone();
+
+    // Shutdown supervisor process after a delay
+    spawn!(|sup, _mailbox: Mailbox<()>| {
+        sleep(Duration::from_millis(10));
+        sup.shutdown();
+    });
+
+    // block main process until supervisor shuts down
+    // the test will hang if block_until_shutdown() fails
+    sup_cloned.block_until_shutdown()
 }
