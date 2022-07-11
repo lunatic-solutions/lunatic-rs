@@ -429,7 +429,6 @@ where
         Bincode::encode(&Sendable::Shutdown(this)).unwrap();
 
         // Send the message and wait for response
-        // unsafe { host::api::message::send(self.process.id()) };
         unsafe {
             let result = host::api::message::send_receive_skip_search(
                 self.process.id(),
