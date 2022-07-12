@@ -413,8 +413,6 @@ fn shutdown() {
 
     let sup = Sup::start((), None);
     sup.shutdown();
-
-    sleep(Duration::from_millis(100));
 }
 
 #[test]
