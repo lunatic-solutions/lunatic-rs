@@ -216,6 +216,127 @@ fn two_failing_process_one_for_all() {
         b.send(Inc);
     }
 }
+#[test]
+fn four_failing_process_rest_for_all() {
+    struct Sup;
+    impl Supervisor for Sup {
+        type Arg = ();
+        type Children = (A, A, A, A);
+
+        fn init(config: &mut SupervisorConfig<Self>, _: ()) {
+            config.set_strategy(SupervisorStrategy::RestForOne);
+            let starting_state_a = 33;
+            let starting_state_b = 44;
+            let starting_state_c = 55;
+            let starting_state_d = 66;
+            config.children_args((
+                (starting_state_a, None),
+                (starting_state_b, None),
+                (starting_state_c, None),
+                (starting_state_d, None),
+            ));
+        }
+    }
+
+    let sup = Sup::start((), None);
+
+    let (a, b, c, d) = sup.children();
+
+    // Starting state should be 33 for a
+    for i in 33..36 {
+        assert_eq!(i, a.request(Count));
+        a.send(Inc);
+    }
+    // Starting state should be 44 for b
+    for i in 44..48 {
+        assert_eq!(i, b.request(Count));
+        b.send(Inc);
+    }
+    // Starting state should be 55 for c
+    for i in 55..59 {
+        assert_eq!(i, c.request(Count));
+        c.send(Inc);
+    }
+    // Starting state should be 66 for d
+    for i in 66..70 {
+        assert_eq!(i, d.request(Count));
+        d.send(Inc);
+    }
+
+    // Panicking b is going to restart the count
+    b.send(Panic);
+
+    // We need to re-acquire reference to child and give a bit of time to the supervisor to re-spawn it.
+    sleep(Duration::from_millis(10));
+    let (a, b, c, d) = sup.children();
+
+    // The state for a shouldn't be restarted.
+    for i in 36..99 {
+        assert_eq!(i, a.request(Count));
+        a.send(Inc);
+    }
+    // But b, c, d should
+    for i in 44..48 {
+        assert_eq!(i, b.request(Count));
+        b.send(Inc);
+    }
+    for i in 55..59 {
+        assert_eq!(i, c.request(Count));
+        c.send(Inc);
+    }
+    for i in 66..70 {
+        assert_eq!(i, d.request(Count));
+        d.send(Inc);
+    }
+
+    // Panicking the first child should restart all children
+    a.send(Panic);
+
+    // We need to re-acquire reference to child and give a bit of time to the supervisor to re-spawn it.
+    sleep(Duration::from_millis(10));
+    let (a, b, c, d) = sup.children();
+
+    // All children should have restarted
+    for i in 33..36 {
+        assert_eq!(i, a.request(Count));
+        a.send(Inc);
+    }
+    for i in 44..48 {
+        assert_eq!(i, b.request(Count));
+        b.send(Inc);
+    }
+    for i in 55..59 {
+        assert_eq!(i, c.request(Count));
+        c.send(Inc);
+    }
+    for i in 66..70 {
+        assert_eq!(i, d.request(Count));
+        d.send(Inc);
+    }
+
+    // Panicking the last child
+    d.send(Panic);
+    sleep(Duration::from_millis(10));
+    let (a, b, c, d) = sup.children();
+
+    // Only the last child should have restarted
+    for i in 36..40 {
+        assert_eq!(i, a.request(Count));
+        a.send(Inc);
+    }
+    for i in 48..52 {
+        assert_eq!(i, b.request(Count));
+        b.send(Inc);
+    }
+    for i in 59..63 {
+        assert_eq!(i, c.request(Count));
+        c.send(Inc);
+    }
+    for i in 66..70 {
+        assert_eq!(i, d.request(Count));
+        d.send(Inc);
+    }
+}
 
 #[test]
 fn ten_children_sup() {
