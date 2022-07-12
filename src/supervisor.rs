@@ -257,6 +257,8 @@ mod macros {
         ($config:ident, after $tag:ident, [$head_i:tt $($rest_i:tt)*]) => { // recursive case
             if $tag == $config.children_tags.as_ref().unwrap().$head_i {
                 macros::reverse_shutdown!($config, [$($rest_i)*]);
+            } else {
+                macros::reverse_shutdown!($config, after $tag, [$($rest_i)*]);
             }
         };
     }
