@@ -326,8 +326,12 @@ fn starter<T>(
                         unsafe { std::mem::transmute(handler) };
                     handler(&mut state, sender);
                 }
-                Sendable::Shutdown => {
+                Sendable::Shutdown(sender) => {
+                    // Get tag out of message first
+                    let tag = unsafe { host::api::message::get_tag() };
+                    let tag = Tag::from(tag);
                     T::terminate(state);
+                    sender.tag_send(tag, ());
                     break;
                 }
             },
@@ -438,11 +442,31 @@ where
 {
     /// Shut down process
     pub fn shutdown(&self) {
+        self.shutdown_timeout(Duration::new(0, 0))
+            .expect("no timeout specified")
+    }
+
+    /// Shut down process with a timeout
+    pub fn shutdown_timeout(&self, duration: Duration) -> Result<(), ReceiveError> {
         // Create new message buffer.
-        unsafe { host::api::message::create_data(Tag::none().id(), 0) };
-        Bincode::encode(&Sendable::Shutdown).unwrap();
-        // Send the message
-        host::send(self.process.node_id(), self.process.id());
+        let tag = Tag::new();
+        unsafe { host::api::message::create_data(tag.id(), 0) };
+
+        // Create reference to self
+        let this: Process<()> = Process::this();
+
+        Bincode::encode(&Sendable::Shutdown(this)).unwrap();
+
+        // Send the message and wait for response
+        let result = host::send_receive_skip_search(
+            self.process.node_id(),
+            self.process.id(),
+            duration.as_millis() as u32,
+        );
+        if result == 9027 {
+            return Err(ReceiveError::Timeout);
+        }
+        Ok(())
     }
 }
 
@@ -455,7 +479,7 @@ enum Sendable {
     // The process type can't be carried over as a generic and is set here to `()`, but overwritten
     // at the time of returning with the correct type.
     Request(i32, Process<()>),
-    Shutdown,
+    Shutdown(Process<()>),
 }
 
 impl<M, S, T> Message<M, S> for ProcessRef<T>
