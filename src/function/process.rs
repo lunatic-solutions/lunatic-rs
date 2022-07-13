@@ -321,16 +321,19 @@ where
     }
 }
 
-// Processes are equal if their UUID is equal.
+// Processes are equal if their process id and node id are equal.
 impl<M, S> PartialEq for Process<M, S> {
     fn eq(&self, other: &Self) -> bool {
-        self.id() == other.id()
+        self.id() == other.id() && self.node_id() == other.node_id()
     }
 }
 
 impl<M, S> std::fmt::Debug for Process<M, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Process").field("uuid", &self.id()).finish()
+        f.debug_struct("Process")
+            .field("id", &self.id())
+            .field("node_id", &self.node_id())
+            .finish()
     }
 }
 
@@ -342,8 +345,4 @@ impl<M, S> Clone for Process<M, S> {
             serializer_type: self.serializer_type,
         }
     }
-}
-
-impl<M, S> Drop for Process<M, S> {
-    fn drop(&mut self) {}
 }
