@@ -9,14 +9,68 @@ use lunatic::{
     test,
 };
 
-struct A(u32);
+const LOGGER_NAME: &'static str = "logger/assert_order";
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+enum LogEvent {
+    Init(char),
+    Panic(char),
+    Shutdown(char),
+}
+
+struct Logger {
+    logs: Vec<LogEvent>,
+}
+
+impl AbstractProcess for Logger {
+    type Arg = ();
+    type State = Logger;
+
+    fn init(_: ProcessRef<Self>, _arg: Self::Arg) -> Self::State {
+        Logger { logs: vec![] }
+    }
+}
+
+impl ProcessRequest<LogEvent> for Logger {
+    type Response = ();
+
+    fn handle(state: &mut Self::State, request: LogEvent) -> Self::Response {
+        state.logs.push(request);
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct TakeLogs;
+impl ProcessRequest<TakeLogs> for Logger {
+    type Response = Vec<LogEvent>;
+
+    fn handle(state: &mut Self::State, _request: TakeLogs) -> Self::Response {
+        std::mem::replace(&mut state.logs, vec![])
+    }
+}
+
+struct A {
+    count: u32,
+    name: char,
+}
 
 impl AbstractProcess for A {
-    type Arg = u32;
+    type Arg = (u32, char);
     type State = A;
 
-    fn init(_: ProcessRef<Self>, start: u32) -> A {
-        A(start)
+    fn init(_: ProcessRef<Self>, (count, name): Self::Arg) -> A {
+        if let Some(logger) = ProcessRef::<Logger>::lookup(LOGGER_NAME) {
+            let log = LogEvent::Init(name);
+            logger.request(log);
+        }
+        A { count, name }
+    }
+
+    fn terminate(state: Self::State) {
+        if let Some(logger) = ProcessRef::<Logger>::lookup(LOGGER_NAME) {
+            let log = LogEvent::Shutdown(state.name);
+            logger.request(log);
+        }
     }
 }
 
@@ -24,7 +78,7 @@ impl AbstractProcess for A {
 struct Inc;
 impl ProcessMessage<Inc> for A {
     fn handle(state: &mut Self::State, _: Inc) {
-        state.0 += 1;
+        state.count += 1;
     }
 }
 
@@ -34,14 +88,18 @@ impl ProcessRequest<Count> for A {
     type Response = u32;
 
     fn handle(state: &mut Self::State, _: Count) -> u32 {
-        state.0
+        state.count
     }
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Panic;
 impl ProcessMessage<Panic> for A {
-    fn handle(_: &mut Self::State, _: Panic) {
+    fn handle(state: &mut Self::State, _: Panic) {
+        if let Some(logger) = ProcessRef::<Logger>::lookup(LOGGER_NAME) {
+            let log = LogEvent::Panic(state.name);
+            logger.request(log);
+        }
         panic!();
     }
 }
@@ -55,7 +113,7 @@ fn one_failing_process() {
 
         fn init(config: &mut SupervisorConfig<Self>, _: ()) {
             config.set_strategy(SupervisorStrategy::OneForOne);
-            let starting_state = 4;
+            let starting_state = (4, ' ');
             config.children_args((starting_state, None));
         }
     }
@@ -92,12 +150,13 @@ fn two_failing_process_one_for_one() {
 
         fn init(config: &mut SupervisorConfig<Self>, _: ()) {
             config.set_strategy(SupervisorStrategy::OneForOne);
-            let starting_state_a = 33;
-            let starting_state_b = 44;
+            let starting_state_a = (33, 'a');
+            let starting_state_b = (44, 'b');
             config.children_args(((starting_state_a, None), (starting_state_b, None)));
         }
     }
 
+    let logger = Logger::start_link((), Some(LOGGER_NAME));
     let sup = Sup::start((), None);
 
     let (a, b) = sup.children();
@@ -118,6 +177,21 @@ fn two_failing_process_one_for_one() {
 
     // We need to re-acquire reference to child and give a bit of time to the supervisor to re-spawn it.
     sleep(Duration::from_millis(10));
+
+    let log = logger.request(TakeLogs);
+    assert_eq!(
+        log,
+        vec![
+            // initial spawn
+            LogEvent::Init('a'),
+            LogEvent::Init('b'),
+            // panic
+            LogEvent::Panic('b'),
+            // restart
+            LogEvent::Init('b'),
+        ]
+    );
+
     let (a, b) = sup.children();
 
     // The state for a shouldn't be restarted.
@@ -136,6 +210,18 @@ fn two_failing_process_one_for_one() {
 
     // We need to re-acquire reference to child and give a bit of time to the supervisor to re-spawn it.
     sleep(Duration::from_millis(10));
+
+    let log = logger.request(TakeLogs);
+    assert_eq!(
+        log,
+        vec![
+            // panic
+            LogEvent::Panic('a'),
+            // restart
+            LogEvent::Init('a'),
+        ]
+    );
+
     let (a, b) = sup.children();
 
     // The state for a shouldn't be restarted.
@@ -159,12 +245,13 @@ fn two_failing_process_one_for_all() {
 
         fn init(config: &mut SupervisorConfig<Self>, _: ()) {
             config.set_strategy(SupervisorStrategy::OneForAll);
-            let starting_state_a = 33;
-            let starting_state_b = 44;
+            let starting_state_a = (33, 'a');
+            let starting_state_b = (44, 'b');
             config.children_args(((starting_state_a, None), (starting_state_b, None)));
         }
     }
 
+    let logger = Logger::start_link((), Some(LOGGER_NAME));
     let sup = Sup::start((), None);
 
     let (a, b) = sup.children();
@@ -182,9 +269,26 @@ fn two_failing_process_one_for_all() {
 
     // Panicking b is going to restart the count
     b.send(Panic);
-
     // We need to re-acquire reference to child and give a bit of time to the supervisor to re-spawn it.
     sleep(Duration::from_millis(10));
+
+    let log = logger.request(TakeLogs);
+    assert_eq!(
+        log,
+        vec![
+            // initial spawn
+            LogEvent::Init('a'),
+            LogEvent::Init('b'),
+            // panic
+            LogEvent::Panic('b'),
+            // shutdown
+            LogEvent::Shutdown('a'),
+            // restart
+            LogEvent::Init('a'),
+            LogEvent::Init('b'),
+        ]
+    );
+
     let (a, b) = sup.children();
 
     // The state for a should be restarted.
@@ -200,9 +304,23 @@ fn two_failing_process_one_for_all() {
 
     // Panicking a is going to restart the count
     a.send(Panic);
-
     // We need to re-acquire reference to child and give a bit of time to the supervisor to re-spawn it.
     sleep(Duration::from_millis(10));
+
+    let log = logger.request(TakeLogs);
+    assert_eq!(
+        log,
+        vec![
+            // panic
+            LogEvent::Panic('a'),
+            // shutdown
+            LogEvent::Shutdown('b'),
+            // restart
+            LogEvent::Init('a'),
+            LogEvent::Init('b'),
+        ]
+    );
+
     let (a, b) = sup.children();
 
     // The state for a should be restarted.
@@ -225,10 +343,10 @@ fn four_failing_process_rest_for_all() {
 
         fn init(config: &mut SupervisorConfig<Self>, _: ()) {
             config.set_strategy(SupervisorStrategy::RestForOne);
-            let starting_state_a = 33;
-            let starting_state_b = 44;
-            let starting_state_c = 55;
-            let starting_state_d = 66;
+            let starting_state_a = (33, 'a');
+            let starting_state_b = (44, 'b');
+            let starting_state_c = (55, 'c');
+            let starting_state_d = (66, 'd');
             config.children_args((
                 (starting_state_a, None),
                 (starting_state_b, None),
@@ -238,104 +356,77 @@ fn four_failing_process_rest_for_all() {
         }
     }
 
+    let logger = Logger::start_link((), Some(LOGGER_NAME));
     let sup = Sup::start((), None);
 
-    let (a, b, c, d) = sup.children();
-
-    // Starting state should be 33 for a
-    for i in 33..36 {
-        assert_eq!(i, a.request(Count));
-        a.send(Inc);
-    }
-    // Starting state should be 44 for b
-    for i in 44..48 {
-        assert_eq!(i, b.request(Count));
-        b.send(Inc);
-    }
-    // Starting state should be 55 for c
-    for i in 55..59 {
-        assert_eq!(i, c.request(Count));
-        c.send(Inc);
-    }
-    // Starting state should be 66 for d
-    for i in 66..70 {
-        assert_eq!(i, d.request(Count));
-        d.send(Inc);
-    }
+    let (_, b, _, _) = sup.children();
 
     // Panicking b is going to restart the count
     b.send(Panic);
-
     // We need to re-acquire reference to child and give a bit of time to the supervisor to re-spawn it.
     sleep(Duration::from_millis(10));
-    let (a, b, c, d) = sup.children();
 
-    // The state for a shouldn't be restarted.
-    for i in 36..99 {
-        assert_eq!(i, a.request(Count));
-        a.send(Inc);
-    }
-    // But b, c, d should
-    for i in 44..48 {
-        assert_eq!(i, b.request(Count));
-        b.send(Inc);
-    }
-    for i in 55..59 {
-        assert_eq!(i, c.request(Count));
-        c.send(Inc);
-    }
-    for i in 66..70 {
-        assert_eq!(i, d.request(Count));
-        d.send(Inc);
-    }
+    let logs = logger.request(TakeLogs);
+    assert_eq!(
+        logs,
+        vec![
+            // initial spawn
+            LogEvent::Init('a'),
+            LogEvent::Init('b'),
+            LogEvent::Init('c'),
+            LogEvent::Init('d'),
+            // panic
+            LogEvent::Panic('b'),
+            // shutdown
+            LogEvent::Shutdown('d'),
+            LogEvent::Shutdown('c'),
+            // restart
+            LogEvent::Init('b'),
+            LogEvent::Init('c'),
+            LogEvent::Init('d'),
+        ]
+    );
 
     // Panicking the first child should restart all children
+    let (a, _, _, _) = sup.children();
     a.send(Panic);
-
     // We need to re-acquire reference to child and give a bit of time to the supervisor to re-spawn it.
     sleep(Duration::from_millis(10));
-    let (a, b, c, d) = sup.children();
 
-    // All children should have restarted
-    for i in 33..36 {
-        assert_eq!(i, a.request(Count));
-        a.send(Inc);
-    }
-    for i in 44..48 {
-        assert_eq!(i, b.request(Count));
-        b.send(Inc);
-    }
-    for i in 55..59 {
-        assert_eq!(i, c.request(Count));
-        c.send(Inc);
-    }
-    for i in 66..70 {
-        assert_eq!(i, d.request(Count));
-        d.send(Inc);
-    }
+    let logs = logger.request(TakeLogs);
+    assert_eq!(
+        logs,
+        vec![
+            // panic
+            LogEvent::Panic('a'),
+            // shutdown
+            LogEvent::Shutdown('d'),
+            LogEvent::Shutdown('c'),
+            LogEvent::Shutdown('b'),
+            // restart
+            LogEvent::Init('a'),
+            LogEvent::Init('b'),
+            LogEvent::Init('c'),
+            LogEvent::Init('d'),
+        ]
+    );
 
     // Panicking the last child
+    let (_, _, _, d) = sup.children();
     d.send(Panic);
+    // We need to re-acquire reference to child and give a bit of time to the supervisor to re-spawn it.
     sleep(Duration::from_millis(10));
-    let (a, b, c, d) = sup.children();
 
-    // Only the last child should have restarted
-    for i in 36..40 {
-        assert_eq!(i, a.request(Count));
-        a.send(Inc);
-    }
-    for i in 48..52 {
-        assert_eq!(i, b.request(Count));
-        b.send(Inc);
-    }
-    for i in 59..63 {
-        assert_eq!(i, c.request(Count));
-        c.send(Inc);
-    }
-    for i in 66..70 {
-        assert_eq!(i, d.request(Count));
-        d.send(Inc);
-    }
+    let logs = logger.request(TakeLogs);
+    assert_eq!(
+        logs,
+        vec![
+            // panic
+            LogEvent::Panic('d'),
+            // no shutdown only restart
+            LogEvent::Init('d'),
+        ]
+    );
 }
 
 #[test]
@@ -348,16 +439,16 @@ fn ten_children_sup() {
         fn init(config: &mut SupervisorConfig<Self>, _: ()) {
             config.set_strategy(SupervisorStrategy::OneForOne);
             config.children_args((
-                (0, None),
-                (0, None),
-                (0, None),
-                (0, None),
-                (0, None),
-                (0, None),
-                (0, None),
-                (0, None),
-                (0, None),
-                (0, None),
+                ((0, ' '), None),
+                ((0, ' '), None),
+                ((0, ' '), None),
+                ((0, ' '), None),
+                ((0, ' '), None),
+                ((0, ' '), None),
+                ((0, ' '), None),
+                ((0, ' '), None),
+                ((0, ' '), None),
+                ((0, ' '), None),
             ));
         }
     }
@@ -384,22 +475,6 @@ fn children_args_not_called() {
 
 #[test]
 fn shutdown() {
-    struct A;
-
-    impl AbstractProcess for A {
-        type Arg = ();
-        type State = A;
-
-        fn init(proc: ProcessRef<Self>, _: ()) -> A {
-            println!("{}", proc.uuid());
-            A
-        }
-
-        fn terminate(_: Self::State) {
-            println!("Exit");
-        }
-    }
-
     struct Sup;
     impl Supervisor for Sup {
         type Arg = ();
@@ -407,12 +482,32 @@ fn shutdown() {
 
         fn init(config: &mut SupervisorConfig<Self>, _: ()) {
             config.set_strategy(SupervisorStrategy::OneForOne);
-            config.children_args((((), None), ((), None), ((), None), ((), None)));
+            config.children_args((
+                ((0, 'a'), None),
+                ((0, 'b'), None),
+                ((0, 'c'), None),
+                ((0, 'd'), None),
+            ));
         }
     }
 
+    let logger = Logger::start_link((), Some(LOGGER_NAME));
     let sup = Sup::start((), None);
     sup.shutdown();
+    let log = logger.request(TakeLogs);
+    assert_eq!(
+        log,
+        vec![
+            LogEvent::Init('a'),
+            LogEvent::Init('b'),
+            LogEvent::Init('c'),
+            LogEvent::Init('d'),
+            LogEvent::Shutdown('d'),
+            LogEvent::Shutdown('c'),
+            LogEvent::Shutdown('b'),
+            LogEvent::Shutdown('a'),
+        ],
+    );
 }
 
 #[test]
@@ -425,9 +520,9 @@ fn lookup_children() {
         fn init(config: &mut SupervisorConfig<Self>, _: ()) {
             config.set_strategy(SupervisorStrategy::OneForOne);
             config.children_args((
-                (0, Some("first".to_owned())),
-                (1, Some("second".to_owned())),
-                (2, Some("third".to_owned())),
+                ((0, ' '), Some("first".to_owned())),
+                ((1, ' '), Some("second".to_owned())),
+                ((2, ' '), Some("third".to_owned())),
             ));
         }
     }
@@ -463,7 +558,7 @@ fn block_until_shutdown() {
 
         fn init(config: &mut SupervisorConfig<Self>, _: ()) {
             config.set_strategy(SupervisorStrategy::OneForOne);
-            config.children_args((0, None));
+            config.children_args(((0, ' '), None));
         }
     }
 
