@@ -17,5 +17,5 @@ fn main() {
 }
 
 fn function_process(input: String) {
-    assert_eq!(input, "Hello function");
+    assert_eq!(input, "Hello function!");
 }

@@ -1,13 +1,18 @@
 use std::{marker::PhantomData, time::Duration};
 
 use crate::{
-    host,
+    distributed::node_id,
+    host::{self, api},
     mailbox::{LinkMailbox, LinkTrapped},
     serializer::{Bincode, Serializer},
     supervisor::{Supervisable, Supervisor, SupervisorConfig},
     timer::TimerRef,
-    Mailbox, Process, ProcessConfig, ReceiveError, Resource, Tag,
+    Mailbox, Process, ProcessConfig, ReceiveError, Tag,
 };
+
+pub fn process_id() -> u64 {
+    unsafe { api::process::process_id() }
+}
 
 /// Types that implement the `AbstractProcess` trait can be started as processes.
 ///
@@ -114,6 +119,7 @@ where
     fn start_config(arg: T::Arg, name: Option<&str>, config: &ProcessConfig) -> ProcessRef<T>;
     fn start_link(arg: T::Arg, name: Option<&str>) -> ProcessRef<T>;
     fn start_link_config(arg: T::Arg, name: Option<&str>, config: &ProcessConfig) -> ProcessRef<T>;
+    fn start_node(arg: T::Arg, name: Option<&str>, node: u64) -> ProcessRef<T>;
 }
 
 impl<T> StartProcess<T> for T
@@ -122,22 +128,30 @@ where
 {
     /// Start a process.
     fn start(arg: T::Arg, name: Option<&str>) -> ProcessRef<T> {
-        start::<T>(arg, name, None, None).unwrap()
+        start::<T>(arg, name, None, None, None).unwrap()
     }
 
     /// Start a process with configuration.
     fn start_config(arg: T::Arg, name: Option<&str>, config: &ProcessConfig) -> ProcessRef<T> {
-        start::<T>(arg, name, None, Some(config)).unwrap()
+        start::<T>(arg, name, None, Some(config), None).unwrap()
     }
 
     /// Start a linked process.
     fn start_link(arg: T::Arg, name: Option<&str>) -> ProcessRef<T> {
-        start::<T>(arg, name, Some(Tag::new()), None).unwrap()
+        start::<T>(arg, name, Some(Tag::new()), None, None).unwrap()
     }
 
     /// Start a linked process with configuration.
     fn start_link_config(arg: T::Arg, name: Option<&str>, config: &ProcessConfig) -> ProcessRef<T> {
-        start::<T>(arg, name, Some(Tag::new()), Some(config)).unwrap()
+        start::<T>(arg, name, Some(Tag::new()), Some(config), None).unwrap()
+    }
+
+    fn start_node(
+        arg: <T as AbstractProcess>::Arg,
+        name: Option<&str>,
+        node: u64,
+    ) -> ProcessRef<T> {
+        start::<T>(arg, name, None, None, Some(node)).unwrap()
     }
 }
 
@@ -151,7 +165,7 @@ where
     T: AbstractProcess,
 {
     fn process(&self) -> ProcessRef<T> {
-        unsafe { ProcessRef::from(host::api::process::this()) }
+        unsafe { ProcessRef::new(node_id(), process_id()) }
     }
 }
 
@@ -186,7 +200,7 @@ where
         name: Option<&str>,
     ) -> Result<(ProcessRef<T>, Tag), LinkTrapped> {
         let tag = Tag::new();
-        let proc = start::<T>(arg, name, Some(tag), None)?;
+        let proc = start::<T>(arg, name, Some(tag), None, None)?;
         Ok((proc, tag))
     }
 
@@ -197,7 +211,7 @@ where
         config: &ProcessConfig,
     ) -> Result<(ProcessRef<T>, Tag), LinkTrapped> {
         let tag = Tag::new();
-        let proc = start::<T>(arg, name, Some(tag), Some(config))?;
+        let proc = start::<T>(arg, name, Some(tag), Some(config), None)?;
         Ok((proc, tag))
     }
 }
@@ -207,6 +221,7 @@ fn start<T>(
     name: Option<&str>,
     link: Option<Tag>,
     config: Option<&ProcessConfig>,
+    node: Option<u64>,
 ) -> Result<ProcessRef<T>, LinkTrapped>
 where
     T: AbstractProcess,
@@ -218,8 +233,15 @@ where
         Tag::new()
     };
     let name = name.map(|name| name.to_owned());
-    let parent = unsafe { <Process<(), Bincode> as Resource>::from_id(host::api::process::this()) };
-    let process = if let Some(config) = config {
+    let parent = <Process<(), Bincode>>::new(node_id(), process_id());
+    let process = if let Some(node) = node {
+        // no link or config
+        Process::<(), Bincode>::spawn_node(
+            node,
+            (parent, tag, arg, name, T::init as usize as i32),
+            starter::<T>,
+        )
+    } else if let Some(config) = config {
         if link.is_some() {
             Process::<(), Bincode>::spawn_link_config_tag(
                 config,
@@ -266,13 +288,20 @@ fn starter<T>(
 {
     let entry: fn(this: ProcessRef<T>, arg: T::Arg) -> T::State =
         unsafe { std::mem::transmute(entry) };
-    let this = unsafe { ProcessRef::from(host::api::process::this()) };
+    let this = unsafe { ProcessRef::new(node_id(), process_id()) };
 
     // Register name
     let name = if let Some(name) = name {
         // Encode type information in name
         let name = format!("{} + ProcessRef + {}", name, std::any::type_name::<T>());
-        unsafe { host::api::registry::put(name.as_ptr(), name.len(), this.process.id()) };
+        unsafe {
+            host::api::registry::put(
+                name.as_ptr(),
+                name.len(),
+                this.process.node_id(),
+                this.process.id(),
+            )
+        };
         Some(name)
     } else {
         None
@@ -354,8 +383,8 @@ where
 
 impl<T> ProcessRef<T> {
     /// Construct a process from a raw ID.
-    unsafe fn from(id: u64) -> Self {
-        let process = <Process<()> as Resource>::from_id(id);
+    unsafe fn new(node_id: u64, process_id: u64) -> Self {
+        let process = <Process<()>>::new(node_id, process_id);
         ProcessRef {
             process,
             phantom: PhantomData,
@@ -363,18 +392,18 @@ impl<T> ProcessRef<T> {
     }
 
     /// Returns a globally unique process ID.
-    pub fn uuid(&self) -> u128 {
-        let mut uuid: [u8; 16] = [0; 16];
-        unsafe { host::api::process::id(self.process.id(), &mut uuid as *mut [u8; 16]) };
-        u128::from_le_bytes(uuid)
+    pub fn id(&self) -> u64 {
+        self.process.id()
     }
 
     pub fn lookup(name: &str) -> Option<Self> {
         let name = format!("{} + ProcessRef + {}", name, std::any::type_name::<T>());
         let mut id = 0;
-        let result = unsafe { host::api::registry::get(name.as_ptr(), name.len(), &mut id) };
+        let mut node_id = 0;
+        let result =
+            unsafe { host::api::registry::get(name.as_ptr(), name.len(), &mut node_id, &mut id) };
         if result == 0 {
-            unsafe { Some(Self::from(id)) }
+            unsafe { Some(Self::new(node_id, id)) }
         } else {
             None
         }
@@ -424,20 +453,19 @@ where
         unsafe { host::api::message::create_data(tag.id(), 0) };
 
         // Create reference to self
-        let this: Process<()> = unsafe { Process::from_id(host::api::process::this()) };
+        let this: Process<()> = Process::this();
 
         Bincode::encode(&Sendable::Shutdown(this)).unwrap();
 
         // Send the message and wait for response
-        unsafe {
-            let result = host::api::message::send_receive_skip_search(
-                self.process.id(),
-                duration.as_millis() as u32,
-            );
-            if result == 9027 {
-                return Err(ReceiveError::Timeout);
-            }
-        };
+        let result = host::send_receive_skip_search(
+            self.process.node_id(),
+            self.process.id(),
+            duration.as_millis() as u32,
+        );
+        if result == 9027 {
+            return Err(ReceiveError::Timeout);
+        }
         Ok(())
     }
 }
@@ -480,7 +508,7 @@ where
         // Then the message itself.
         S::encode(&message).unwrap();
         // Send the message
-        unsafe { host::api::message::send(self.process.id()) };
+        host::send(self.process.node_id(), self.process.id());
     }
 
     /// Send message to the process after the specified duration has passed.
@@ -544,7 +572,7 @@ where
         // Create new message buffer.
         unsafe { host::api::message::create_data(tag.id(), 0) };
         // Create reference to self
-        let this: Process<()> = unsafe { Process::from_id(host::api::process::this()) };
+        let this: Process<()> = Process::new(node_id(), process_id());
         // First encode the handler inside the message buffer.
         let handler = unpacker::<T, M, S> as usize as i32;
         let handler_message = Sendable::Request(handler, this);
@@ -552,14 +580,13 @@ where
         // Then the message itself.
         S::encode(&request).unwrap();
         // Send it & wait on a response!
-        unsafe {
-            let result = host::api::message::send_receive_skip_search(
-                self.process.id(),
-                duration.as_millis() as u32,
-            );
-            if result == 9027 {
-                return Err(ReceiveError::Timeout);
-            }
+        let result = host::send_receive_skip_search(
+            self.process.node_id(),
+            self.process.id(),
+            duration.as_millis() as u32,
+        );
+        if result == 9027 {
+            return Err(ReceiveError::Timeout);
         };
         Ok(S::decode().unwrap())
     }
@@ -610,7 +637,7 @@ where
         // Create new message buffer.
         unsafe { host::api::message::create_data(tag.id(), 0) };
         // Create reference to self
-        let this: Process<()> = unsafe { Process::from_id(host::api::process::this()) };
+        let this: Process<()> = Process::this();
         // First encode the handler inside the message buffer.
         let handler = unpacker::<T> as usize as i32;
         let handler_message = Sendable::Request(handler, this);
@@ -649,14 +676,14 @@ where
 // Processes are equal if their UUID is equal.
 impl<T> PartialEq for ProcessRef<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.uuid() == other.uuid()
+        self.id() == other.id()
     }
 }
 
 impl<T> std::fmt::Debug for ProcessRef<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ProcessRef")
-            .field("uuid", &self.uuid())
+            .field("uuid", &self.id())
             .finish()
     }
 }

@@ -20,8 +20,6 @@ pub mod message {
         pub fn get_tag() -> i64;
         #[allow(dead_code)]
         pub fn data_size() -> u64;
-        pub fn push_process(process_id: u64) -> u64;
-        pub fn take_process(index: u64) -> u64;
         pub fn push_tcp_stream(tcp_stream_id: u64) -> u64;
         pub fn take_tcp_stream(index: u64) -> u64;
         pub fn send(process_id: u64);
@@ -178,12 +176,9 @@ pub mod process {
             params_len: usize,
             id: *mut u64,
         ) -> u32;
-        pub fn drop_process(process_id: u64);
-        pub fn clone_process(process_id: u64) -> u64;
         pub fn sleep_ms(millis: u64);
         pub fn die_when_link_dies(trap: u32);
-        pub fn this() -> u64;
-        pub fn id(process_id: u64, uuid: *mut [u8; 16]);
+        pub fn process_id() -> u64;
         pub fn link(tag: i64, process_id: u64);
         pub fn unlink(process_id: u64);
         pub fn kill(process_id: u64);
@@ -193,8 +188,13 @@ pub mod process {
 pub mod registry {
     #[link(wasm_import_module = "lunatic::registry")]
     extern "C" {
-        pub fn put(name: *const u8, name_len: usize, process_id: u64);
-        pub fn get(name: *const u8, name_len: usize, process_id: *mut u64) -> u32;
+        pub fn put(name: *const u8, name_len: usize, node_id: u64, process_id: u64);
+        pub fn get(
+            name: *const u8,
+            name_len: usize,
+            node_id: *mut u64,
+            process_id: *mut u64,
+        ) -> u32;
         pub fn remove(name: *const u8, name_len: usize);
     }
 }
@@ -211,6 +211,28 @@ pub mod wasi {
         );
         pub fn config_add_command_line_argument(config_id: u64, key: *const u8, key_len: usize);
         pub fn config_preopen_dir(config_id: u64, key: *const u8, key_len: usize);
+    }
+}
+
+pub mod distributed {
+    #[link(wasm_import_module = "lunatic::distributed")]
+    extern "C" {
+        pub fn get_nodes(nodes_ptr: *mut u64, nodes_len: u32) -> u32;
+        pub fn nodes_count() -> u32;
+        pub fn node_id() -> u64;
+        pub fn module_id() -> u64;
+        pub fn send(node_id: u64, process_id: u64);
+        pub fn send_receive_skip_search(node_id: u64, process_id: u64, timeout: u32) -> u32;
+        pub fn spawn(
+            node_id: u64,
+            config_id: i64,
+            module_id: u64,
+            function: *const u8,
+            function_len: usize,
+            params: *const u8,
+            params_len: usize,
+            id: *mut u64,
+        ) -> u32;
     }
 }
 

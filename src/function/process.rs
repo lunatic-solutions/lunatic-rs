@@ -1,14 +1,15 @@
 //! As the name suggests, a "function" process can be spawned just from a function. Opposite of a
 //! `AbstractProcess` that requires a `struct`.
 
-use std::{cell::UnsafeCell, marker::PhantomData, time::Duration};
+use serde::{Deserialize, Serialize};
+use std::{marker::PhantomData, time::Duration};
 
 use crate::{
-    host,
+    host::{self, node_id, process_id},
     protocol::ProtocolCapture,
     serializer::{Bincode, Serializer},
     timer::TimerRef,
-    ProcessConfig, Resource, Tag,
+    ProcessConfig, Tag,
 };
 
 /// Decides what can be turned into a process.
@@ -22,6 +23,7 @@ pub trait IntoProcess<M, S> {
         entry: fn(C, Self),
         link: Option<Tag>,
         config: Option<&ProcessConfig>,
+        node: Option<u64>,
     ) -> Self::Process
     where
         S: Serializer<C> + Serializer<ProtocolCapture<C>>;
@@ -107,16 +109,26 @@ pub trait NoLink {}
 /// `Protocol<AddProtocol, MessagePack>`).
 ///
 /// If a protocol based process is dropped before the `End` state is reached, the drop will panic.
+#[derive(Serialize, Deserialize)]
 pub struct Process<M, S = Bincode> {
+    node_id: u64,
     id: u64,
-    // If set to true, the host call `lunatic::process::drop_process` will not be executed on drop.
-    // This is necessary during serialization, where the process resource is consumed directly by
-    // the runtime and doesn't need to be dropped.
-    consumed: UnsafeCell<bool>,
+    #[serde(skip_serializing, default)]
     serializer_type: PhantomData<(M, S)>,
 }
 
 impl<M, S> Process<M, S> {
+    pub fn new(node_id: u64, process_id: u64) -> Self {
+        Self {
+            node_id,
+            id: process_id,
+            serializer_type: PhantomData,
+        }
+    }
+
+    pub fn this() -> Self {
+        Self::new(node_id(), process_id())
+    }
     /// Spawn a process.
     pub fn spawn<C, T>(capture: C, entry: fn(C, T)) -> T::Process
     where
@@ -124,7 +136,17 @@ impl<M, S> Process<M, S> {
         T: IntoProcess<M, S>,
         T: NoLink,
     {
-        T::spawn(capture, entry, None, None)
+        T::spawn(capture, entry, None, None, None)
+    }
+
+    /// Spawn a process.
+    pub fn spawn_node<C, T>(node_id: u64, capture: C, entry: fn(C, T)) -> T::Process
+    where
+        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        T: IntoProcess<M, S>,
+        T: NoLink,
+    {
+        T::spawn(capture, entry, None, None, Some(node_id))
     }
 
     /// Spawn a linked process.
@@ -133,7 +155,7 @@ impl<M, S> Process<M, S> {
         S: Serializer<C> + Serializer<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
     {
-        T::spawn(capture, entry, Some(Tag::new()), None)
+        T::spawn(capture, entry, Some(Tag::new()), None, None)
     }
 
     /// Spawn a linked process with a tag.
@@ -144,7 +166,7 @@ impl<M, S> Process<M, S> {
         S: Serializer<C> + Serializer<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
     {
-        T::spawn(capture, entry, Some(tag), None)
+        T::spawn(capture, entry, Some(tag), None, None)
     }
 
     /// Spawn a process with a custom configuration.
@@ -154,7 +176,7 @@ impl<M, S> Process<M, S> {
         T: IntoProcess<M, S>,
         T: NoLink,
     {
-        T::spawn(capture, entry, None, Some(config))
+        T::spawn(capture, entry, None, Some(config), None)
     }
 
     /// Spawn a linked process with a custom configuration.
@@ -167,7 +189,7 @@ impl<M, S> Process<M, S> {
         S: Serializer<C> + Serializer<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
     {
-        T::spawn(capture, entry, Some(Tag::new()), Some(config))
+        T::spawn(capture, entry, Some(Tag::new()), Some(config), None)
     }
 
     /// Spawn a linked process with a custom configuration & provide tag for linking.
@@ -181,14 +203,17 @@ impl<M, S> Process<M, S> {
         S: Serializer<C> + Serializer<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
     {
-        T::spawn(capture, entry, Some(tag), Some(config))
+        T::spawn(capture, entry, Some(tag), Some(config), None)
     }
 
-    /// Returns a globally unique process ID.
-    pub fn uuid(&self) -> u128 {
-        let mut uuid: [u8; 16] = [0; 16];
-        unsafe { host::api::process::id(self.id, &mut uuid as *mut [u8; 16]) };
-        u128::from_le_bytes(uuid)
+    /// Returns a local node process ID.
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
+    /// Returns a node ID.
+    pub fn node_id(&self) -> u64 {
+        self.node_id
     }
 
     /// Link process to the one currently running.
@@ -217,7 +242,7 @@ impl<M, S> Process<M, S> {
             std::any::type_name::<M>(),
             std::any::type_name::<S>()
         );
-        unsafe { host::api::registry::put(name.as_ptr(), name.len(), self.id) };
+        unsafe { host::api::registry::put(name.as_ptr(), name.len(), self.node_id, self.id) };
     }
 
     /// Look up a process.
@@ -229,22 +254,18 @@ impl<M, S> Process<M, S> {
             std::any::type_name::<S>()
         );
         let mut id = 0;
-        let result = unsafe { host::api::registry::get(name.as_ptr(), name.len(), &mut id) };
+        let mut node_id = 0;
+        let result =
+            unsafe { host::api::registry::get(name.as_ptr(), name.len(), &mut node_id, &mut id) };
         if result == 0 {
-            unsafe { Some(Self::from_id(id)) }
+            Some(Self {
+                node_id,
+                id,
+                serializer_type: PhantomData,
+            })
         } else {
             None
         }
-    }
-
-    /// Marks the process as consumed.
-    ///
-    /// Consumed processes don't call the `lunatic::process::drop_process` host function when they
-    /// are dropped. This characteristic is useful when implementing serializers for processes.
-    /// Serializers will move the process out of the local state into the message scratch buffer,
-    /// and they can't be dropped from the local state anymore.
-    unsafe fn consume(&self) {
-        *self.consumed.get() = true;
     }
 }
 
@@ -261,10 +282,10 @@ where
     pub fn send(&self, message: M) {
         // Create new message.
         unsafe { host::api::message::create_data(Tag::none().id(), 0) };
-        // During serialization resources will add themself to the message.
+        // During serialization resources will add themselves to the message.
         S::encode(&message).unwrap();
         // Send it!
-        unsafe { host::api::message::send(self.id) };
+        host::send(self.node_id, self.id);
     }
 
     /// Send a message to the process after the specified duration has passed.
@@ -276,7 +297,7 @@ where
     pub fn send_after(&self, message: M, duration: Duration) -> TimerRef {
         // Create new message.
         unsafe { host::api::message::create_data(Tag::none().id(), 0) };
-        // During serialization resources will add themself to the message.
+        // During serialization resources will add themselves to the message.
         S::encode(&message).unwrap();
         // Send it!
         let timer_id =
@@ -293,98 +314,35 @@ where
     pub fn tag_send(&self, tag: Tag, message: M) {
         // Create new message.
         unsafe { host::api::message::create_data(tag.id(), 0) };
-        // During serialization resources will add themself to the message.
+        // During serialization resources will add themselves to the message.
         S::encode(&message).unwrap();
         // Send it!
-        unsafe { host::api::message::send(self.id) };
+        host::send(self.node_id, self.id);
     }
 }
 
-impl<M, S> Resource for Process<M, S> {
-    fn id(&self) -> u64 {
-        self.id
-    }
-
-    unsafe fn from_id(id: u64) -> Self {
-        Self {
-            id,
-            consumed: UnsafeCell::new(false),
-            serializer_type: PhantomData,
-        }
-    }
-}
-
-// Processes are equal if their UUID is equal.
+// Processes are equal if their process id and node id are equal.
 impl<M, S> PartialEq for Process<M, S> {
     fn eq(&self, other: &Self) -> bool {
-        self.uuid() == other.uuid()
+        self.id() == other.id() && self.node_id() == other.node_id()
     }
 }
 
 impl<M, S> std::fmt::Debug for Process<M, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Process")
-            .field("uuid", &self.uuid())
+            .field("id", &self.id())
+            .field("node_id", &self.node_id())
             .finish()
     }
 }
 
 impl<M, S> Clone for Process<M, S> {
     fn clone(&self) -> Self {
-        let id = unsafe { host::api::process::clone_process(self.id) };
-        unsafe { Process::from_id(id) }
-    }
-}
-
-impl<M, S> Drop for Process<M, S> {
-    fn drop(&mut self) {
-        // Only drop a process if it's not already consumed.
-        if unsafe { !*self.consumed.get() } {
-            unsafe { host::api::process::drop_process(self.id) };
+        Self {
+            node_id: self.node_id,
+            id: self.id,
+            serializer_type: self.serializer_type,
         }
-    }
-}
-
-impl<M, S> serde::Serialize for Process<M, S> {
-    fn serialize<A>(&self, serializer: A) -> Result<A::Ok, A::Error>
-    where
-        A: serde::Serializer,
-    {
-        // Mark process as consumed.
-        unsafe { self.consume() };
-
-        let index = unsafe { host::api::message::push_process(self.id) };
-        serializer.serialize_u64(index)
-    }
-}
-
-struct ProcessVisitor<M, S> {
-    _phantom: PhantomData<(M, S)>,
-}
-
-impl<'de, M, S> serde::de::Visitor<'de> for ProcessVisitor<M, S> {
-    type Value = Process<M, S>;
-
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("an u64 index")
-    }
-
-    fn visit_u64<E>(self, index: u64) -> Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
-        let id = unsafe { host::api::message::take_process(index) };
-        Ok(unsafe { Process::from_id(id) })
-    }
-}
-
-impl<'de, M, S> serde::de::Deserialize<'de> for Process<M, S> {
-    fn deserialize<D>(deserializer: D) -> Result<Process<M, S>, D::Error>
-    where
-        D: serde::de::Deserializer<'de>,
-    {
-        deserializer.deserialize_u64(ProcessVisitor {
-            _phantom: PhantomData {},
-        })
     }
 }
