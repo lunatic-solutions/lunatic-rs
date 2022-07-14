@@ -88,6 +88,8 @@ where
 
 pub enum SupervisorStrategy {
     OneForOne,
+    OneForAll,
+    RestForOne,
 }
 
 pub struct SupervisorConfig<T>
@@ -189,29 +191,26 @@ where
     }
 
     fn handle_failure(config: &mut SupervisorConfig<K>, tag: Tag) {
-        match config.strategy {
-            // After a failure, just restart the same process.
-            SupervisorStrategy::OneForOne => {
-                if tag == config.children_tags.unwrap() {
-                    let (proc, tag) = match T1::start_link_or_fail(
-                        config.children_args.as_ref().unwrap().0.clone(),
-                        config.children_args.as_ref().unwrap().1.as_deref(),
-                    ) {
-                        Ok(result) => result,
-                        Err(_) => panic!(
-                            "Supervisor failed to start child `{}`",
-                            std::any::type_name::<T1>()
-                        ),
-                    };
-                    *config.children.as_mut().unwrap() = proc;
-                    *config.children_tags.as_mut().unwrap() = tag;
-                } else {
-                    panic!(
-                        "Supervisor {} received kill signal",
-                        std::any::type_name::<K>()
-                    );
-                }
-            }
+        // Since there is only one children process, the behavior is the same for all
+        // strategies -- after a failure, restart the child process
+        if tag == config.children_tags.unwrap() {
+            let (proc, tag) = match T1::start_link_or_fail(
+                config.children_args.as_ref().unwrap().0.clone(),
+                config.children_args.as_ref().unwrap().1.as_deref(),
+            ) {
+                Ok(result) => result,
+                Err(_) => panic!(
+                    "Supervisor failed to start child `{}`",
+                    std::any::type_name::<T1>()
+                ),
+            };
+            *config.children.as_mut().unwrap() = proc;
+            *config.children_tags.as_mut().unwrap() = tag;
+        } else {
+            panic!(
+                "Supervisor {} received kill signal",
+                std::any::type_name::<K>()
+            );
         }
     }
 }
@@ -235,6 +234,32 @@ mod macros {
     macro_rules! tag {
         ($args:ident) => {
             Tag
+        };
+    }
+
+    macro_rules! reverse_shutdown {
+        // reverse_shutdown!(config, [...]) shuts down all children in reverse order
+        ($config:ident, []) => {}; // base case
+        ($config:ident, [$head_i:tt $($rest_i:tt)*]) => { // recursive case
+            macros::reverse_shutdown!($config, [$($rest_i)*]);
+            $config.children.as_ref().unwrap().$head_i.shutdown();
+        };
+        // reverse_shutdown!(config, skip tag, [...]) shuts down all children with unmatched tags
+        ($config:ident, skip $tag:ident, []) => {}; // base case
+        ($config:ident, skip $tag:ident, [$head_i:tt $($rest_i:tt)*]) => { // recursive case
+            macros::reverse_shutdown!($config, skip $tag, [$($rest_i)*]);
+            if $tag != $config.children_tags.as_ref().unwrap().$head_i {
+                $config.children.as_ref().unwrap().$head_i.shutdown();
+            }
+        };
+        // reverse_shutdown!(config, after tag, [...]) shuts down the children after the tag
+        ($config:ident, after $tag:ident, []) => {}; // base case
+        ($config:ident, after $tag:ident, [$head_i:tt $($rest_i:tt)*]) => { // recursive case
+            if $tag == $config.children_tags.as_ref().unwrap().$head_i {
+                macros::reverse_shutdown!($config, [$($rest_i)*]);
+            } else {
+                macros::reverse_shutdown!($config, after $tag, [$($rest_i)*]);
+            }
         };
     }
 
@@ -271,7 +296,7 @@ mod macros {
                 }
 
                 fn terminate(config: SupervisorConfig<K>) {
-                    $( config.children.as_ref().unwrap().$i.shutdown() );*
+                    macros::reverse_shutdown!(config, [ $($i)* ]);
                 }
 
                 fn handle_failure(config: &mut SupervisorConfig<K>, tag: Tag) {
@@ -300,9 +325,89 @@ mod macros {
 
                             {
                                 panic!(
-                                    "Supervisor {} received kill signal",
+                                    "Supervisor {} received kill signal from a died link",
                                     std::any::type_name::<K>()
                                 );
+                            }
+                        }
+                        // After a failure, restart all children
+                        SupervisorStrategy::OneForAll => {
+                            // check if the tag belongs to one of the children
+                            $(
+                                if tag == config.children_tags.unwrap().$i { } else
+                            )*
+                            {
+                                panic!(
+                                    "Supervisor {} received kill signal from a died link",
+                                    std::any::type_name::<K>()
+                                );
+                            }
+
+                            // shutdown children in reversed start order
+                            macros::reverse_shutdown!(config, skip tag, [ $($i)* ]);
+
+                            // restart all
+                            $(
+
+                                let (proc, tag) = match $args::start_link_or_fail(
+                                    config.children_args.as_ref().unwrap().$i.0.clone(),
+                                    config.children_args.as_ref().unwrap().$i.1.as_deref(),
+                                ) {
+                                    Ok(result) => result,
+                                    Err(_) => panic!(
+                                        "Supervisor failed to start child `{}`",
+                                        std::any::type_name::<$args>()
+                                    ),
+                                };
+                                (*config.children.as_mut().unwrap()).$i = proc;
+                                (*config.children_tags.as_mut().unwrap()).$i = tag;
+
+                            )*
+                        }
+                        // If a child process terminates, the rest of the child processes (that is,
+                        // the child processes after the terminated process in start order)
+                        // are terminated. Then the terminated child process and the rest of the
+                        // child processes are restarted.
+                        SupervisorStrategy::RestForOne => {
+                            // check if the tag belongs to one of the children
+                            $(
+                                if tag == config.children_tags.unwrap().$i { } else
+                            )*
+                            {
+                                panic!(
+                                    "Supervisor {} received kill signal from a died link",
+                                    std::any::type_name::<K>()
+                                );
+                            }
+
+                            // shutdown children after the tag in reversed start order
+                            macros::reverse_shutdown!(config, after tag, [ $($i)* ]);
+
+                            // restart children starting at the tag
+                            // silence false positive warnings on seen_tag
+                            #[allow(unused_assignments)]
+                            {
+                                let mut seen_tag = false;
+                                $(
+
+                                    if seen_tag == true || tag == config.children_tags.unwrap().$i {
+                                        seen_tag = true;
+
+                                        let (proc, tag) = match $args::start_link_or_fail(
+                                            config.children_args.as_ref().unwrap().$i.0.clone(),
+                                            config.children_args.as_ref().unwrap().$i.1.as_deref(),
+                                        ) {
+                                            Ok(result) => result,
+                                            Err(_) => panic!(
+                                                "Supervisor failed to start child `{}`",
+                                                std::any::type_name::<$args>()
+                                            ),
+                                        };
+                                        (*config.children.as_mut().unwrap()).$i = proc;
+                                        (*config.children_tags.as_mut().unwrap()).$i = tag;
+                                    }
+
+                                )*
                             }
                         }
                     }
@@ -312,6 +417,7 @@ mod macros {
     }
 
     pub(crate) use impl_supervisable;
+    pub(crate) use reverse_shutdown;
     pub(crate) use tag;
 }
 
