@@ -204,7 +204,7 @@ checksum = "349d5a591cd28b49e1d1037471617a32ddcda5731b99419008085f72d5a53836"
 
 [[package]]
 name = "lunatic"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "bincode",
  "criterion",
@@ -220,7 +220,7 @@ dependencies = [
 
 [[package]]
 name = "lunatic-macros"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "quote",
  "syn",
@@ -228,7 +228,7 @@ dependencies = [
 
 [[package]]
 name = "lunatic-test"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "quote",
  "syn",
