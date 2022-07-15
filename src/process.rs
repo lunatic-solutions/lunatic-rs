@@ -617,7 +617,7 @@ where
 {
     /// Block until the Supervisor shuts down.
     ///
-    /// A tagged message will be sent to the supervisor process as a [`Request`](Sendable::Request)
+    /// A tagged message will be sent to the supervisor process as a request
     /// and the subscription will be registered. When the supervisor process shuts down, the
     /// subscribers will be each notified by a response message and therefore be unblocked
     /// after having received the awaited message.

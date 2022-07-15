@@ -94,6 +94,7 @@ mod error;
 mod macros;
 mod mailbox;
 mod module;
+mod process_local;
 mod tag;
 
 pub mod distributed;
@@ -112,6 +113,10 @@ pub use function::process::Process;
 pub use mailbox::{Mailbox, ReceiveError};
 pub use module::WasmModule;
 pub use tag::Tag;
+
+#[doc(hidden)]
+pub use process_local::statik::Key as __StaticProcessLocalInner;
+pub use process_local::ProcessLocal;
 
 pub use lunatic_macros::main;
 pub use lunatic_test::test;
