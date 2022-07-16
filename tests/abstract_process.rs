@@ -1,11 +1,12 @@
 use std::time::Duration;
 
 use lunatic::{
+    host,
     process::{
         AbstractProcess, Message, ProcessMessage, ProcessRef, ProcessRequest, Request,
         SelfReference, StartProcess,
     },
-    sleep, test,
+    sleep, spawn_link, test, Tag,
 };
 
 #[test]
@@ -27,6 +28,45 @@ fn shutdown() {
 
     let a = A::start_link((), None);
     a.shutdown();
+}
+
+#[test]
+fn handle_link_trapped() {
+    struct A {
+        link_trapped: bool,
+    }
+
+    impl AbstractProcess for A {
+        type Arg = ();
+        type State = A;
+
+        fn init(_process: ProcessRef<Self>, _arg: ()) -> Self {
+            unsafe { host::api::process::die_when_link_dies(0) };
+            spawn_link!(|| panic!());
+            Self {
+                link_trapped: false,
+            }
+        }
+
+        fn handle_link_trapped(state: &mut Self::State, tag: Tag) {
+            println!("Link trapped: {:?}", tag);
+            state.link_trapped = true;
+        }
+    }
+
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct IsLinkTrapped;
+    impl ProcessRequest<IsLinkTrapped> for A {
+        type Response = bool;
+
+        fn handle(state: &mut Self::State, _request: IsLinkTrapped) -> bool {
+            state.link_trapped
+        }
+    }
+
+    let a = A::start((), None);
+    sleep(Duration::from_millis(10));
+    assert!(a.request(IsLinkTrapped));
 }
 
 #[test]
