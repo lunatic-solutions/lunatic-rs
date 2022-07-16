@@ -6,7 +6,7 @@ use lunatic::{
         AbstractProcess, Message, ProcessMessage, ProcessRef, ProcessRequest, Request,
         SelfReference, StartProcess,
     },
-    sleep, test, Tag,
+    sleep, spawn_link, test, Tag,
 };
 
 #[test]
@@ -42,7 +42,7 @@ fn handle_link_trapped() {
 
         fn init(_process: ProcessRef<Self>, _arg: ()) -> Self {
             unsafe { host::api::process::die_when_link_dies(0) };
-            ProcessRef::<A>::lookup("test/gonna-die").unwrap().link();
+            spawn_link!(|| panic!());
             Self {
                 link_trapped: false,
             }
@@ -51,14 +51,6 @@ fn handle_link_trapped() {
         fn handle_link_trapped(state: &mut Self::State, tag: Tag) {
             println!("Link trapped: {:?}", tag);
             state.link_trapped = true;
-        }
-    }
-
-    #[derive(serde::Serialize, serde::Deserialize)]
-    struct Panic;
-    impl ProcessMessage<Panic> for A {
-        fn handle(_state: &mut Self::State, _: Panic) {
-            panic!();
         }
     }
 
@@ -72,11 +64,9 @@ fn handle_link_trapped() {
         }
     }
 
-    let a = A::start((), Some("test/gonna-die"));
-    let b = A::start((), None);
-    a.send(Panic);
+    let a = A::start((), None);
     sleep(Duration::from_millis(10));
-    assert!(b.request(IsLinkTrapped));
+    assert!(a.request(IsLinkTrapped));
 }
 
 #[test]
