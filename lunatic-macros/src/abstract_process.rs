@@ -1,19 +1,27 @@
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned};
 use syn::ImplItem::Method;
 
-pub(crate) fn render_abstract_process(impl_block: syn::ItemImpl) -> proc_macro::TokenStream {
+pub(crate) fn render_abstract_process(impl_block: syn::ItemImpl) -> TokenStream {
     let impl_attrs = impl_block.attrs;
-    let impl_ty = impl_block.self_ty;
+
+    let impl_ty = *impl_block.self_ty;
+    let impl_ty_name = match &impl_ty {
+        syn::Type::Path(p) => p.path.get_ident().map(|i| i.to_string()),
+        _ => None,
+    };
 
     // impl blocks for ProcessMessage and ProcessRequest
-    let mut impls: Vec<TokenStream> = vec![];
+    let mut process_impls: Vec<TokenStream> = vec![];
     // AbstractProcess methods
     let mut init_impl: Option<TokenStream> = None; // contains the State type
     let mut terminate: Option<TokenStream> = None;
     let mut handle_link_trapped: Option<TokenStream> = None;
     // other items that will be left unchanged in the impl block
     let mut skipped_items: Vec<TokenStream> = vec![];
+    // wrapper functions
+    let mut handler_func_defs: Vec<TokenStream> = vec![];
+    let mut handler_func_impls: Vec<TokenStream> = vec![];
 
     for item in &impl_block.items {
         match item {
@@ -25,11 +33,19 @@ pub(crate) fn render_abstract_process(impl_block: syn::ItemImpl) -> proc_macro::
                 handle_link_trapped = Some(render_handle_link_trapped(method));
             }
             Method(method) if method.has_tag("process_message") => {
-                impls.push(render_process_message(method, &impl_ty));
+                let (process_imp, handle_func_def, handle_func_impl) =
+                    render_process_message(method, &impl_ty);
+                process_impls.push(process_imp);
+                handler_func_defs.push(handle_func_def);
+                handler_func_impls.push(handle_func_impl);
                 skipped_items.push(quote! { #method });
             }
             Method(method) if method.has_tag("process_request") => {
-                impls.push(render_process_request(method, &impl_ty));
+                let (process_imp, handle_func_def, handle_func_impl) =
+                    render_process_request(method, &impl_ty);
+                process_impls.push(process_imp);
+                handler_func_defs.push(handle_func_def);
+                handler_func_impls.push(handle_func_impl);
                 skipped_items.push(quote! { #method });
             }
             _ => {
@@ -55,11 +71,10 @@ pub(crate) fn render_abstract_process(impl_block: syn::ItemImpl) -> proc_macro::
         }
     });
 
-    let init_impl = init_impl.unwrap_or(TokenStream::new());
-    let terminate = terminate.unwrap_or(TokenStream::new());
-    let handle_link_trapped = handle_link_trapped.unwrap_or(TokenStream::new());
+    let handler_trait = format!("{}Handler", impl_ty_name.unwrap());
+    let handler_trait = proc_macro2::Ident::new(&handler_trait, Span::call_site());
 
-    let output = quote! {
+    quote! {
         #(#impl_attrs)*
         impl #impl_ty {
             #terminate
@@ -74,9 +89,16 @@ pub(crate) fn render_abstract_process(impl_block: syn::ItemImpl) -> proc_macro::
             #handle_link_trapped_impl
         }
 
-        #(#impls)*
-    };
-    proc_macro::TokenStream::from(output)
+        #(#process_impls)*
+
+        trait #handler_trait {
+            #(#handler_func_defs)*
+        }
+
+        impl #handler_trait for lunatic::process::ProcessRef<#impl_ty> {
+            #(#handler_func_impls)*
+        }
+    }
 }
 
 fn render_init(item: &syn::ImplItemMethod) -> TokenStream {
@@ -107,7 +129,6 @@ fn render_init(item: &syn::ImplItemMethod) -> TokenStream {
         #(#attrs)*
         fn #ident(#func_args) -> Self::State #block
     }
-    .into()
 }
 
 fn render_terminate(item: &syn::ImplItemMethod) -> TokenStream {
@@ -128,7 +149,6 @@ fn render_terminate(item: &syn::ImplItemMethod) -> TokenStream {
     quote! {
         fn #ident(#self_arg) #block
     }
-    .into()
 }
 
 fn render_handle_link_trapped(item: &syn::ImplItemMethod) -> TokenStream {
@@ -149,10 +169,12 @@ fn render_handle_link_trapped(item: &syn::ImplItemMethod) -> TokenStream {
     quote! {
         fn #ident(#self_arg) #block
     }
-    .into()
 }
 
-fn render_process_message(item: &syn::ImplItemMethod, ident: &Box<syn::Type>) -> TokenStream {
+fn render_process_message(
+    item: &syn::ImplItemMethod,
+    ident: &syn::Type,
+) -> (TokenStream, TokenStream, TokenStream) {
     let attrs = item
         .attrs
         .iter()
@@ -168,18 +190,30 @@ fn render_process_message(item: &syn::ImplItemMethod, ident: &Box<syn::Type>) ->
         _ => unreachable!(),
     };
 
-    quote! {
-        #(#attrs)*
-        impl lunatic::process::ProcessMessage<#message_type> for #ident {
-            fn handle(state: &mut Self::State, message: #message_type) {
-                state.#fn_ident(message)
+    (
+        quote! {
+            #(#attrs)*
+            impl lunatic::process::ProcessMessage<#message_type> for #ident {
+                fn handle(state: &mut Self::State, message: #message_type) {
+                    state.#fn_ident(message)
+                }
             }
-        }
-    }
-    .into()
+        },
+        quote! {
+            fn #fn_ident(&self, message: #message_type);
+        },
+        quote! {
+            fn #fn_ident(&self, message: #message_type) {
+                self.send(message);
+            }
+        },
+    )
 }
 
-fn render_process_request(item: &syn::ImplItemMethod, ident: &Box<syn::Type>) -> TokenStream {
+fn render_process_request(
+    item: &syn::ImplItemMethod,
+    ident: &syn::Type,
+) -> (TokenStream, TokenStream, TokenStream) {
     let attrs = item
         .attrs
         .iter()
@@ -201,16 +235,25 @@ fn render_process_request(item: &syn::ImplItemMethod, ident: &Box<syn::Type>) ->
         }
     };
 
-    quote! {
-        #(#attrs)*
-        impl lunatic::process::ProcessRequest<#message_type> for #ident {
-            type Response = #response_type;
-            fn handle(state: &mut Self::State, request: #message_type) -> #response_type {
-                state.#fn_ident(request)
+    (
+        quote! {
+            #(#attrs)*
+            impl lunatic::process::ProcessRequest<#message_type> for #ident {
+                type Response = #response_type;
+                fn handle(state: &mut Self::State, request: #message_type) -> #response_type {
+                    state.#fn_ident(request)
+                }
             }
-        }
-    }
-    .into()
+        },
+        quote! {
+            fn #fn_ident(&self, message: #message_type) -> #response_type;
+        },
+        quote! {
+            fn #fn_ident(&self, message: #message_type) -> #response_type {
+                self.request(message)
+            }
+        },
+    )
 }
 
 trait HasTag {

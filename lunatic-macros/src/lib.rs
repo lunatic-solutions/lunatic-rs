@@ -38,7 +38,7 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn abstract_process(_args: TokenStream, item: TokenStream) -> TokenStream {
     match syn::parse(item.clone()) {
-        Ok(it) => render_abstract_process(it),
+        Ok(it) => render_abstract_process(it).into(),
         Err(e) => token_stream_with_error(item, e),
     }
 }

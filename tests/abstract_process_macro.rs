@@ -1,10 +1,9 @@
 use lunatic::process::SelfReference;
 use lunatic::{
-    host,
     process::{Message, ProcessRef, Request, StartProcess},
     sleep, test, Tag,
 };
-use lunatic_macros::*;
+use lunatic_macros::{abstract_process, process_message, process_request};
 use std::time::Duration;
 
 #[derive(Debug)]
@@ -64,35 +63,13 @@ impl Counter {
 #[test]
 fn init_and_terminate() {
     let counter = Counter::start_link(2, None);
-    counter.send(Inc);
-    counter.send(Inc);
-    counter.send(Inc);
-    counter.send(Inc);
-    dbg!(counter.request(Count));
-}
-
-#[test]
-fn handle_link_trapped() {
-    struct A;
-    #[abstract_process]
-    impl A {
-        #[init]
-        fn init(_process: ProcessRef<Self>, _arg: ()) -> Self {
-            unsafe { host::api::process::die_when_link_dies(0) };
-            ProcessRef::<Counter>::lookup("counter").unwrap().link();
-            Self {}
-        }
-
-        #[handle_link_trapped]
-        fn handle_link_trapped(&mut self, tag: Tag) {
-            println!("Link trapped: {:?}", tag);
-        }
-    }
-
-    let counter = Counter::start(0, Some("counter"));
-    A::start((), None);
-    counter.send(Panic);
-    sleep(Duration::from_millis(50));
+    counter.increment(Inc);
+    counter.increment(Inc);
+    counter.increment(Inc);
+    counter.increment(Inc);
+    counter.increment(Inc);
+    dbg!(counter.count(Count));
+    counter.panic(Panic);
 }
 
 #[test]
@@ -134,7 +111,7 @@ fn handle_message() {
     }
 
     let a = A::start_link((), None);
-    a.send("Hello world".to_owned());
+    a.handle("Hello world".to_owned());
 
     sleep(Duration::from_millis(100));
 }
@@ -158,7 +135,7 @@ fn handle_request() {
     }
 
     let a = A::start_link((), None);
-    let response = a.request("Hello".to_owned());
+    let response = a.handle("Hello".to_owned());
 
     assert_eq!(response, "Hello world");
 }
@@ -167,8 +144,6 @@ fn handle_request() {
 fn init_args() {
     struct A(Vec<f64>);
 
-    #[derive(serde::Serialize, serde::Deserialize)]
-    struct Add(f64);
     #[derive(serde::Serialize, serde::Deserialize)]
     struct Sum;
 
@@ -180,8 +155,8 @@ fn init_args() {
         }
 
         #[process_message]
-        fn add(&mut self, message: Add) {
-            self.0.push(message.0);
+        fn add(&mut self, message: f64) {
+            self.0.push(message);
         }
 
         #[process_request]
@@ -193,19 +168,19 @@ fn init_args() {
     let init = vec![0.1, 0.1, 0.1, 0.2];
     let a = A::start_link(init, None);
 
-    a.send(Add(0.2));
-    a.send(Add(0.2));
-    a.send(Add(0.1));
-    a.send(Add(1.0));
-    assert_eq!(a.request(Sum), 2.0);
-    a.send(Add(0.1));
-    assert_eq!(a.request(Sum), 2.1);
-    a.send(Add(0.1));
-    assert_eq!(a.request(Sum), 2.2);
-    a.send(Add(0.3));
-    assert_eq!(a.request(Sum), 2.5);
-    a.send(Add(0.1));
-    assert_eq!(a.request(Sum), 2.6);
+    a.add(0.2);
+    a.add(0.2);
+    a.add(0.1);
+    a.add(1.0);
+    assert_eq!(a.sum(Sum), 2.0);
+    a.add(0.1);
+    assert_eq!(a.sum(Sum), 2.1);
+    a.add(0.1);
+    assert_eq!(a.sum(Sum), 2.2);
+    a.add(0.3);
+    assert_eq!(a.sum(Sum), 2.5);
+    a.add(0.1);
+    assert_eq!(a.sum(Sum), 2.6);
 }
 
 #[test]
@@ -222,7 +197,7 @@ fn self_reference() {
         #[init]
         fn init(this: ProcessRef<Self>, start: u32) -> A {
             // Start incrementing state state.
-            this.send(Inc);
+            this.increment(Inc);
 
             A(start)
         }
@@ -233,7 +208,7 @@ fn self_reference() {
             if self.0 < 10 {
                 self.0 += 1;
                 // Increment state again
-                self.process().send(Inc);
+                self.process().increment(Inc);
             }
         }
 
@@ -247,7 +222,7 @@ fn self_reference() {
     // Give enough time to increment state.
     sleep(Duration::from_millis(20));
 
-    assert_eq!(a.request(Count), 10);
+    assert_eq!(a.count(Count), 10);
 }
 
 #[test]
@@ -269,7 +244,7 @@ fn lookup() {
     drop(a);
 
     let a = ProcessRef::<A>::lookup("a").unwrap();
-    a.request(());
+    a.handle(());
     drop(a);
 
     let a = ProcessRef::<A>::lookup("b");
@@ -292,14 +267,14 @@ fn linked_process_fails() {
         }
 
         #[process_message]
-        fn handle(&mut self, _: Panic) {
+        fn panic(&mut self, _: Panic) {
             panic!();
         }
     }
 
     let a = A::start_link((), None);
     a.link();
-    a.send(Panic);
+    a.panic(Panic);
     sleep(Duration::from_millis(100));
 }
 
@@ -318,7 +293,7 @@ fn unlinked_process_doesnt_fail() {
         }
 
         #[process_message]
-        fn handle(&mut self, _: Panic) {
+        fn panic(&mut self, _: Panic) {
             panic!();
         }
     }
@@ -326,7 +301,7 @@ fn unlinked_process_doesnt_fail() {
     let a = A::start_link((), None);
     a.link();
     a.unlink();
-    a.send(Panic);
+    a.panic(Panic);
     sleep(Duration::from_millis(100));
 }
 
