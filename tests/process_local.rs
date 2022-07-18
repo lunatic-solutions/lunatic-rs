@@ -7,13 +7,13 @@ use lunatic_test::test;
 fn two_processes_have_independent_locals() {
     process_local!(static FOO: RefCell<u32> = RefCell::new(1));
 
-    FOO.with_borrow_mut(|f| {
+    FOO.with_borrow_mut(|mut f| {
         *f = 2;
     });
 
     // each process starts out with the initial value of 1
     let child = spawn_link!(@task || {
-        FOO.with_borrow_mut(|f| {
+        FOO.with_borrow_mut(|mut f| {
             assert_eq!(*f, 1);
             *f = 3;
         });
@@ -63,7 +63,7 @@ fn refcell_take() {
         static X: RefCell<Vec<i32>> = RefCell::new(Vec::new());
     }
 
-    X.with_borrow_mut(|v| v.push(1));
+    X.with_borrow_mut(|mut v| v.push(1));
     let a = X.take();
     assert_eq!(a, vec![1]);
     X.with_borrow(|v| assert!(v.is_empty()));

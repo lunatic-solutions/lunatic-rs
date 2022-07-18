@@ -2,7 +2,7 @@
 //!
 //! This implementation is mostly a copy of Rust's thread local implementation.
 
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::fmt;
 
 /// A process local storage which owns its contents.
@@ -198,7 +198,7 @@ impl<T: 'static> ProcessLocal<T> {
     /// it yet.
     pub fn with<F, R>(&'static self, f: F) -> R
     where
-        F: FnOnce(&T) -> R,
+        F: FnOnce(&'static T) -> R,
     {
         unsafe {
             let process_local =
@@ -215,7 +215,7 @@ impl<T: 'static> ProcessLocal<T> {
     /// `Some(init)` is passed to `f`.
     fn initialize_with<F, R>(&'static self, init: T, f: F) -> R
     where
-        F: FnOnce(Option<T>, &T) -> R,
+        F: FnOnce(Option<T>, &'static T) -> R,
     {
         unsafe {
             let mut init = Some(init);
@@ -351,9 +351,9 @@ impl<T: 'static> ProcessLocal<RefCell<T>> {
     /// ```
     pub fn with_borrow<F, R>(&'static self, f: F) -> R
     where
-        F: FnOnce(&T) -> R,
+        F: FnOnce(Ref<'static, T>) -> R,
     {
-        self.with(|cell| f(&cell.borrow()))
+        self.with(|cell| f(cell.borrow()))
     }
 
     /// Acquires a mutable reference to the contained value.
@@ -380,9 +380,9 @@ impl<T: 'static> ProcessLocal<RefCell<T>> {
     /// ```
     pub fn with_borrow_mut<F, R>(&'static self, f: F) -> R
     where
-        F: FnOnce(&mut T) -> R,
+        F: FnOnce(RefMut<'static, T>) -> R,
     {
-        self.with(|cell| f(&mut cell.borrow_mut()))
+        self.with(|cell| f(cell.borrow_mut()))
     }
 
     /// Sets or initializes the contained value.
