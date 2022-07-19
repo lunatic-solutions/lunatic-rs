@@ -12,6 +12,7 @@ license = "Apache-2.0/MIT"
 quote = "1"
 syn = { version = "1", features = ["full", "extra-traits"] }
 proc-macro2 = "1.0"
+convert_case = "0.5"
 
 [lib]
 proc-macro = true

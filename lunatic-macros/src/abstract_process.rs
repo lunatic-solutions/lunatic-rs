@@ -1,3 +1,4 @@
+use convert_case::{Case, Casing};
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned};
 use syn::ImplItem::Method;
@@ -5,19 +6,22 @@ use syn::ImplItem::Method;
 pub(crate) fn render_abstract_process(impl_block: syn::ItemImpl) -> TokenStream {
     let impl_attrs = impl_block.attrs;
 
+    // type that is being implemented
     let impl_ty = *impl_block.self_ty;
     let impl_ty_name = match &impl_ty {
         syn::Type::Path(p) => p.path.get_ident().map(|i| i.to_string()),
         _ => None,
     };
 
+    // message (message, request, and response) struct definitions
+    let mut message_structs: Vec<TokenStream> = vec![];
     // impl blocks for ProcessMessage and ProcessRequest
     let mut process_impls: Vec<TokenStream> = vec![];
     // AbstractProcess methods
     let mut init_impl: Option<TokenStream> = None; // contains the State type
     let mut terminate: Option<TokenStream> = None;
     let mut handle_link_trapped: Option<TokenStream> = None;
-    // other items that will be left unchanged in the impl block
+    // other items (e.g. helper methods) that will be left unchanged in the impl block
     let mut skipped_items: Vec<TokenStream> = vec![];
     // wrapper functions
     let mut handler_func_defs: Vec<TokenStream> = vec![];
@@ -33,16 +37,18 @@ pub(crate) fn render_abstract_process(impl_block: syn::ItemImpl) -> TokenStream 
                 handle_link_trapped = Some(render_handle_link_trapped(method));
             }
             Method(method) if method.has_tag("process_message") => {
-                let (process_imp, handle_func_def, handle_func_impl) =
+                let (msg_struct, process_imp, handle_func_def, handle_func_impl) =
                     render_process_message(method, &impl_ty);
+                message_structs.push(msg_struct);
                 process_impls.push(process_imp);
                 handler_func_defs.push(handle_func_def);
                 handler_func_impls.push(handle_func_impl);
                 skipped_items.push(quote! { #method });
             }
             Method(method) if method.has_tag("process_request") => {
-                let (process_imp, handle_func_def, handle_func_impl) =
+                let (msg_structs, process_imp, handle_func_def, handle_func_impl) =
                     render_process_request(method, &impl_ty);
+                message_structs.push(msg_structs);
                 process_impls.push(process_imp);
                 handler_func_defs.push(handle_func_def);
                 handler_func_impls.push(handle_func_impl);
@@ -62,7 +68,6 @@ pub(crate) fn render_abstract_process(impl_block: syn::ItemImpl) -> TokenStream 
             }
         }
     });
-
     let handle_link_trapped_impl = handle_link_trapped.clone().map(|_| {
         quote! {
             fn handle_link_trapped(state: &mut Self::State, tag: Tag) {
@@ -75,6 +80,8 @@ pub(crate) fn render_abstract_process(impl_block: syn::ItemImpl) -> TokenStream 
     let handler_trait = proc_macro2::Ident::new(&handler_trait, Span::call_site());
 
     quote! {
+        #(#message_structs)*
+
         #(#impl_attrs)*
         impl #impl_ty {
             #terminate
@@ -174,37 +181,42 @@ fn render_handle_link_trapped(item: &syn::ImplItemMethod) -> TokenStream {
 fn render_process_message(
     item: &syn::ImplItemMethod,
     ident: &syn::Type,
-) -> (TokenStream, TokenStream, TokenStream) {
+) -> (TokenStream, TokenStream, TokenStream, TokenStream) {
     let attrs = item
         .attrs
         .iter()
         .filter(|attr| !attr.path.is_ident("process_message"));
 
-    let sig = &item.sig;
-    let fn_ident = &sig.ident;
-    let message_type = match sig.inputs.last().unwrap() {
-        syn::FnArg::Typed(arg) => {
-            let ty = &arg.ty;
-            quote! { #ty }
-        }
-        _ => unreachable!(),
-    };
+    let (
+        fn_ident,
+        message_type,
+        handler_args,
+        handler_arg_names,
+        handler_arg_types,
+        message_destructuring,
+    ) = extract_handler_input(item);
 
     (
+        quote! {
+            #[derive(serde::Serialize, serde::Deserialize)]
+            struct #message_type (
+                #(#handler_arg_types),*
+            );
+        },
         quote! {
             #(#attrs)*
             impl lunatic::process::ProcessMessage<#message_type> for #ident {
                 fn handle(state: &mut Self::State, message: #message_type) {
-                    state.#fn_ident(message)
+                    state.#fn_ident(#(#message_destructuring),*)
                 }
             }
         },
         quote! {
-            fn #fn_ident(&self, message: #message_type);
+            fn #fn_ident(&self, #(#handler_args),*);
         },
         quote! {
-            fn #fn_ident(&self, message: #message_type) {
-                self.send(message);
+            fn #fn_ident(&self, #(#handler_args),*) {
+                self.send(#message_type(#(#handler_arg_names),*));
             }
         },
     )
@@ -213,22 +225,22 @@ fn render_process_message(
 fn render_process_request(
     item: &syn::ImplItemMethod,
     ident: &syn::Type,
-) -> (TokenStream, TokenStream, TokenStream) {
+) -> (TokenStream, TokenStream, TokenStream, TokenStream) {
     let attrs = item
         .attrs
         .iter()
         .filter(|attr| !attr.path.is_ident("process_request"));
 
-    let sig = &item.sig;
-    let fn_ident = &sig.ident;
-    let message_type = match sig.inputs.last().unwrap() {
-        syn::FnArg::Typed(arg) => {
-            let ty = &arg.ty;
-            quote! { #ty }
-        }
-        _ => unreachable!(),
-    };
-    let response_type = match &sig.output {
+    let (
+        fn_ident,
+        message_type,
+        handler_args,
+        handler_arg_names,
+        handler_arg_types,
+        message_destructuring,
+    ) = extract_handler_input(item);
+
+    let response_type = match &item.sig.output {
         syn::ReturnType::Type(_, ty) => quote! { #ty },
         syn::ReturnType::Default => {
             quote! { () }
@@ -237,22 +249,84 @@ fn render_process_request(
 
     (
         quote! {
+            #[derive(serde::Serialize, serde::Deserialize)]
+            struct #message_type (
+                #(#handler_arg_types),*
+            );
+        },
+        quote! {
             #(#attrs)*
             impl lunatic::process::ProcessRequest<#message_type> for #ident {
                 type Response = #response_type;
-                fn handle(state: &mut Self::State, request: #message_type) -> #response_type {
-                    state.#fn_ident(request)
+                fn handle(state: &mut Self::State, message: #message_type) -> #response_type {
+                    state.#fn_ident(#(#message_destructuring),*)
                 }
             }
         },
         quote! {
-            fn #fn_ident(&self, message: #message_type) -> #response_type;
+            fn #fn_ident(&self, #(#handler_args),*) -> #response_type;
         },
         quote! {
-            fn #fn_ident(&self, message: #message_type) -> #response_type {
-                self.request(message)
+            fn #fn_ident(&self, #(#handler_args),*) -> #response_type {
+                self.request(#message_type(#(#handler_arg_names),*))
             }
         },
+    )
+}
+
+fn extract_handler_input(
+    item: &syn::ImplItemMethod,
+) -> (
+    &syn::Ident,
+    syn::Ident,
+    Vec<TokenStream>,
+    Vec<syn::Ident>,
+    Vec<syn::Type>,
+    Vec<TokenStream>,
+) {
+    let sig = &item.sig;
+    let fn_ident = &sig.ident;
+    let message_type = proc_macro2::Ident::new(
+        &format!("__lunatic_{}", fn_ident.to_string().to_case(Case::Pascal)),
+        Span::call_site(),
+    );
+
+    // wrap message types
+    let mut handler_args: Vec<TokenStream> = vec![];
+    let mut handler_arg_names: Vec<syn::Ident> = vec![];
+    let mut handler_arg_types: Vec<syn::Type> = vec![];
+
+    for (i, arg) in sig.inputs.iter().skip(1).enumerate() {
+        let ident = match arg {
+            syn::FnArg::Typed(arg) => match *arg.pat.clone() {
+                // replace pattern matching arguments
+                syn::Pat::Ident(pat_ident) => pat_ident.ident,
+                _ => proc_macro2::Ident::new(&format!("__arg_{}", i), Span::call_site()),
+            },
+            _ => unreachable!(),
+        };
+        let ty = match arg {
+            syn::FnArg::Typed(arg) => *arg.ty.clone(),
+            _ => unreachable!(),
+        };
+        handler_args.push(quote! { #ident: #ty });
+        handler_arg_names.push(ident);
+        handler_arg_types.push(ty);
+    }
+    let message_destructuring = (0..handler_arg_types.len())
+        .map(|i| {
+            let i = proc_macro2::Literal::usize_unsuffixed(i);
+            quote! { message.#i }
+        })
+        .collect();
+
+    (
+        fn_ident,
+        message_type,
+        handler_args,
+        handler_arg_names,
+        handler_arg_types,
+        message_destructuring,
     )
 }
 
