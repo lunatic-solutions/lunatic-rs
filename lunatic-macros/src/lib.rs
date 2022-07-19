@@ -4,7 +4,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 
 mod abstract_process;
-use abstract_process::render_abstract_process;
+use abstract_process::AbstractProcessTransformer;
 
 #[proc_macro_attribute]
 pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
@@ -35,10 +35,53 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
     .into()
 }
 
+/// Add AbstractProcess behaviour to the given struct implementation with minimum
+/// boilerplate code.
+///
+/// - Use **#\[init\]**, **#\[terminate\]**, and **#\[handle_link_trapped\]** marker macros to
+/// specify methods for implementing lunatic::process::AbstractProcess.
+/// - Use **#\[process_message\]** and **#\[process_request\]** marker macros to specify
+/// message and request handlers.
+///
+/// Specifying message types is unnecessary because the macro will create wrapper
+/// types for messages on all handlers. Handlers can take arbitrary number of
+/// parameters and invocating them works the same as directly calling the method
+/// on the struct without spawning it as a process.
+///
+/// # Examples
+///
+/// ```
+/// use lunatic::process::{Message, ProcessRef, Request, StartProcess};
+/// use lunatic_macros::{abstract_process, process_message, process_request};
+///
+/// struct Counter(u32);
+///
+/// #[abstract_process]
+/// impl Counter {
+///     fn init(_: ProcessRef<Self>, start: u32) -> Self {
+///         Self(start)
+///     }
+///
+///     #[process_message]
+///     fn increment(&mut self) {
+///         state.0 += 1;
+///     }
+///
+///     #[process_request]
+///     fn count(&self) -> u32 {
+///         state.0
+///     }
+/// }
+///
+///
+/// let counter = Counter::start(5, None);
+/// counter.increment();
+/// assert_eq!(counter.count(), 6);
+/// ```
 #[proc_macro_attribute]
 pub fn abstract_process(_args: TokenStream, item: TokenStream) -> TokenStream {
     match syn::parse(item.clone()) {
-        Ok(it) => render_abstract_process(it).into(),
+        Ok(it) => AbstractProcessTransformer::new().transform(it).into(),
         Err(e) => token_stream_with_error(item, e),
     }
 }
