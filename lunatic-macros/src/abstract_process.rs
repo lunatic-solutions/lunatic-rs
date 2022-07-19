@@ -187,14 +187,14 @@ fn render_process_message(
         .iter()
         .filter(|attr| !attr.path.is_ident("process_message"));
 
-    let (
+    let HandlerComponents {
         fn_ident,
         message_type,
         handler_args,
         handler_arg_names,
         handler_arg_types,
         message_destructuring,
-    ) = extract_handler_input(item);
+    } = extract_handler_input(item);
 
     (
         quote! {
@@ -231,14 +231,14 @@ fn render_process_request(
         .iter()
         .filter(|attr| !attr.path.is_ident("process_request"));
 
-    let (
+    let HandlerComponents {
         fn_ident,
         message_type,
         handler_args,
         handler_arg_names,
         handler_arg_types,
         message_destructuring,
-    ) = extract_handler_input(item);
+    } = extract_handler_input(item);
 
     let response_type = match &item.sig.output {
         syn::ReturnType::Type(_, ty) => quote! { #ty },
@@ -274,16 +274,7 @@ fn render_process_request(
     )
 }
 
-fn extract_handler_input(
-    item: &syn::ImplItemMethod,
-) -> (
-    &syn::Ident,
-    syn::Ident,
-    Vec<TokenStream>,
-    Vec<syn::Ident>,
-    Vec<syn::Type>,
-    Vec<TokenStream>,
-) {
+fn extract_handler_input(item: &syn::ImplItemMethod) -> HandlerComponents {
     let sig = &item.sig;
     let fn_ident = &sig.ident;
     let message_type = proc_macro2::Ident::new(
@@ -320,14 +311,23 @@ fn extract_handler_input(
         })
         .collect();
 
-    (
-        fn_ident,
+    HandlerComponents {
+        fn_ident: fn_ident.clone(),
         message_type,
         handler_args,
         handler_arg_names,
         handler_arg_types,
         message_destructuring,
-    )
+    }
+}
+
+struct HandlerComponents {
+    fn_ident: syn::Ident,
+    message_type: syn::Ident,
+    handler_args: Vec<TokenStream>,
+    handler_arg_names: Vec<syn::Ident>,
+    handler_arg_types: Vec<syn::Type>,
+    message_destructuring: Vec<TokenStream>,
 }
 
 trait HasTag {
