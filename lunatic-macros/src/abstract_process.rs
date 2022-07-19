@@ -278,7 +278,7 @@ fn extract_handler_input(item: &syn::ImplItemMethod) -> HandlerComponents {
     let sig = &item.sig;
     let fn_ident = &sig.ident;
     let message_type = proc_macro2::Ident::new(
-        &format!("__lunatic_{}", fn_ident.to_string().to_case(Case::Pascal)),
+        &format!("__MsgWrap{}", fn_ident.to_string().to_case(Case::Pascal)),
         Span::call_site(),
     );
 
