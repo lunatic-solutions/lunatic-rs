@@ -144,7 +144,7 @@ impl AbstractProcessTransformer {
     }
 
     fn extract_init(&mut self, method: &syn::ImplItemMethod) {
-        if let Some(_) = self.ap_impls.init {
+        if self.ap_impls.init.is_some() {
             let err = syn::Error::new(
                 method.sig.ident.span(),
                 "Only one method can be marked with `#[init]` macro",
@@ -192,7 +192,7 @@ impl AbstractProcessTransformer {
     }
 
     fn extract_terminate(&mut self, method: &syn::ImplItemMethod) {
-        if let Some(_) = self.type_impls.terminate {
+        if self.type_impls.terminate.is_some() {
             let err = syn::Error::new(
                 method.sig.ident.span(),
                 "Only one method can be marked with `#[terminate]` macro",
@@ -231,7 +231,7 @@ impl AbstractProcessTransformer {
     }
 
     fn extract_handle_link_trapped(&mut self, method: &syn::ImplItemMethod) {
-        if let Some(_) = self.type_impls.handle_link_trapped {
+        if self.type_impls.handle_link_trapped.is_some() {
             let err = syn::Error::new(
                 method.sig.ident.span(),
                 "Only one method can be marked with `#[handle_link_trapped]` macro",
