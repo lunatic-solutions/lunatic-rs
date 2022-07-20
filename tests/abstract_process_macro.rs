@@ -158,7 +158,7 @@ fn handle_single_argument() {
 }
 
 #[test]
-fn handle_more_than_one_argument() {
+fn handle_multiple_arguments() {
     struct A;
 
     #[derive(serde::Serialize, serde::Deserialize)]
