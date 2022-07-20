@@ -270,10 +270,13 @@ impl AbstractProcessTransformer {
     }
 
     fn extract_process_message(&mut self, method: &syn::ImplItemMethod) {
-        let attrs = method
+        let mut method = method.clone();
+        method.attrs = method
             .attrs
-            .iter()
-            .filter(|attr| !attr.path.is_ident("process_message"));
+            .into_iter()
+            .filter(|attr| !attr.path.is_ident("process_message"))
+            .collect();
+        let attrs = &method.attrs;
 
         let HandlerComponents {
             fn_ident,
@@ -282,7 +285,7 @@ impl AbstractProcessTransformer {
             handler_arg_names,
             handler_arg_types,
             message_destructuring,
-        } = self.extract_handler_input(method);
+        } = self.extract_handler_input(&method);
 
         let ident = &self.impl_type.clone().unwrap();
 
@@ -312,10 +315,13 @@ impl AbstractProcessTransformer {
     }
 
     fn extract_process_request(&mut self, method: &syn::ImplItemMethod) {
-        let attrs = method
+        let mut method = method.clone();
+        method.attrs = method
             .attrs
-            .iter()
-            .filter(|attr| !attr.path.is_ident("process_request"));
+            .into_iter()
+            .filter(|attr| !attr.path.is_ident("process_request"))
+            .collect();
+        let attrs = &method.attrs;
 
         let HandlerComponents {
             fn_ident,
@@ -324,7 +330,7 @@ impl AbstractProcessTransformer {
             handler_arg_names,
             handler_arg_types,
             message_destructuring,
-        } = self.extract_handler_input(method);
+        } = self.extract_handler_input(&method);
 
         let ident = &self.impl_type.clone().unwrap();
 

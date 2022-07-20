@@ -52,10 +52,10 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// ```
 /// use lunatic::{
+///     abstract_process,
 ///     process::{Message, ProcessRef, Request, StartProcess},
 ///     Tag,
 /// };
-/// use lunatic_macros::{abstract_process, process_message, process_request};
 ///
 /// struct Counter(u32);
 ///
@@ -96,8 +96,10 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 /// A more complicated example
 ///
 /// ```
-/// use lunatic::process::{Message, ProcessRef, Request, StartProcess};
-/// use lunatic_macros::{abstract_process, process_message, process_request};
+/// use lunatic::{
+///     abstract_process,
+///     process::{Message, ProcessRef, Request, StartProcess},
+/// }
 ///
 ///
 /// struct A;
@@ -153,31 +155,6 @@ pub fn abstract_process(_args: TokenStream, item: TokenStream) -> TokenStream {
         Ok(it) => AbstractProcessTransformer::new().transform(it).into(),
         Err(e) => token_stream_with_error(item, e),
     }
-}
-
-#[proc_macro_attribute]
-pub fn init(_args: TokenStream, item: TokenStream) -> TokenStream {
-    item
-}
-
-#[proc_macro_attribute]
-pub fn terminate(_args: TokenStream, item: TokenStream) -> TokenStream {
-    item
-}
-
-#[proc_macro_attribute]
-pub fn handle_link_trapped(_args: TokenStream, item: TokenStream) -> TokenStream {
-    item
-}
-
-#[proc_macro_attribute]
-pub fn process_message(_args: TokenStream, item: TokenStream) -> TokenStream {
-    item
-}
-
-#[proc_macro_attribute]
-pub fn process_request(_args: TokenStream, item: TokenStream) -> TokenStream {
-    item
 }
 
 fn token_stream_with_error(mut tokens: TokenStream, error: syn::Error) -> TokenStream {

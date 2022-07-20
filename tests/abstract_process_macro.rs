@@ -1,9 +1,8 @@
 use lunatic::{
-    host,
+    abstract_process, host,
     process::{Message, ProcessRef, Request, StartProcess},
     sleep, spawn_link, test, Tag,
 };
-use lunatic_macros::{abstract_process, process_message, process_request};
 use std::time::Duration;
 
 #[test]

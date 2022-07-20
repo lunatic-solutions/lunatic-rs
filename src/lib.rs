@@ -112,7 +112,7 @@ pub use mailbox::{Mailbox, ReceiveError};
 pub use module::WasmModule;
 pub use tag::Tag;
 
-pub use lunatic_macros::main;
+pub use lunatic_macros::{abstract_process, main};
 pub use lunatic_test::test;
 
 /// Implemented for all resources held by the VM.
