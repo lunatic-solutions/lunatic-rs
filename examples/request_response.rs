@@ -1,5 +1,5 @@
 use lunatic::{
-    process::{AbstractProcess, ProcessRef, ProcessRequest, Request, StartProcess},
+    process::{AbstractProcess, ProcessRef, Request, RequestHandler, StartProcess},
     Mailbox,
 };
 
@@ -12,7 +12,7 @@ impl AbstractProcess for Adder {
         Adder
     }
 }
-impl ProcessRequest<(i32, i32)> for Adder {
+impl RequestHandler<(i32, i32)> for Adder {
     type Response = i32;
 
     fn handle(_: &mut Self::State, (a, b): (i32, i32)) -> i32 {
