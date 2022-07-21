@@ -304,6 +304,7 @@ impl AbstractProcessTransformer {
             }
         });
         self.handler_wrappers.trait_defs.push(quote! {
+            #(#attrs)*
             fn #fn_ident(&self, #(#handler_args),*);
         });
         self.handler_wrappers.trait_impls.push(quote! {
@@ -358,6 +359,7 @@ impl AbstractProcessTransformer {
             }
         });
         self.handler_wrappers.trait_defs.push(quote! {
+            #(#attrs)*
             fn #fn_ident(&self, #(#handler_args),*) -> #response_type;
         });
         self.handler_wrappers.trait_impls.push(quote! {
