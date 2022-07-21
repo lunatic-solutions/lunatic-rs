@@ -1,6 +1,6 @@
 use lunatic::{
     abstract_process, host,
-    process::{Message, ProcessRef, Request, StartProcess},
+    process::{ProcessRef, StartProcess},
     sleep, spawn_link, test, Tag,
 };
 use std::time::Duration;
@@ -130,7 +130,7 @@ fn handle_single_argument() {
     struct A;
 
     #[derive(serde::Serialize, serde::Deserialize)]
-    struct Name(String);
+    pub struct Name(String);
 
     #[abstract_process]
     impl A {
@@ -161,7 +161,7 @@ fn handle_multiple_arguments() {
     struct A;
 
     #[derive(serde::Serialize, serde::Deserialize)]
-    struct Num(u32);
+    pub struct Num(u32);
 
     #[abstract_process]
     impl A {
@@ -217,7 +217,7 @@ fn handle_destructuring() {
     struct A;
 
     #[derive(serde::Serialize, serde::Deserialize)]
-    struct Person {
+    pub struct Person {
         name: String,
         age: u16,
     }
@@ -266,7 +266,7 @@ fn reply_types() {
     struct A;
 
     #[derive(Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-    struct CustomReply;
+    pub struct CustomReply;
 
     #[abstract_process]
     impl A {

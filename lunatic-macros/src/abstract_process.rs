@@ -133,7 +133,7 @@ impl AbstractProcessTransformer {
 
             #(#handler_impls)*
 
-            trait #handler_trait {
+            pub trait #handler_trait {
                 #(#handler_wrapper_defs)*
             }
 
@@ -308,6 +308,7 @@ impl AbstractProcessTransformer {
         });
         self.handler_wrappers.trait_impls.push(quote! {
             fn #fn_ident(&self, #(#handler_args),*) {
+                use lunatic::process::Message;
                 self.send(#message_type(#(#handler_arg_names),*));
             }
         });
@@ -361,6 +362,7 @@ impl AbstractProcessTransformer {
         });
         self.handler_wrappers.trait_impls.push(quote! {
             fn #fn_ident(&self, #(#handler_args),*) -> #response_type {
+                use lunatic::process::Request;
                 self.request(#message_type(#(#handler_arg_names),*))
             }
         });
