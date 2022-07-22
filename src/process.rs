@@ -17,7 +17,7 @@ pub fn process_id() -> u64 {
 /// Types that implement the `AbstractProcess` trait can be started as processes.
 ///
 /// Their state can be mutated through messages and requests. To define a handler for them,
-/// use [`ProcessMessage`] or [`ProcessRequest`].
+/// use [`MessageHandler`] or [`RequestHandler`].
 ///
 /// [`Message`] provides a `send` method to send messages to the process, without waiting on a
 /// response. [`Request`] provides a `request` method that will block until a response is received.
@@ -26,7 +26,7 @@ pub fn process_id() -> u64 {
 ///
 /// ```
 /// use lunatic::process::{
-///     AbstractProcess, Message, ProcessMessage, ProcessRef, ProcessRequest,
+///     AbstractProcess, Message, MessageHandler, ProcessRef, RequestHandler,
 ///     Request, StartProcess,
 /// };
 ///
@@ -43,7 +43,7 @@ pub fn process_id() -> u64 {
 ///
 /// #[derive(serde::Serialize, serde::Deserialize)]
 /// struct Inc;
-/// impl ProcessMessage<Inc> for Counter {
+/// impl MessageHandler<Inc> for Counter {
 ///     fn handle(state: &mut Self::State, _: Inc) {
 ///         state.0 += 1;
 ///     }
@@ -51,7 +51,7 @@ pub fn process_id() -> u64 {
 ///
 /// #[derive(serde::Serialize, serde::Deserialize)]
 /// struct Count;
-/// impl ProcessRequest<Count> for Counter {
+/// impl RequestHandler<Count> for Counter {
 ///     type Response = u32;
 ///
 ///     fn handle(state: &mut Self::State, _: Count) -> u32 {
@@ -94,7 +94,7 @@ pub trait AbstractProcess {
 }
 
 /// Defines a handler for a message of type `M`.
-pub trait ProcessMessage<M, S = Bincode>: AbstractProcess
+pub trait MessageHandler<M, S = Bincode>: AbstractProcess
 where
     S: Serializer<M>,
 {
@@ -102,7 +102,7 @@ where
 }
 
 /// Defines a handler for a request of type `M`.
-pub trait ProcessRequest<M, S = Bincode>: AbstractProcess
+pub trait RequestHandler<M, S = Bincode>: AbstractProcess
 where
     S: Serializer<M>,
 {
@@ -371,7 +371,7 @@ where
 /// A reference to a running process.
 ///
 /// `ProcessRef<T>` is different from a `Process` in the ability to handle messages of different
-/// types, as long as the traits `ProcessMessage<M>` or `ProcessRequest<R>` are implemented for T.
+/// types, as long as the traits `MessageHandler<M>` or `RequestHandler<R>` are implemented for T.
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ProcessRef<T>
 where
@@ -485,18 +485,18 @@ enum Sendable {
 impl<M, S, T> Message<M, S> for ProcessRef<T>
 where
     T: AbstractProcess,
-    T: ProcessMessage<M, S>,
+    T: MessageHandler<M, S>,
     S: Serializer<M>,
 {
     /// Send message to the process.
     fn send(&self, message: M) {
         fn unpacker<TU, MU, SU>(this: &mut TU::State)
         where
-            TU: ProcessMessage<MU, SU>,
+            TU: MessageHandler<MU, SU>,
             SU: Serializer<MU>,
         {
             let message: MU = SU::decode().unwrap();
-            <TU as ProcessMessage<MU, SU>>::handle(this, message);
+            <TU as MessageHandler<MU, SU>>::handle(this, message);
         }
 
         // Create new message buffer.
@@ -515,11 +515,11 @@ where
     fn send_after(&self, message: M, duration: Duration) -> TimerRef {
         fn unpacker<TU, MU, SU>(this: &mut TU::State)
         where
-            TU: ProcessMessage<MU, SU>,
+            TU: MessageHandler<MU, SU>,
             SU: Serializer<MU>,
         {
             let message: MU = SU::decode().unwrap();
-            <TU as ProcessMessage<MU, SU>>::handle(this, message);
+            <TU as MessageHandler<MU, SU>>::handle(this, message);
         }
 
         // Create new message buffer.
@@ -540,10 +540,10 @@ where
 impl<M, S, T> Request<M, S> for ProcessRef<T>
 where
     T: AbstractProcess,
-    T: ProcessRequest<M, S>,
-    S: Serializer<M> + Serializer<Sendable> + Serializer<<T as ProcessRequest<M, S>>::Response>,
+    T: RequestHandler<M, S>,
+    S: Serializer<M> + Serializer<Sendable> + Serializer<<T as RequestHandler<M, S>>::Response>,
 {
-    type Result = <T as ProcessRequest<M, S>>::Response;
+    type Result = <T as RequestHandler<M, S>>::Response;
 
     /// Send request to the process. If duration is 0 block until an answer is received,
     /// else wait for the supplied duration.
@@ -554,17 +554,17 @@ where
     ) -> Result<Self::Result, ReceiveError> {
         fn unpacker<TU, MU, SU>(
             this: &mut TU::State,
-            sender: Process<<TU as ProcessRequest<MU, SU>>::Response, SU>,
+            sender: Process<<TU as RequestHandler<MU, SU>>::Response, SU>,
         ) where
-            TU: ProcessRequest<MU, SU>,
-            SU: Serializer<MU> + Serializer<<TU as ProcessRequest<MU, SU>>::Response>,
+            TU: RequestHandler<MU, SU>,
+            SU: Serializer<MU> + Serializer<<TU as RequestHandler<MU, SU>>::Response>,
         {
             // Get content out of message
             let message: MU = SU::decode().unwrap();
             // Get tag out of message before the handler function maybe manipulates it.
             let tag = unsafe { host::api::message::get_tag() };
             let tag = Tag::from(tag);
-            let result = <TU as ProcessRequest<MU, SU>>::handle(this, message);
+            let result = <TU as RequestHandler<MU, SU>>::handle(this, message);
             sender.tag_send(tag, result);
         }
 
@@ -651,7 +651,7 @@ where
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct GetChildren;
-impl<T> ProcessRequest<GetChildren> for T
+impl<T> RequestHandler<GetChildren> for T
 where
     T: Supervisor,
     T: AbstractProcess<State = SupervisorConfig<T>>,
@@ -714,13 +714,13 @@ mod tests {
         }
     }
 
-    impl ProcessMessage<Inc> for TestServer {
+    impl MessageHandler<Inc> for TestServer {
         fn handle(state: &mut Self::State, message: Inc) {
             state.0 += message.0;
         }
     }
 
-    impl ProcessRequest<Count> for TestServer {
+    impl RequestHandler<Count> for TestServer {
         type Response = i32;
 
         fn handle(state: &mut Self::State, _: Count) -> Self::Response {
@@ -728,7 +728,7 @@ mod tests {
         }
     }
 
-    impl ProcessMessage<Panic> for TestServer {
+    impl MessageHandler<Panic> for TestServer {
         fn handle(_: &mut Self::State, _: Panic) {
             panic!("fail");
         }
