@@ -18,7 +18,7 @@ pub struct AbstractProcessTransformer {
     handler_wrappers: HandlerWrappers,
     /// message (message, request, and response) struct definitions
     message_structs: Vec<TokenStream>,
-    /// impl blocks for ProcessMessage and ProcessRequest
+    /// impl blocks for MessageHandler and RequestHandler
     handler_impls: Vec<TokenStream>,
     /// compiler errors
     errors: Vec<TokenStream>,
@@ -297,7 +297,7 @@ impl AbstractProcessTransformer {
         });
         self.handler_impls.push(quote! {
             #(#attrs)*
-            impl lunatic::process::ProcessMessage<#message_type> for #ident {
+            impl lunatic::process::MessageHandler<#message_type> for #ident {
                 fn handle(state: &mut Self::State, message: #message_type) {
                     state.#fn_ident(#(#message_destructuring),*)
                 }
@@ -351,7 +351,7 @@ impl AbstractProcessTransformer {
         });
         self.handler_impls.push(quote! {
             #(#attrs)*
-            impl lunatic::process::ProcessRequest<#message_type> for #ident {
+            impl lunatic::process::RequestHandler<#message_type> for #ident {
                 type Response = #response_type;
                 fn handle(state: &mut Self::State, message: #message_type) -> #response_type {
                     state.#fn_ident(#(#message_destructuring),*)

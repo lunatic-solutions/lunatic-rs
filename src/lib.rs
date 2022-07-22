@@ -16,7 +16,7 @@ function.
 
 * **[`Process`]** - A process that can receive messages through a [`Mailbox`] or
     [`Protocol`](protocol::Protocol).
-* **[`AbstractProcess`](process::AbstractProcess)** - Abstracts state managment and message/request
+* **[`AbstractProcess`](process::AbstractProcess)** - Abstracts state management and message/request
     handling.
 * **[`Supervisor`](supervisor::Supervisor)** - A process that can supervise others and re-spawn
     them if they fail.
@@ -94,8 +94,10 @@ mod error;
 mod macros;
 mod mailbox;
 mod module;
+mod process_local;
 mod tag;
 
+pub mod distributed;
 pub mod function;
 pub mod host;
 pub mod net;
@@ -111,6 +113,10 @@ pub use function::process::Process;
 pub use mailbox::{Mailbox, ReceiveError};
 pub use module::WasmModule;
 pub use tag::Tag;
+
+#[doc(hidden)]
+pub use process_local::statik::Key as __StaticProcessLocalInner;
+pub use process_local::ProcessLocal;
 
 pub use lunatic_macros::{abstract_process, main};
 pub use lunatic_test::test;

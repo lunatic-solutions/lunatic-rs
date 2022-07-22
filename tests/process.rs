@@ -1,6 +1,9 @@
 use std::time::Duration;
 
-use lunatic::{spawn_link, Mailbox, Process, ProcessConfig};
+use lunatic::{
+    host::api::{message::receive, process::die_when_link_dies},
+    spawn_link, Mailbox, Process, ProcessConfig,
+};
 use lunatic_test::test;
 
 #[test]
@@ -121,4 +124,16 @@ fn unlink_shouldnt_fail_on_dead_process() {
     // Give enough time for process to finish
     lunatic::sleep(Duration::from_millis(100));
     child.unlink();
+}
+
+#[test]
+fn link_should_trigger_on_dead_process() {
+    unsafe { die_when_link_dies(0) };
+    let child = Process::spawn((), |_, _: Mailbox<()>| {});
+    // Give enough time for process to finish
+    lunatic::sleep(Duration::from_millis(100));
+    child.link();
+    let result = unsafe { receive(&0i64 as *const i64, 0, 100) };
+    // Confirm it's a link broke message and not a timeout
+    assert_ne!(result, 9027);
 }

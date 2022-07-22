@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use lunatic::{
-    process::{AbstractProcess, ProcessRef, ProcessRequest, Request, StartProcess},
+    process::{AbstractProcess, ProcessRef, Request, RequestHandler, StartProcess},
     spawn_link, Mailbox, Process, ReceiveError,
 };
 use lunatic_test::test;
@@ -60,6 +60,14 @@ fn message_resource(mailbox: Mailbox<Proc>) {
 }
 
 #[test]
+fn message_dead_process() {
+    let child = Process::spawn((), |_, _: Mailbox<()>| {});
+    // Give enough time to finish
+    lunatic::sleep(Duration::from_millis(100));
+    child.send(());
+}
+
+#[test]
 fn request_reply(mailbox: Mailbox<u64>) {
     struct Adder;
     impl AbstractProcess for Adder {
@@ -70,7 +78,7 @@ fn request_reply(mailbox: Mailbox<u64>) {
             Adder
         }
     }
-    impl ProcessRequest<(i32, i32)> for Adder {
+    impl RequestHandler<(i32, i32)> for Adder {
         type Response = i32;
 
         fn handle(_: &mut Self::State, (a, b): (i32, i32)) -> i32 {

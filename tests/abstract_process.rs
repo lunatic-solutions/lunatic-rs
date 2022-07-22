@@ -1,11 +1,12 @@
 use std::time::Duration;
 
 use lunatic::{
+    host,
     process::{
-        AbstractProcess, Message, ProcessMessage, ProcessRef, ProcessRequest, Request,
+        AbstractProcess, Message, MessageHandler, ProcessRef, Request, RequestHandler,
         SelfReference, StartProcess,
     },
-    sleep, test,
+    sleep, spawn_link, test, Tag,
 };
 
 #[test]
@@ -30,6 +31,45 @@ fn shutdown() {
 }
 
 #[test]
+fn handle_link_trapped() {
+    struct A {
+        link_trapped: bool,
+    }
+
+    impl AbstractProcess for A {
+        type Arg = ();
+        type State = A;
+
+        fn init(_process: ProcessRef<Self>, _arg: ()) -> Self {
+            unsafe { host::api::process::die_when_link_dies(0) };
+            spawn_link!(|| panic!());
+            Self {
+                link_trapped: false,
+            }
+        }
+
+        fn handle_link_trapped(state: &mut Self::State, tag: Tag) {
+            println!("Link trapped: {:?}", tag);
+            state.link_trapped = true;
+        }
+    }
+
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct IsLinkTrapped;
+    impl RequestHandler<IsLinkTrapped> for A {
+        type Response = bool;
+
+        fn handle(state: &mut Self::State, _request: IsLinkTrapped) -> bool {
+            state.link_trapped
+        }
+    }
+
+    let a = A::start((), None);
+    sleep(Duration::from_millis(10));
+    assert!(a.request(IsLinkTrapped));
+}
+
+#[test]
 fn handle_message() {
     struct A;
 
@@ -42,7 +82,7 @@ fn handle_message() {
         }
     }
 
-    impl ProcessMessage<String> for A {
+    impl MessageHandler<String> for A {
         fn handle(_state: &mut Self::State, message: String) {
             assert_eq!(message, "Hello world");
         }
@@ -67,7 +107,7 @@ fn handle_request() {
         }
     }
 
-    impl ProcessRequest<String> for A {
+    impl RequestHandler<String> for A {
         type Response = String;
 
         fn handle(_state: &mut Self::State, mut request: String) -> String {
@@ -97,7 +137,7 @@ fn init_args() {
 
     #[derive(serde::Serialize, serde::Deserialize)]
     struct Add(f64);
-    impl ProcessMessage<Add> for A {
+    impl MessageHandler<Add> for A {
         fn handle(state: &mut Self::State, message: Add) {
             state.0.push(message.0);
         }
@@ -105,7 +145,7 @@ fn init_args() {
 
     #[derive(serde::Serialize, serde::Deserialize)]
     struct Sum;
-    impl ProcessRequest<Sum> for A {
+    impl RequestHandler<Sum> for A {
         type Response = f64;
 
         fn handle(state: &mut Self::State, _: Sum) -> f64 {
@@ -149,7 +189,7 @@ fn self_reference() {
 
     #[derive(serde::Serialize, serde::Deserialize)]
     struct Inc;
-    impl ProcessMessage<Inc> for A {
+    impl MessageHandler<Inc> for A {
         fn handle(state: &mut Self::State, _: Inc) {
             // Increment state until 10
             if state.0 < 10 {
@@ -162,7 +202,7 @@ fn self_reference() {
 
     #[derive(serde::Serialize, serde::Deserialize)]
     struct Count;
-    impl ProcessRequest<Count> for A {
+    impl RequestHandler<Count> for A {
         type Response = u32;
 
         fn handle(state: &mut Self::State, _: Count) -> u32 {
@@ -193,7 +233,7 @@ fn different_state_type() {
 
     #[derive(serde::Serialize, serde::Deserialize)]
     struct Inc;
-    impl ProcessMessage<Inc> for B {
+    impl MessageHandler<Inc> for B {
         fn handle(state: &mut Self::State, _: Inc) {
             state.0 += 1;
         }
@@ -201,7 +241,7 @@ fn different_state_type() {
 
     #[derive(serde::Serialize, serde::Deserialize)]
     struct Count;
-    impl ProcessRequest<Count> for B {
+    impl RequestHandler<Count> for B {
         type Response = u32;
 
         fn handle(state: &mut Self::State, _: Count) -> u32 {
@@ -230,7 +270,7 @@ fn lookup() {
         }
     }
 
-    impl ProcessRequest<()> for A {
+    impl RequestHandler<()> for A {
         type Response = ();
         fn handle(_: &mut Self::State, _: ()) {}
     }
@@ -262,7 +302,7 @@ fn linked_process_fails() {
 
     #[derive(serde::Serialize, serde::Deserialize)]
     struct Panic;
-    impl ProcessMessage<Panic> for A {
+    impl MessageHandler<Panic> for A {
         fn handle(_state: &mut Self::State, _: Panic) {
             panic!();
         }
@@ -289,7 +329,7 @@ fn unlinked_process_doesnt_fail() {
 
     #[derive(serde::Serialize, serde::Deserialize)]
     struct Panic;
-    impl ProcessMessage<Panic> for A {
+    impl MessageHandler<Panic> for A {
         fn handle(_state: &mut Self::State, _: Panic) {
             panic!();
         }
@@ -315,7 +355,7 @@ fn request_timeout() {
         }
     }
 
-    impl ProcessRequest<String> for A {
+    impl RequestHandler<String> for A {
         type Response = String;
 
         fn handle(_state: &mut Self::State, mut request: String) -> String {

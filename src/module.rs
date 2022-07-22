@@ -1,6 +1,11 @@
 use std::u128;
 
-use crate::{error::LunaticError, host, serializer::Serializer, Process, Resource};
+use crate::{
+    error::LunaticError,
+    host::{self, api::distributed::node_id},
+    serializer::Serializer,
+    Process,
+};
 
 /// A compiled instance of a WebAssembly module.
 ///
@@ -83,7 +88,7 @@ impl WasmModule {
         };
 
         if result == 0 {
-            Ok(unsafe { Process::from_id(process_or_error_id) })
+            Ok(unsafe { Process::new(node_id(), process_or_error_id) })
         } else {
             Err(LunaticError::from(process_or_error_id))
         }
@@ -114,7 +119,7 @@ impl WasmModule {
         };
 
         if result == 0 {
-            Ok(unsafe { Process::from_id(process_or_error_id) })
+            Ok(unsafe { Process::new(node_id(), process_or_error_id) })
         } else {
             Err(LunaticError::from(process_or_error_id))
         }

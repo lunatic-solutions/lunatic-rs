@@ -4,7 +4,7 @@ use crate::{
     function::process::IntoProcess,
     host,
     serializer::{Bincode, Serializer},
-    Mailbox, Process, ProcessConfig, ReceiveError, Resource, Tag,
+    Mailbox, Process, ProcessConfig, ReceiveError, Tag,
 };
 
 /// A value that the protocol captures from the parent process.
@@ -26,6 +26,7 @@ pub struct ProtocolCapture<C> {
 /// processes are in the correct order and of the correct type.
 pub struct Protocol<P: 'static, S = Bincode> {
     id: u64,
+    node_id: u64,
     tag: Tag,
     phantom: PhantomData<(P, S)>,
 }
@@ -39,7 +40,6 @@ impl<P: 'static, S> Drop for Protocol<P, S> {
                 std::any::type_name::<P>()
             );
         }
-        unsafe { host::api::process::drop_process(self.id) };
     }
 }
 
@@ -50,6 +50,7 @@ impl<P, S> Protocol<P, S> {
         let process = ManuallyDrop::new(process);
         Self {
             id: process.id(),
+            node_id: process.node_id(),
             tag,
             phantom: PhantomData,
         }
@@ -61,6 +62,7 @@ impl<P, S> Protocol<P, S> {
         let self_ = ManuallyDrop::new(self);
         Protocol {
             id: self_.id,
+            node_id: self_.node_id,
             tag: self_.tag,
             phantom: PhantomData,
         }
@@ -77,7 +79,7 @@ where
         // Don't drop the session yet.
         let self_ = ManuallyDrop::new(self);
         // Temporarily cast to right process type.
-        let process: Process<A, S> = unsafe { Process::from_id(self_.id) };
+        let process: Process<A, S> = Process::new(self_.node_id, self_.id);
         process.tag_send(self_.tag, message);
         Protocol::from_process(process, self_.tag)
     }
@@ -134,7 +136,7 @@ where
         // Don't drop the session yet.
         let self_ = ManuallyDrop::new(self);
         // Temporarily cast to right process type.
-        let process: Process<bool, S> = unsafe { Process::from_id(self_.id) };
+        let process: Process<bool, S> = Process::new(self_.node_id, self_.id);
         process.tag_send(self_.tag, true);
         Protocol::from_process(process, self_.tag)
     }
@@ -145,7 +147,7 @@ where
         // Don't drop the session yet.
         let self_ = ManuallyDrop::new(self);
         // Temporarily cast to right process type.
-        let process: Process<bool, S> = unsafe { Process::from_id(self_.id) };
+        let process: Process<bool, S> = Process::new(self_.node_id, self_.id);
         process.tag_send(self_.tag, false);
         Protocol::from_process(process, self_.tag)
     }
@@ -251,27 +253,29 @@ where
         entry: fn(C, Protocol<P, S>),
         link: Option<Tag>,
         config: Option<&ProcessConfig>,
+        node: Option<u64>,
     ) -> Self::Process
     where
         S: Serializer<ProtocolCapture<C>>,
     {
         let entry = entry as usize as i32;
+        let node_id = node.unwrap_or_else(host::node_id);
 
         // The `type_helper_wrapper` function is used here to create a pointer to a function with
         // generic types C, P & S. We can only send pointer data across processes and this is the
         // only way the Rust compiler will let us transfer this information into the new process.
-        match host::spawn(config, link, type_helper_wrapper::<C, P, S>, entry) {
+        match host::spawn(node, config, link, type_helper_wrapper::<C, P, S>, entry) {
             Ok(id) => {
                 // Use unique tag so that protocol messages are separated from regular messages.
                 let tag = Tag::new();
                 // Create reference to self
-                let this = unsafe { Process::<()>::from_id(host::api::process::this()) };
+                let this = Process::<()>::new(host::node_id(), host::process_id());
                 let capture = ProtocolCapture {
                     process: this,
                     tag,
                     capture,
                 };
-                let child = unsafe { Process::<ProtocolCapture<C>, S>::from_id(id) };
+                let child = Process::<ProtocolCapture<C>, S>::new(node_id, id);
 
                 child.send(capture);
                 Protocol::from_process(child, tag)
@@ -289,9 +293,9 @@ where
 {
     let p_capture = unsafe { Mailbox::<ProtocolCapture<C>, S>::new() }.receive();
     let capture = p_capture.capture;
-    let procotol = Protocol::from_process(p_capture.process, p_capture.tag);
+    let protocol = Protocol::from_process(p_capture.process, p_capture.tag);
     let function: fn(C, Protocol<P, S>) = unsafe { std::mem::transmute(function) };
-    function(capture, procotol);
+    function(capture, protocol);
 }
 
 #[cfg(test)]

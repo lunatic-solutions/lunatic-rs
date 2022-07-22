@@ -6,7 +6,7 @@ use crate::{
     function::process::{IntoProcess, NoLink},
     host::{self, api::message},
     serializer::{Bincode, DecodeError, Serializer},
-    Process, ProcessConfig, Resource, Tag,
+    Process, ProcessConfig, Tag,
 };
 
 const LINK_TRAPPED: u32 = 1;
@@ -27,7 +27,7 @@ where
 {
     /// Returns a reference to the currently running process
     pub fn this(&self) -> Process<M, S> {
-        unsafe { <Process<M, S> as Resource>::from_id(host::api::process::this()) }
+        Process::new(host::node_id(), host::process_id())
     }
 
     /// Gets next message from process' mailbox.
@@ -220,22 +220,24 @@ where
         entry: fn(C, Self),
         link: Option<Tag>,
         config: Option<&ProcessConfig>,
+        node: Option<u64>,
     ) -> Self::Process
     where
         S: Serializer<C> + Serializer<M>,
     {
         let entry = entry as usize as i32;
+        let node_id = node.unwrap_or_else(host::node_id);
 
         // The `type_helper_wrapper` function is used here to create a pointer to a function with
         // generic types C, M & S. We can only send pointer data across processes and this is the
         // only way the Rust compiler will let us transfer this information into the new process.
-        match host::spawn(config, link, type_helper_wrapper::<C, M, S>, entry) {
+        match host::spawn(node, config, link, type_helper_wrapper::<C, M, S>, entry) {
             Ok(id) => {
                 // If the captured variable is of size 0, we don't need to send it to another process.
                 if std::mem::size_of::<C>() == 0 {
-                    unsafe { Process::from_id(id) }
+                    Process::new(node_id, id)
                 } else {
-                    let child = unsafe { Process::<C, S>::from_id(id) };
+                    let child = Process::<C, S>::new(node_id, id);
                     child.send(capture);
                     // Processes can only receive one type of message, but to pass in the captured variable
                     // we pretend for the first message that our process is receiving messages of type `C`.
