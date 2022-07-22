@@ -40,7 +40,7 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// - Use **#\[init\]**, **#\[terminate\]**, and **#\[handle_link_trapped\]** attributes to
 /// specify methods for implementing lunatic::process::AbstractProcess.
-/// - Use **#\[process_message\]** and **#\[process_request\]** attributes to specify
+/// - Use **#\[handle_message\]** and **#\[handle_request\]** attributes to specify
 /// message and request handlers.
 ///
 /// Specifying message types is unnecessary because the macro will create wrapper
@@ -76,12 +76,12 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///         println!("Link trapped");
 ///     }
 ///
-///     #[process_message]
+///     #[handle_message]
 ///     fn increment(&mut self) {
 ///         self.0 += 1;
 ///     }
 ///
-///     #[process_request]
+///     #[handle_request]
 ///     fn count(&self) -> u32 {
 ///         self.0
 ///     }
