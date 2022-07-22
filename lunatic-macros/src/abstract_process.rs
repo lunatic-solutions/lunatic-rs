@@ -67,11 +67,11 @@ impl AbstractProcessTransformer {
                 Method(method) if method.has_tag("handle_link_trapped") => {
                     self.extract_handle_link_trapped(method)
                 }
-                Method(method) if method.has_tag("process_message") => {
-                    self.extract_process_message(method);
+                Method(method) if method.has_tag("handle_message") => {
+                    self.extract_handle_message(method);
                 }
-                Method(method) if method.has_tag("process_request") => {
-                    self.extract_process_request(method);
+                Method(method) if method.has_tag("handle_request") => {
+                    self.extract_handle_request(method);
                 }
                 _ => {
                     self.type_impls.skipped_items.push(quote! { #item });
@@ -269,12 +269,12 @@ impl AbstractProcessTransformer {
         });
     }
 
-    fn extract_process_message(&mut self, method: &syn::ImplItemMethod) {
+    fn extract_handle_message(&mut self, method: &syn::ImplItemMethod) {
         let mut method = method.clone();
         method.attrs = method
             .attrs
             .into_iter()
-            .filter(|attr| !attr.path.is_ident("process_message"))
+            .filter(|attr| !attr.path.is_ident("handle_message"))
             .collect();
         let attrs = &method.attrs;
 
@@ -316,12 +316,12 @@ impl AbstractProcessTransformer {
         self.type_impls.skipped_items.push(quote! { #method })
     }
 
-    fn extract_process_request(&mut self, method: &syn::ImplItemMethod) {
+    fn extract_handle_request(&mut self, method: &syn::ImplItemMethod) {
         let mut method = method.clone();
         method.attrs = method
             .attrs
             .into_iter()
-            .filter(|attr| !attr.path.is_ident("process_request"))
+            .filter(|attr| !attr.path.is_ident("handle_request"))
             .collect();
         let attrs = &method.attrs;
 

@@ -117,14 +117,14 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///         A
 ///     }
 ///
-///     #[process_message]
+///     #[hanlde_message]
 ///     fn multiple_arguments(&self, a: u8, (b, c): (bool, char)) {
 ///         assert_eq!(a, 5);
 ///         assert_eq!(b, false);
 ///         assert_eq!(c, 'a');
 ///     }
 ///
-///     #[process_request]
+///     #[handle_request]
 ///     fn unpack_struct(&self, Person { name, age }: Person) -> String {
 ///         assert_eq!(name, "Mark");
 ///         assert_eq!(age, 5);

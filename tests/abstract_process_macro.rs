@@ -70,7 +70,7 @@ fn handle_link_trapped() {
             self.link_trapped = true;
         }
 
-        #[process_request]
+        #[handle_request]
         fn is_link_trapped(&self) -> bool {
             self.link_trapped
         }
@@ -94,19 +94,19 @@ fn handle_zero_argument() {
             Self { count }
         }
 
-        #[process_message]
+        #[handle_message]
         fn increment(&mut self, num: u32) {
             self.count += num;
             self.check_count();
         }
 
-        #[process_message]
+        #[handle_message]
         fn decrement(&mut self, num: u32) {
             self.count -= num;
             self.check_count();
         }
 
-        #[process_request]
+        #[handle_request]
         fn count(&self) -> u32 {
             self.count
         }
@@ -139,12 +139,12 @@ fn handle_single_argument() {
             A
         }
 
-        #[process_message]
+        #[handle_message]
         fn say_hello(&self, message: String) {
             assert_eq!(message, "Hello");
         }
 
-        #[process_request]
+        #[handle_request]
         fn say_hello_to(&self, name: Name) -> String {
             format!("Hello {}", name.0)
         }
@@ -170,14 +170,14 @@ fn handle_multiple_arguments() {
             A
         }
 
-        #[process_message]
+        #[handle_message]
         fn say_hello(&self, arg1: String, arg2: bool, arg3: Num) {
             assert_eq!(arg1, "Hello");
             assert_eq!(arg2, false);
             assert_eq!(arg3.0, 666);
         }
 
-        #[process_request]
+        #[handle_request]
         fn say_hello_to(&self, arg1: String, arg2: bool, arg3: Num) -> String {
             format!("{} {} {}", arg1, arg2, arg3.0)
         }
@@ -200,10 +200,10 @@ fn handle_mut_types() {
             A
         }
 
-        #[process_message]
+        #[handle_message]
         fn one_mut_arg(&self, mut _a: String) {}
 
-        #[process_request]
+        #[handle_request]
         fn two_mut_arg(&self, mut _a: String, _b: bool) -> () {}
     }
 
@@ -229,7 +229,7 @@ fn handle_destructuring() {
             A
         }
 
-        #[process_message]
+        #[handle_message]
         fn unpack_tuples(&self, (a, (mut b, c)): (u8, (bool, char))) {
             assert_eq!(a, 5);
             b = !b;
@@ -237,14 +237,14 @@ fn handle_destructuring() {
             assert_eq!(c, 'a');
         }
 
-        #[process_message]
+        #[handle_message]
         fn unpack_slice(&self, [a, b, c]: [u32; 3]) {
             assert_eq!(a, 0);
             assert_eq!(b, 1);
             assert_eq!(c, 2);
         }
 
-        #[process_request]
+        #[handle_request]
         fn unpack_struct(&self, Person { name, mut age }: Person) -> () {
             assert_eq!(name, "Mark");
             age += 1;
@@ -275,20 +275,20 @@ fn reply_types() {
             A
         }
 
-        #[process_request]
+        #[handle_request]
         fn empty_struct(&self) -> () {}
 
-        #[process_request]
+        #[handle_request]
         fn builtin_type(&self) -> bool {
             true
         }
 
-        #[process_request]
+        #[handle_request]
         fn nested_types(&self) -> (bool, u8) {
             (true, 9)
         }
 
-        #[process_request]
+        #[handle_request]
         fn custom_type(&self) -> CustomReply {
             CustomReply
         }
