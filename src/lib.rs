@@ -118,7 +118,7 @@ pub use tag::Tag;
 pub use process_local::statik::Key as __StaticProcessLocalInner;
 pub use process_local::ProcessLocal;
 
-pub use lunatic_macros::main;
+pub use lunatic_macros::{abstract_process, main};
 pub use lunatic_test::test;
 
 /// Implemented for all resources held by the VM.
