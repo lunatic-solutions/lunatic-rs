@@ -28,8 +28,6 @@ use crate::{error::LunaticError, host};
 #[derive(Debug)]
 pub struct TcpStream {
     id: u64,
-    read_timeout: u32,  // ms
-    write_timeout: u32, // ms
     // If the TCP stream is serialized it will be removed from our resources, so we can't call
     // `drop_tcp_stream()` anymore on it.
     consumed: UnsafeCell<bool>,
@@ -49,8 +47,6 @@ impl Clone for TcpStream {
         let id = unsafe { host::api::networking::clone_tcp_stream(self.id) };
         Self {
             id,
-            read_timeout: self.read_timeout,
-            write_timeout: self.write_timeout,
             consumed: UnsafeCell::new(false),
         }
     }
@@ -98,29 +94,7 @@ impl TcpStream {
     pub(crate) fn from(id: u64) -> Self {
         TcpStream {
             id,
-            read_timeout: 0,
-            write_timeout: 0,
             consumed: UnsafeCell::new(false),
-        }
-    }
-
-    /// Sets the read timeout.
-    ///
-    /// If the value specified is `None`, then read calls will block indefinitely.
-    pub fn set_read_timeout(&mut self, duration: Option<Duration>) {
-        match duration {
-            None => self.read_timeout = 0,
-            Some(duration) => self.read_timeout = duration.as_millis() as u32,
-        }
-    }
-
-    /// Sets the write timeout.
-    ///
-    /// If the value specified is `None`, then write calls will block indefinitely.
-    pub fn set_write_timeout(&mut self, duration: Option<Duration>) {
-        match duration {
-            None => self.write_timeout = 0,
-            Some(duration) => self.write_timeout = duration.as_millis() as u32,
         }
     }
 
@@ -153,12 +127,8 @@ impl TcpStream {
         let mut id = 0;
         for addr in addr.to_socket_addrs()? {
             let timeout_ms = match timeout {
-                // If waiting time is smaller than 1ms, round it up to 1ms.
-                Some(timeout) => match timeout.as_millis() {
-                    0 => 1,
-                    other => other as u32,
-                },
-                None => 0,
+                Some(timeout) => timeout.as_millis() as u64,
+                None => u64::MAX,
             };
             let result = match addr {
                 SocketAddr::V4(v4_addr) => {
@@ -216,7 +186,6 @@ impl Write for TcpStream {
                 self.id,
                 bufs.as_ptr() as *const u32,
                 bufs.len(),
-                self.write_timeout,
                 &mut nwritten_or_error_id as *mut u64,
             )
         };
@@ -248,7 +217,6 @@ impl Read for TcpStream {
                 self.id,
                 buf.as_mut_ptr(),
                 buf.len(),
-                self.read_timeout,
                 &mut nread_or_error_id as *mut u64,
             )
         };

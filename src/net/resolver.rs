@@ -84,12 +84,8 @@ fn resolve_timeout_(
 ) -> Result<SocketAddrIterator, LunaticError> {
     let mut dns_iter_or_error_id: u64 = 0;
     let timeout_ms = match timeout {
-        // If waiting time is smaller than 1ms, round it up to 1ms.
-        Some(timeout) => match timeout.as_millis() {
-            0 => 1,
-            other => other as u32,
-        },
-        None => 0,
+        Some(timeout) => timeout.as_millis() as u64,
+        None => u64::MAX,
     };
     let result = unsafe {
         host::api::networking::resolve(

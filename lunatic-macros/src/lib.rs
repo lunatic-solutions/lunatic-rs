@@ -50,7 +50,7 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Examples
 ///
-/// ```
+/// ```compile_fail
 /// use lunatic::{
 ///     abstract_process,
 ///     process::{Message, ProcessRef, Request, StartProcess},
@@ -95,7 +95,7 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// A more complicated example
 ///
-/// ```
+/// ```compile_fail
 /// use lunatic::{
 ///     abstract_process,
 ///     process::{Message, ProcessRef, Request, StartProcess},

@@ -87,7 +87,7 @@ pub fn send(node: u64, process_id: u64) {
     }
 }
 
-pub fn send_receive_skip_search(node: u64, process_id: u64, timeout: u32) -> u32 {
+pub fn send_receive_skip_search(node: u64, process_id: u64, timeout: u64) -> u32 {
     if node_id() == node {
         unsafe { api::message::send_receive_skip_search(process_id, timeout) }
     } else {
