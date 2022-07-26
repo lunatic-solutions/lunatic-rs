@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use lunatic::{
     process::{
-        AbstractProcess, Message, ProcessMessage, ProcessRef, ProcessRequest, Request, StartProcess,
+        AbstractProcess, Message, MessageHandler, ProcessRef, Request, RequestHandler, StartProcess,
     },
     sleep, spawn,
     supervisor::{Supervisor, SupervisorConfig, SupervisorStrategy},
@@ -31,7 +31,7 @@ impl AbstractProcess for Logger {
     }
 }
 
-impl ProcessRequest<LogEvent> for Logger {
+impl RequestHandler<LogEvent> for Logger {
     type Response = ();
 
     fn handle(state: &mut Self::State, request: LogEvent) -> Self::Response {
@@ -41,7 +41,7 @@ impl ProcessRequest<LogEvent> for Logger {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct TakeLogs;
-impl ProcessRequest<TakeLogs> for Logger {
+impl RequestHandler<TakeLogs> for Logger {
     type Response = Vec<LogEvent>;
 
     fn handle(state: &mut Self::State, _request: TakeLogs) -> Self::Response {
@@ -76,7 +76,7 @@ impl AbstractProcess for A {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Inc;
-impl ProcessMessage<Inc> for A {
+impl MessageHandler<Inc> for A {
     fn handle(state: &mut Self::State, _: Inc) {
         state.count += 1;
     }
@@ -84,7 +84,7 @@ impl ProcessMessage<Inc> for A {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Count;
-impl ProcessRequest<Count> for A {
+impl RequestHandler<Count> for A {
     type Response = u32;
 
     fn handle(state: &mut Self::State, _: Count) -> u32 {
@@ -94,7 +94,7 @@ impl ProcessRequest<Count> for A {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Panic;
-impl ProcessMessage<Panic> for A {
+impl MessageHandler<Panic> for A {
     fn handle(state: &mut Self::State, _: Panic) {
         if let Some(logger) = ProcessRef::<Logger>::lookup(LOGGER_NAME) {
             let log = LogEvent::Panic(state.name);

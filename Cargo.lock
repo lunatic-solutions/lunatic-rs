@@ -104,6 +104,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "convert_case"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb4a24b1aaf0fd0ce8b45161144d6f42cd91677fd5940fd431183eb023b3a2b8"
+
+[[package]]
 name = "criterion"
 version = "0.3.5"
 source = "git+https://github.com/bheisler/criterion.rs?branch=version-0.4#ecfd1d15b0def59a4b6e313553153c26a755f694"
@@ -222,6 +228,8 @@ dependencies = [
 name = "lunatic-macros"
 version = "0.10.0"
 dependencies = [
+ "convert_case",
+ "proc-macro2",
  "quote",
  "syn",
 ]

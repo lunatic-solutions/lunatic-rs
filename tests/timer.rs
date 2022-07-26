@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use lunatic::process::{AbstractProcess, Message, ProcessMessage, ProcessRef, StartProcess};
+use lunatic::process::{AbstractProcess, Message, MessageHandler, ProcessRef, StartProcess};
 use lunatic_test::test;
 
 struct P;
@@ -12,7 +12,7 @@ impl AbstractProcess for P {
         this
     }
 }
-impl ProcessMessage<()> for P {
+impl MessageHandler<()> for P {
     fn handle(this: &mut Self::State, _: ()) {
         this.kill();
     }
