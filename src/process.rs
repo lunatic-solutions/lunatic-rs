@@ -360,12 +360,20 @@ where
     type Result;
 
     fn request(&self, request: M) -> Self::Result {
-        self.request_timeout(request, Duration::new(0, 0))
+        self.request_timeout_(request, None)
             .expect("no timeout specified")
     }
 
-    fn request_timeout(&self, request: M, duration: Duration)
-        -> Result<Self::Result, ReceiveError>;
+    fn request_timeout(&self, request: M, timeout: Duration) -> Result<Self::Result, ReceiveError> {
+        self.request_timeout_(request, Some(timeout))
+    }
+
+    #[doc(hidden)]
+    fn request_timeout_(
+        &self,
+        request: M,
+        timeout: Option<Duration>,
+    ) -> Result<Self::Result, ReceiveError>;
 }
 
 /// A reference to a running process.
@@ -442,12 +450,15 @@ where
 {
     /// Shut down process
     pub fn shutdown(&self) {
-        self.shutdown_timeout(Duration::new(0, 0))
-            .expect("no timeout specified")
+        self.shutdown_timeout_(None).expect("no timeout specified")
     }
 
     /// Shut down process with a timeout
-    pub fn shutdown_timeout(&self, duration: Duration) -> Result<(), ReceiveError> {
+    pub fn shutdown_timeout(&self, timeout: Duration) -> Result<(), ReceiveError> {
+        self.shutdown_timeout_(Some(timeout))
+    }
+
+    fn shutdown_timeout_(&self, timeout: Option<Duration>) -> Result<(), ReceiveError> {
         // Create new message buffer.
         let tag = Tag::new();
         unsafe { host::api::message::create_data(tag.id(), 0) };
@@ -456,13 +467,13 @@ where
         let this: Process<()> = Process::this();
 
         Bincode::encode(&Sendable::Shutdown(this)).unwrap();
-
+        let timeout_ms = match timeout {
+            Some(timeout) => timeout.as_millis() as u64,
+            None => u64::MAX,
+        };
         // Send the message and wait for response
-        let result = host::send_receive_skip_search(
-            self.process.node_id(),
-            self.process.id(),
-            duration.as_millis() as u32,
-        );
+        let result =
+            host::send_receive_skip_search(self.process.node_id(), self.process.id(), timeout_ms);
         if result == 9027 {
             return Err(ReceiveError::Timeout);
         }
@@ -545,12 +556,11 @@ where
 {
     type Result = <T as RequestHandler<M, S>>::Response;
 
-    /// Send request to the process. If duration is 0 block until an answer is received,
-    /// else wait for the supplied duration.
-    fn request_timeout(
+    #[doc(hidden)]
+    fn request_timeout_(
         &self,
         request: M,
-        duration: Duration,
+        timeout: Option<Duration>,
     ) -> Result<Self::Result, ReceiveError> {
         fn unpacker<TU, MU, SU>(
             this: &mut TU::State,
@@ -580,11 +590,12 @@ where
         // Then the message itself.
         S::encode(&request).unwrap();
         // Send it & wait on a response!
-        let result = host::send_receive_skip_search(
-            self.process.node_id(),
-            self.process.id(),
-            duration.as_millis() as u32,
-        );
+        let timeout_ms = match timeout {
+            Some(timeout) => timeout.as_millis() as u64,
+            None => u64::MAX,
+        };
+        let result =
+            host::send_receive_skip_search(self.process.node_id(), self.process.id(), timeout_ms);
         if result == 9027 {
             return Err(ReceiveError::Timeout);
         };

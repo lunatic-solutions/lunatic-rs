@@ -23,8 +23,8 @@ pub mod message {
         pub fn push_tcp_stream(tcp_stream_id: u64) -> u64;
         pub fn take_tcp_stream(index: u64) -> u64;
         pub fn send(process_id: u64);
-        pub fn send_receive_skip_search(process_id: u64, timeout: u32) -> u32;
-        pub fn receive(tag: *const i64, tag_len: usize, timeout: u32) -> u32;
+        pub fn send_receive_skip_search(process_id: u64, timeout: u64) -> u32;
+        pub fn receive(tag: *const i64, tag_len: usize, timeout: u64) -> u32;
     }
 }
 
@@ -39,7 +39,7 @@ pub mod timer {
 pub mod networking {
     #[link(wasm_import_module = "lunatic::networking")]
     extern "C" {
-        pub fn resolve(name_str: *const u8, name_str_len: usize, timeout: u32, id: *mut u64)
+        pub fn resolve(name_str: *const u8, name_str_len: usize, timeout: u64, id: *mut u64)
             -> u32;
         pub fn drop_dns_iterator(dns_iter_id: u64);
         pub fn resolve_next(
@@ -77,7 +77,7 @@ pub mod networking {
             port: u32,
             flow_info: u32,
             scope_id: u32,
-            timeout: u32,
+            timeout: u64,
             id: *mut u64,
         ) -> u32;
         pub fn udp_connect(
@@ -87,7 +87,7 @@ pub mod networking {
             port: u32,
             flow_info: u32,
             scope_id: u32,
-            timeout: u32,
+            timeout: u64,
             id: *mut u64,
         ) -> u32;
         pub fn drop_tcp_stream(tcp_stream_id: u64);
@@ -96,21 +96,20 @@ pub mod networking {
             tcp_stream_id: u64,
             ciovec_array: *const u32,
             ciovec_array_len: usize,
-            timeout: u32,
             opaque: *mut u64,
         ) -> u32;
         pub fn tcp_read(
             tcp_stream_id: u64,
             buffer: *mut u8,
             buffer_len: usize,
-            timeout: u32,
+
             opaque: *mut u64,
         ) -> u32;
         pub fn udp_send(
             udp_socket_id: u64,
             buffer: *const u8,
             buffer_len: usize,
-            timeout: u32,
+
             opaque: *mut u64,
         ) -> u32;
         pub fn udp_send_to(
@@ -122,21 +121,18 @@ pub mod networking {
             port: u32,
             flow_info: u32,
             scope_id: u32,
-            timeout: u32,
             opaque: *mut u64,
         ) -> u32;
         pub fn udp_receive(
             udp_socket_id: u64,
             buffer: *mut u8,
             buffer_len: usize,
-            timeout: u32,
             opaque: *mut u64,
         ) -> u32;
         pub fn udp_receive_from(
             udp_socket_id: u64,
             buffer: *mut u8,
             buffer_len: usize,
-            timeout: u32,
             opaque: *mut u64,
             dns_iter_ptr: *mut u64,
         ) -> u32;
@@ -222,7 +218,7 @@ pub mod distributed {
         pub fn node_id() -> u64;
         pub fn module_id() -> u64;
         pub fn send(node_id: u64, process_id: u64);
-        pub fn send_receive_skip_search(node_id: u64, process_id: u64, timeout: u32) -> u32;
+        pub fn send_receive_skip_search(node_id: u64, process_id: u64, timeout: u64) -> u32;
         pub fn spawn(
             node_id: u64,
             config_id: i64,

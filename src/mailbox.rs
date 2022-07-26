@@ -84,12 +84,8 @@ where
     fn receive_(&self, tags: Option<&[i64]>, timeout: Option<Duration>) -> Result<M, ReceiveError> {
         let tags = if let Some(tags) = tags { tags } else { &[] };
         let timeout_ms = match timeout {
-            // If waiting time is smaller than 1ms, round it up to 1ms.
-            Some(timeout) => match timeout.as_millis() {
-                0 => 1,
-                other => other as u32,
-            },
-            None => 0,
+            Some(timeout) => timeout.as_millis() as u64,
+            None => u64::MAX,
         };
         let message_type = unsafe { message::receive(tags.as_ptr(), tags.len(), timeout_ms) };
         // Mailbox can't receive LINK_TRAPPED messages.
@@ -174,12 +170,8 @@ where
     ) -> Result<Result<M, LinkTrapped>, ReceiveError> {
         let tags = if let Some(tags) = tags { tags } else { &[] };
         let timeout_ms = match timeout {
-            // If waiting time is smaller than 1ms, round it up to 1ms.
-            Some(timeout) => match timeout.as_millis() {
-                0 => 1,
-                other => other as u32,
-            },
-            None => 0,
+            Some(timeout) => timeout.as_millis() as u64,
+            None => u64::MAX,
         };
         let message_type = unsafe { message::receive(tags.as_ptr(), tags.len(), timeout_ms) };
         // If we received a LINK_TRAPPED message return
