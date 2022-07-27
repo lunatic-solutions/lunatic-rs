@@ -12,7 +12,7 @@ use abstract_process::AbstractProcessTransformer;
 /// `Mailbox<T>`.
 ///
 /// # Example
-/// ```no_run
+/// ```ignore
 /// #[lunatic::main]
 /// fn main(_: Mailbox<()>) {
 ///     println!("Hello, world!");
@@ -62,7 +62,7 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Examples
 ///
-/// ```no_run
+/// ```ignore
 /// use lunatic::{
 ///     abstract_process,
 ///     process::{Message, ProcessRef, Request, StartProcess},
@@ -107,7 +107,7 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// A more complicated example
 ///
-/// ```no_run
+/// ```ignore
 /// use lunatic::{
 ///     abstract_process,
 ///     process::{Message, ProcessRef, Request, StartProcess},
