@@ -6,6 +6,19 @@ use quote::quote;
 mod abstract_process;
 use abstract_process::AbstractProcessTransformer;
 
+/// Marks the main function to be executed by the lunatic runtime as the root process.
+///
+/// Note: The macro can only be used on `main` function with 1 argument of type
+/// `Mailbox<T>`.
+///
+/// # Example
+/// ```ignore
+/// #[lunatic::main]
+/// fn main(_: Mailbox<()>) {
+///     println!("Hello, world!");
+/// }
+/// ```
+#[allow(clippy::needless_doctest_main)]
 #[proc_macro_attribute]
 pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
     let input: syn::ItemFn = match syn::parse(item.clone()) {
@@ -20,12 +33,11 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
             .into();
     }
 
-    let name = input.sig.ident;
     let arguments = input.sig.inputs;
     let block = input.block;
 
     quote! {
-        fn #name() {
+        fn main() {
             fn __with_mailbox(#arguments) {
                 #block
             }
@@ -35,12 +47,12 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
     .into()
 }
 
-/// Add [`AbstractProcess`][lunatic::process:AbstractProcess] behavior to the given struct
-/// implementation with minimum boilerplate code.
+/// Add [`AbstractProcess`] behavior to the given struct implementation with minimum
+/// boilerplate code.
 ///
-/// - Use **#\[init\]**, **#\[terminate\]**, and **#\[handle_link_trapped\]** attributes to
-/// specify methods for implementing lunatic::process::AbstractProcess.
-/// - Use **#\[handle_message\]** and **#\[handle_request\]** attributes to specify
+/// - Use `#[init]`, `#[terminate]`, and `#[handle_link_trapped]` attributes to
+/// specify methods for implementing [`AbstractProcess`].
+/// - Use `#[handle_message]` and `#[handle_request]` attributes to specify
 /// message and request handlers.
 ///
 /// Specifying message types is unnecessary because the macro will create wrapper
@@ -50,7 +62,7 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Examples
 ///
-/// ```compile_fail
+/// ```ignore
 /// use lunatic::{
 ///     abstract_process,
 ///     process::{Message, ProcessRef, Request, StartProcess},
@@ -95,12 +107,11 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// A more complicated example
 ///
-/// ```compile_fail
+/// ```ignore
 /// use lunatic::{
 ///     abstract_process,
 ///     process::{Message, ProcessRef, Request, StartProcess},
 /// }
-///
 ///
 /// struct A;
 ///
@@ -136,6 +147,7 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///     }
 /// }
 ///
+///
 /// let a = A::start_link((), None);
 ///
 /// a.multiple_arguments(5, (false, 'a'));
@@ -147,8 +159,9 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// let greeting = a.unpack_struct(person);
 /// assert_eq!(greeting, "Hi Mark!");
-///
 /// ```
+///
+/// [`AbstractProcess`]: process/trait.AbstractProcess.html
 #[proc_macro_attribute]
 pub fn abstract_process(_args: TokenStream, item: TokenStream) -> TokenStream {
     match syn::parse(item.clone()) {

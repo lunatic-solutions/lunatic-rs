@@ -556,7 +556,6 @@ where
 {
     type Result = <T as RequestHandler<M, S>>::Response;
 
-    #[doc(hidden)]
     fn request_timeout_(
         &self,
         request: M,
