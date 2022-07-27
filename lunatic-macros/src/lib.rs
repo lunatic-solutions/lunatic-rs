@@ -6,6 +6,18 @@ use quote::quote;
 mod abstract_process;
 use abstract_process::AbstractProcessTransformer;
 
+/// Marks the main function to be executed by the lunatic runtime as the root process.
+///
+/// Note: The macro can only be used on `main` function with 1 argument of type
+/// `Mailbox<T>`.
+///
+/// # Example
+/// ```
+/// #[lunatic::main]
+/// fn main(_: Mailbox<()>) {
+///     println!("Hello, world!");
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
     let input: syn::ItemFn = match syn::parse(item.clone()) {
@@ -20,12 +32,11 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
             .into();
     }
 
-    let name = input.sig.ident;
     let arguments = input.sig.inputs;
     let block = input.block;
 
     quote! {
-        fn #name() {
+        fn main() {
             fn __with_mailbox(#arguments) {
                 #block
             }
