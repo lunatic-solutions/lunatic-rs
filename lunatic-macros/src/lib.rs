@@ -12,12 +12,13 @@ use abstract_process::AbstractProcessTransformer;
 /// `Mailbox<T>`.
 ///
 /// # Example
-/// ```
+/// ```no_run
 /// #[lunatic::main]
 /// fn main(_: Mailbox<()>) {
 ///     println!("Hello, world!");
 /// }
 /// ```
+#[allow(clippy::needless_doctest_main)]
 #[proc_macro_attribute]
 pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
     let input: syn::ItemFn = match syn::parse(item.clone()) {
@@ -61,7 +62,7 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
 /// use lunatic::{
 ///     abstract_process,
 ///     process::{Message, ProcessRef, Request, StartProcess},
@@ -106,7 +107,7 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// A more complicated example
 ///
-/// ```
+/// ```no_run
 /// use lunatic::{
 ///     abstract_process,
 ///     process::{Message, ProcessRef, Request, StartProcess},
