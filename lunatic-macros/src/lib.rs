@@ -35,12 +35,12 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
     .into()
 }
 
-/// Add [`AbstractProcess`][lunatic::process:AbstractProcess] behavior to the given struct
-/// implementation with minimum boilerplate code.
+/// Add [`AbstractProcess`] behavior to the given struct implementation with minimum
+/// boilerplate code.
 ///
-/// - Use **#\[init\]**, **#\[terminate\]**, and **#\[handle_link_trapped\]** attributes to
-/// specify methods for implementing lunatic::process::AbstractProcess.
-/// - Use **#\[handle_message\]** and **#\[handle_request\]** attributes to specify
+/// - Use `#[init]`, `#[terminate]`, and `#[handle_link_trapped]` attributes to
+/// specify methods for implementing [`AbstractProcess`].
+/// - Use `#[handle_message]` and `#[handle_request]` attributes to specify
 /// message and request handlers.
 ///
 /// Specifying message types is unnecessary because the macro will create wrapper
@@ -50,7 +50,7 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Examples
 ///
-/// ```compile_fail
+/// ```
 /// use lunatic::{
 ///     abstract_process,
 ///     process::{Message, ProcessRef, Request, StartProcess},
@@ -95,12 +95,11 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// A more complicated example
 ///
-/// ```compile_fail
+/// ```
 /// use lunatic::{
 ///     abstract_process,
 ///     process::{Message, ProcessRef, Request, StartProcess},
 /// }
-///
 ///
 /// struct A;
 ///
@@ -136,6 +135,7 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///     }
 /// }
 ///
+///
 /// let a = A::start_link((), None);
 ///
 /// a.multiple_arguments(5, (false, 'a'));
@@ -147,8 +147,9 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// let greeting = a.unpack_struct(person);
 /// assert_eq!(greeting, "Hi Mark!");
-///
 /// ```
+///
+/// [`AbstractProcess`]: process/trait.AbstractProcess.html
 #[proc_macro_attribute]
 pub fn abstract_process(_args: TokenStream, item: TokenStream) -> TokenStream {
     match syn::parse(item.clone()) {
