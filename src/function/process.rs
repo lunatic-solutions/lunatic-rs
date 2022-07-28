@@ -139,7 +139,7 @@ impl<M, S> Process<M, S> {
         T::spawn(capture, entry, None, None, None)
     }
 
-    /// Spawn a process.
+    /// Spawn a process on a remote node.
     pub fn spawn_node<C, T>(node_id: u64, capture: C, entry: fn(C, T)) -> T::Process
     where
         S: Serializer<C> + Serializer<ProtocolCapture<C>>,
@@ -147,6 +147,16 @@ impl<M, S> Process<M, S> {
         T: NoLink,
     {
         T::spawn(capture, entry, None, None, Some(node_id))
+    }
+
+    /// Spawn a process on a remote node.
+    pub fn spawn_node_config<C, T>(node_id: u64, config: &ProcessConfig, capture: C, entry: fn(C, T)) -> T::Process
+    where
+        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        T: IntoProcess<M, S>,
+        T: NoLink,
+    {
+        T::spawn(capture, entry, None, Some(config), Some(node_id))
     }
 
     /// Spawn a linked process.

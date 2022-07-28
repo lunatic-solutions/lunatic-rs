@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use lunatic::ProcessConfig;
 use lunatic::{host::node_id, sleep, Mailbox, Process};
 
 use lunatic::process::{AbstractProcess, ProcessRef, Request, RequestHandler, StartProcess};
@@ -25,20 +26,25 @@ impl RequestHandler<(i32, i32)> for Adder {
 fn main() {
     let nodes = lunatic::distributed::nodes();
 
-    let add_server = Adder::start_node((), None, nodes[0]);
-
     println!("Nodes {nodes:?}");
+
+    let mut config = ProcessConfig::new();
+    config.set_max_memory(1_500_000);
+    config.set_max_fuel(1);
+
+    if !nodes.is_empty() {
+        let add_server = Adder::start_node_config((), None, nodes[0], &config);
+        assert_eq!(add_server.request((1, 1)), 2);
+    }
 
     let msgs = [10, 582, 172, 45];
     let procs = nodes
         .into_iter()
-        .map(|node| Process::spawn_node(node, 101, hello));
+        .map(|node| Process::spawn_node_config(node, &config, 101, hello));
 
     for (i, proc) in procs.enumerate() {
         proc.send(msgs[i % msgs.len()]);
     }
-
-    assert_eq!(add_server.request((1, 1)), 2);
 
     sleep(Duration::from_millis(5000));
 }
