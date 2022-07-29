@@ -1,7 +1,12 @@
 use convert_case::{Case, Casing};
 use proc_macro2::{Span, TokenStream};
-use quote::quote;
-use syn::{spanned::Spanned, ImplItem::Method};
+use quote::{format_ident, quote};
+use syn::{
+    parse::{Parse, ParseStream},
+    spanned::Spanned,
+    ImplItem::Method,
+    Token,
+};
 
 /// Transform and expand the `abstract_process` macro
 #[derive(Default)]
@@ -29,36 +34,41 @@ impl AbstractProcessTransformer {
         Self::default()
     }
 
-    pub fn transform(&mut self, impl_block: syn::ItemImpl) -> TokenStream {
-        self.extract(impl_block);
+    pub fn transform(&mut self, args: Args, impl_block: syn::ItemImpl) -> TokenStream {
+        self.extract(args, impl_block);
         self.render()
     }
 
-    fn extract(&mut self, impl_block: syn::ItemImpl) {
+    fn extract(&mut self, args: Args, impl_block: syn::ItemImpl) {
         let impl_block_span = impl_block.span();
 
         self.impl_type_attrs = impl_block.attrs;
         self.impl_type = Some(*impl_block.self_ty);
-        self.handler_wrappers.trait_name = {
-            match &self.impl_type {
-                Some(syn::Type::Path(p)) => p
-                    .path
-                    .get_ident()
-                    .map(|i| i.to_string())
-                    .map(|s| syn::Ident::new(&format!("{}Handler", s), Span::call_site())),
-                _ => None,
-            }
-            .or_else(|| {
-                let err = syn::Error::new(
-                    impl_block_span,
-                    "Only path (type) impl is supported by `#[abstract_process]`",
-                )
-                .to_compile_error();
-                self.errors.push(err);
-                // create temporary to silence error from invalid syntax
-                Some(syn::Ident::new("__Placeholder", Span::call_site()))
-            })
-        };
+        self.handler_wrappers.trait_visibility = args.visibility;
+        self.handler_wrappers.trait_name = Some({
+            args.trait_name
+                .map(|trait_name| format_ident!("{}", trait_name.value()))
+                .unwrap_or_else(|| {
+                    match &self.impl_type {
+                        Some(syn::Type::Path(p)) => {
+                            p.path.get_ident().map(|i| i.to_string()).map(|s| {
+                                syn::Ident::new(&format!("{}Handler", s), Span::call_site())
+                            })
+                        }
+                        _ => None,
+                    }
+                    .unwrap_or_else(|| {
+                        let err = syn::Error::new(
+                            impl_block_span,
+                            "Only path (type) impl is supported by `#[abstract_process]`",
+                        )
+                        .to_compile_error();
+                        self.errors.push(err);
+                        // create temporary to silence error from invalid syntax
+                        syn::Ident::new("__Placeholder", Span::call_site())
+                    })
+                })
+        });
 
         for item in &impl_block.items {
             match item {
@@ -107,6 +117,7 @@ impl AbstractProcessTransformer {
         let impl_attrs = &self.impl_type_attrs;
         let handler_impls = &self.handler_impls;
         let HandlerWrappers {
+            trait_visibility: handler_visibility,
             trait_name: handler_trait,
             trait_defs: handler_wrapper_defs,
             trait_impls: handler_wrapper_impls,
@@ -133,7 +144,7 @@ impl AbstractProcessTransformer {
 
             #(#handler_impls)*
 
-            pub trait #handler_trait {
+            #handler_visibility trait #handler_trait {
                 #(#handler_wrapper_defs)*
             }
 
@@ -420,6 +431,59 @@ impl AbstractProcessTransformer {
     }
 }
 
+#[derive(Default)]
+pub struct Args {
+    trait_name: Option<syn::LitStr>,
+    visibility: Option<syn::Visibility>,
+}
+
+impl Args {
+    fn parse_arg(&mut self, input: ParseStream) -> syn::Result<()> {
+        if input.is_empty() {
+            return Ok(());
+        }
+
+        let ident: syn::Ident = input.parse()?;
+        let _: syn::Token![=] = input.parse()?;
+        if ident == "trait_name" {
+            if self.trait_name.is_some() {
+                return Err(syn::Error::new(
+                    ident.span(),
+                    "trait name already specified",
+                ));
+            }
+
+            self.trait_name = Some(input.parse()?);
+        } else if ident == "visibility" {
+            if self.visibility.is_some() {
+                return Err(syn::Error::new(
+                    ident.span(),
+                    "visibility already specified",
+                ));
+            }
+
+            self.visibility = Some(input.parse()?);
+        } else {
+            return Err(syn::Error::new(ident.span(), "unknown argument"));
+        }
+
+        Ok(())
+    }
+}
+
+impl Parse for Args {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut args = Args::default();
+        while !input.is_empty() {
+            args.parse_arg(input)?;
+            if !input.is_empty() {
+                let _: Token![,] = input.parse()?;
+            }
+        }
+        Ok(args)
+    }
+}
+
 struct HandlerComponents {
     fn_ident: syn::Ident,
     message_type: syn::Ident,
@@ -445,6 +509,7 @@ struct AbstractProcessImpls {
 
 #[derive(Default)]
 struct HandlerWrappers {
+    trait_visibility: Option<syn::Visibility>,
     trait_name: Option<syn::Ident>,
     trait_defs: Vec<TokenStream>,
     trait_impls: Vec<TokenStream>,

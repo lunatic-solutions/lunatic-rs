@@ -60,6 +60,11 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 /// parameters and invocating them works the same as directly calling the method
 /// on the struct without spawning it as a process.
 ///
+/// A trait is generated and defaults to private and follows the name of your type with
+/// `Handler` added as a suffix. To rename or change the visibility of the generated
+/// trait, you can use the `trait_name` and `visbility` arguments with
+/// `#[abstract_process(trait_name = "MyHandler", visibility = pub)]`.
+///
 /// # Examples
 ///
 /// ```ignore
@@ -121,7 +126,7 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///     age: u16,
 /// }
 ///
-/// #[abstract_process]
+/// #[abstract_process(trait_name = "AHandler", visibility = pub)]
 /// impl A {
 ///     #[init]
 ///     fn init(_: ProcessRef<Self>, _: ()) -> A {
@@ -163,9 +168,13 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// [`AbstractProcess`]: process/trait.AbstractProcess.html
 #[proc_macro_attribute]
-pub fn abstract_process(_args: TokenStream, item: TokenStream) -> TokenStream {
+pub fn abstract_process(args: TokenStream, item: TokenStream) -> TokenStream {
+    let args: abstract_process::Args = match syn::parse(args) {
+        Ok(args) => args,
+        Err(e) => return token_stream_with_error(item, e),
+    };
     match syn::parse(item.clone()) {
-        Ok(it) => AbstractProcessTransformer::new().transform(it).into(),
+        Ok(it) => AbstractProcessTransformer::new().transform(args, it).into(),
         Err(e) => token_stream_with_error(item, e),
     }
 }
