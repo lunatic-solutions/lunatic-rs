@@ -476,9 +476,7 @@ impl Parse for Args {
         let mut args = Args::default();
         while !input.is_empty() {
             args.parse_arg(input)?;
-            if !input.is_empty() {
-                let _: Token![,] = input.parse()?;
-            }
+            let _: Option<Token![,]> = input.parse()?;
         }
         Ok(args)
     }
