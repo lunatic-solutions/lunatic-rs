@@ -150,7 +150,12 @@ impl<M, S> Process<M, S> {
     }
 
     /// Spawn a process on a remote node.
-    pub fn spawn_node_config<C, T>(node_id: u64, config: &ProcessConfig, capture: C, entry: fn(C, T)) -> T::Process
+    pub fn spawn_node_config<C, T>(
+        node_id: u64,
+        config: &ProcessConfig,
+        capture: C,
+        entry: fn(C, T),
+    ) -> T::Process
     where
         S: Serializer<C> + Serializer<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,

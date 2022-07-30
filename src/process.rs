@@ -120,7 +120,12 @@ where
     fn start_link(arg: T::Arg, name: Option<&str>) -> ProcessRef<T>;
     fn start_link_config(arg: T::Arg, name: Option<&str>, config: &ProcessConfig) -> ProcessRef<T>;
     fn start_node(arg: T::Arg, name: Option<&str>, node: u64) -> ProcessRef<T>;
-    fn start_node_config(arg: T::Arg, name: Option<&str>, node: u64, config: &ProcessConfig) -> ProcessRef<T>;
+    fn start_node_config(
+        arg: T::Arg,
+        name: Option<&str>,
+        node: u64,
+        config: &ProcessConfig,
+    ) -> ProcessRef<T>;
 }
 
 impl<T> StartProcess<T> for T
@@ -159,7 +164,7 @@ where
         arg: <T as AbstractProcess>::Arg,
         name: Option<&str>,
         node: u64,
-        config: &ProcessConfig
+        config: &ProcessConfig,
     ) -> ProcessRef<T> {
         start::<T>(arg, name, None, Some(config), Some(node)).unwrap()
     }
