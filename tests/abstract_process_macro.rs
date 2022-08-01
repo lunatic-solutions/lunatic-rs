@@ -95,14 +95,14 @@ fn handle_zero_argument() {
         }
 
         #[handle_message]
-        fn increment(&mut self, num: u32) {
-            self.count += num;
+        fn increment(&mut self) {
+            self.count += 1;
             self.check_count();
         }
 
         #[handle_message]
-        fn decrement(&mut self, num: u32) {
-            self.count -= num;
+        fn decrement(&mut self) {
+            self.count -= 1;
             self.check_count();
         }
 
@@ -119,10 +119,10 @@ fn handle_zero_argument() {
     }
 
     let counter = Counter::start_link(2, None);
-    counter.increment(1);
+    counter.increment();
     assert_eq!(3, counter.count());
-    counter.decrement(3);
-    assert_eq!(0, counter.count());
+    counter.decrement();
+    assert_eq!(2, counter.count());
 }
 
 #[test]
@@ -299,4 +299,70 @@ fn reply_types() {
     assert_eq!(a.builtin_type(), true);
     assert_eq!(a.nested_types(), (true, 9));
     assert_eq!(a.custom_type(), CustomReply);
+}
+
+#[test]
+fn send_after() {
+    struct Counter {
+        count: u32,
+    }
+
+    #[abstract_process]
+    impl Counter {
+        #[init]
+        fn init(_process: ProcessRef<Self>, count: u32) -> Self {
+            Self { count }
+        }
+
+        #[handle_message]
+        fn increment(&mut self) {
+            self.count += 1;
+        }
+
+        #[handle_request]
+        fn count(&self) -> u32 {
+            self.count
+        }
+    }
+
+    let counter = Counter::start_link(2, None);
+    counter.after(Duration::from_millis(10)).increment();
+    assert_eq!(2, counter.count());
+    sleep(Duration::from_millis(15));
+    assert_eq!(3, counter.count());
+}
+
+#[test]
+fn request_timeout() {
+    struct A;
+
+    #[abstract_process]
+    impl A {
+        #[init]
+        fn init(_process: ProcessRef<Self>, _: ()) -> Self {
+            Self
+        }
+
+        #[handle_request]
+        fn respond_fast(&self) -> u32 {
+            sleep(Duration::from_millis(5));
+            0
+        }
+
+        #[handle_request]
+        fn respond_slow(&self) -> u32 {
+            sleep(Duration::from_millis(15));
+            0
+        }
+    }
+
+    let counter = A::start_link((), None);
+    assert!(counter
+        .with_timeout(Duration::from_millis(10))
+        .respond_fast()
+        .is_ok());
+    assert!(counter
+        .with_timeout(Duration::from_millis(10))
+        .respond_slow()
+        .is_err());
 }

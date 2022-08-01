@@ -21,6 +21,10 @@ pub struct AbstractProcessTransformer {
     type_impls: TypeImpls,
     /// Wrapper methods for send and request
     handler_wrappers: HandlerWrappers,
+    /// Delayed message builder for invoking `send_after`
+    msg_builder_methods: Vec<TokenStream>,
+    /// Timeout request builder for invoking `request_timeout`
+    req_builder_methods: Vec<TokenStream>,
     /// message (message, request, and response) struct definitions
     message_structs: Vec<TokenStream>,
     /// impl blocks for MessageHandler and RequestHandler
@@ -122,6 +126,17 @@ impl AbstractProcessTransformer {
             trait_defs: handler_wrapper_defs,
             trait_impls: handler_wrapper_impls,
         } = &self.handler_wrappers;
+        let msg_builder_methods = &self.msg_builder_methods;
+        let req_builder_methods = &self.req_builder_methods;
+
+        let msg_builder_struct = proc_macro2::Ident::new(
+            &format!("{}MsgBuilder", quote!(#impl_type)),
+            Span::call_site(),
+        );
+        let req_builder_struct = proc_macro2::Ident::new(
+            &format!("{}ReqBuilder", quote!(#impl_type)),
+            Span::call_site(),
+        );
 
         quote! {
             #(#errors)*
@@ -146,10 +161,48 @@ impl AbstractProcessTransformer {
 
             #handler_visibility trait #handler_trait {
                 #(#handler_wrapper_defs)*
+
+                fn after(&self, duration: Duration) -> #msg_builder_struct;
+
+                fn with_timeout(&self, duration: Duration) -> #req_builder_struct;
             }
 
             impl #handler_trait for lunatic::process::ProcessRef<#impl_type> {
                 #(#handler_wrapper_impls)*
+
+                fn after(&self, duration: Duration) -> #msg_builder_struct {
+                    #msg_builder_struct::new(duration, self.clone())
+                }
+
+                fn with_timeout(&self, duration: Duration) -> #req_builder_struct {
+                    #req_builder_struct::new(duration, self.clone())
+                }
+            }
+
+            struct #msg_builder_struct {
+                duration: std::time::Duration,
+                process_ref: lunatic::process::ProcessRef<#impl_type>,
+            }
+
+            impl #msg_builder_struct {
+                fn new(duration: Duration, process_ref: ProcessRef<#impl_type>) -> Self {
+                    Self { duration, process_ref }
+                }
+
+                #(#msg_builder_methods)*
+            }
+
+            struct #req_builder_struct {
+                duration: std::time::Duration,
+                process_ref: lunatic::process::ProcessRef<#impl_type>,
+            }
+
+            impl #req_builder_struct {
+                fn new(duration: Duration, process_ref: ProcessRef<#impl_type>) -> Self {
+                    Self { duration, process_ref }
+                }
+
+                #(#req_builder_methods)*
             }
         }
     }
@@ -319,12 +372,19 @@ impl AbstractProcessTransformer {
             fn #fn_ident(&self, #(#handler_args),*);
         });
         self.handler_wrappers.trait_impls.push(quote! {
+            #(#attrs)*
             fn #fn_ident(&self, #(#handler_args),*) {
                 use lunatic::process::Message;
                 self.send(#message_type(#(#handler_arg_names),*));
             }
         });
-        self.type_impls.skipped_items.push(quote! { #method })
+        self.msg_builder_methods.push(quote! {
+            fn #fn_ident(&self, #(#handler_args),*) {
+                use lunatic::process::Message;
+                self.process_ref.send_after(#message_type(#(#handler_arg_names),*), self.duration);
+            }
+        });
+        self.type_impls.skipped_items.push(quote! { #method });
     }
 
     fn extract_handle_request(&mut self, method: &syn::ImplItemMethod) {
@@ -374,12 +434,19 @@ impl AbstractProcessTransformer {
             fn #fn_ident(&self, #(#handler_args),*) -> #response_type;
         });
         self.handler_wrappers.trait_impls.push(quote! {
+            #(#attrs)*
             fn #fn_ident(&self, #(#handler_args),*) -> #response_type {
                 use lunatic::process::Request;
                 self.request(#message_type(#(#handler_arg_names),*))
             }
         });
-        self.type_impls.skipped_items.push(quote! { #method })
+        self.req_builder_methods.push(quote! {
+            fn #fn_ident(&self, #(#handler_args),*) -> Result<#response_type, lunatic::ReceiveError> {
+                use lunatic::process::Request;
+                self.process_ref.request_timeout(#message_type(#(#handler_arg_names),*), self.duration)
+            }
+        });
+        self.type_impls.skipped_items.push(quote! { #method });
     }
 
     fn extract_handler_input(&self, item: &syn::ImplItemMethod) -> HandlerComponents {
