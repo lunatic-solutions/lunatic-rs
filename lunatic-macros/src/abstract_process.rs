@@ -179,7 +179,7 @@ impl AbstractProcessTransformer {
                 }
             }
 
-            struct #msg_builder_struct {
+            #handler_visibility struct #msg_builder_struct {
                 duration: std::time::Duration,
                 process_ref: lunatic::process::ProcessRef<#impl_type>,
             }
@@ -189,10 +189,10 @@ impl AbstractProcessTransformer {
                     Self { duration, process_ref }
                 }
 
-                #(#msg_builder_methods)*
+                #(#handler_visibility #msg_builder_methods)*
             }
 
-            struct #req_builder_struct {
+            #handler_visibility struct #req_builder_struct {
                 duration: std::time::Duration,
                 process_ref: lunatic::process::ProcessRef<#impl_type>,
             }
@@ -202,7 +202,7 @@ impl AbstractProcessTransformer {
                     Self { duration, process_ref }
                 }
 
-                #(#req_builder_methods)*
+                #(#handler_visibility #req_builder_methods)*
             }
         }
     }
