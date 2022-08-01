@@ -335,11 +335,9 @@ impl AbstractProcessTransformer {
 
     fn extract_handle_message(&mut self, method: &syn::ImplItemMethod) {
         let mut method = method.clone();
-        method.attrs = method
+        method
             .attrs
-            .into_iter()
-            .filter(|attr| !attr.path.is_ident("handle_message"))
-            .collect();
+            .retain(|attr| !attr.path.is_ident("handle_message"));
         let attrs = &method.attrs;
 
         let HandlerComponents {
@@ -389,11 +387,9 @@ impl AbstractProcessTransformer {
 
     fn extract_handle_request(&mut self, method: &syn::ImplItemMethod) {
         let mut method = method.clone();
-        method.attrs = method
+        method
             .attrs
-            .into_iter()
-            .filter(|attr| !attr.path.is_ident("handle_request"))
-            .collect();
+            .retain(|attr| !attr.path.is_ident("handle_request"));
         let attrs = &method.attrs;
 
         let HandlerComponents {
