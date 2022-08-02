@@ -95,14 +95,14 @@ fn handle_zero_argument() {
         }
 
         #[handle_message]
-        fn increment(&mut self, num: u32) {
-            self.count += num;
+        fn increment(&mut self) {
+            self.count += 1;
             self.check_count();
         }
 
         #[handle_message]
-        fn decrement(&mut self, num: u32) {
-            self.count -= num;
+        fn decrement(&mut self) {
+            self.count -= 1;
             self.check_count();
         }
 
@@ -119,10 +119,10 @@ fn handle_zero_argument() {
     }
 
     let counter = Counter::start_link(2, None);
-    counter.increment(1);
+    counter.increment();
     assert_eq!(3, counter.count());
-    counter.decrement(3);
-    assert_eq!(0, counter.count());
+    counter.decrement();
+    assert_eq!(2, counter.count());
 }
 
 #[test]
@@ -299,4 +299,182 @@ fn reply_types() {
     assert_eq!(a.builtin_type(), true);
     assert_eq!(a.nested_types(), (true, 9));
     assert_eq!(a.custom_type(), CustomReply);
+}
+
+#[test]
+fn send_after() {
+    struct Counter {
+        count: u32,
+    }
+
+    #[abstract_process]
+    impl Counter {
+        #[init]
+        fn init(_process: ProcessRef<Self>, count: u32) -> Self {
+            Self { count }
+        }
+
+        #[handle_message]
+        fn increment(&mut self) {
+            self.count += 1;
+        }
+
+        #[handle_request]
+        fn count(&self) -> u32 {
+            self.count
+        }
+    }
+
+    let counter = Counter::start_link(2, None);
+    counter.after(Duration::from_millis(10)).increment();
+    assert_eq!(2, counter.count());
+    sleep(Duration::from_millis(15));
+    assert_eq!(3, counter.count());
+}
+
+#[test]
+fn request_timeout() {
+    struct A;
+
+    #[abstract_process]
+    impl A {
+        #[init]
+        fn init(_process: ProcessRef<Self>, _: ()) -> Self {
+            Self
+        }
+
+        #[handle_request]
+        fn respond_fast(&self) -> u32 {
+            sleep(Duration::from_millis(5));
+            0
+        }
+
+        #[handle_request]
+        fn respond_slow(&self) -> u32 {
+            sleep(Duration::from_millis(15));
+            0
+        }
+    }
+
+    let counter = A::start_link((), None);
+    assert!(counter
+        .with_timeout(Duration::from_millis(10))
+        .respond_fast()
+        .is_ok());
+    assert!(counter
+        .with_timeout(Duration::from_millis(10))
+        .respond_slow()
+        .is_err());
+}
+
+#[test]
+fn visibility() {
+    mod m {
+        use super::*;
+
+        pub struct Counter {
+            count: u32,
+        }
+
+        #[abstract_process(visibility = pub)]
+        impl Counter {
+            #[init]
+            fn init(_process: ProcessRef<Self>, count: u32) -> Self {
+                Self { count }
+            }
+
+            #[handle_message]
+            fn increment(&mut self) {
+                self.count += 1;
+            }
+
+            #[handle_request]
+            fn count(&self) -> u32 {
+                self.count
+            }
+        }
+    }
+
+    use m::{Counter, CounterHandler};
+    let counter = Counter::start_link(2, None);
+    counter.after(Duration::from_millis(10)).increment();
+    assert_eq!(2, counter.count());
+    sleep(Duration::from_millis(15));
+    assert_eq!(3, counter.count());
+}
+
+#[test]
+fn wrapper_rename() {
+    pub struct Counter {
+        count: u32,
+    }
+
+    #[abstract_process(trait_name = "CounterExt", visibility = pub)]
+    impl Counter {
+        #[init]
+        fn init(_process: ProcessRef<Self>, count: u32) -> Self {
+            Self { count }
+        }
+
+        #[handle_message]
+        fn increment(&mut self) {
+            self.count += 1;
+        }
+
+        #[handle_request]
+        fn count(&self) -> u32 {
+            self.count
+        }
+    }
+
+    let counter = Counter::start_link(2, None);
+    counter.after(Duration::from_millis(10)).increment();
+    assert_eq!(2, counter.count());
+    sleep(Duration::from_millis(15));
+    assert_eq!(3, counter.count());
+}
+
+#[test]
+fn generics() {
+    use serde::{de::Deserialize, ser::Serialize};
+    use std::ops::{Add, AddAssign};
+
+    struct GenAdder<T> {
+        count: T,
+    }
+
+    #[abstract_process]
+    impl<T> GenAdder<T>
+    where
+        T: Add + AddAssign + Default + Clone + Serialize + for<'de> Deserialize<'de>,
+    {
+        #[init]
+        fn init(_: ProcessRef<Self>, _: ()) -> Self {
+            Self {
+                count: T::default(),
+            }
+        }
+
+        #[handle_message]
+        fn add(&mut self, value: T) {
+            self.count += value;
+        }
+
+        #[handle_request]
+        fn sum(&self) -> T {
+            self.count.clone()
+        }
+    }
+
+    let counter = GenAdder::<f32>::start_link((), None);
+    assert_eq!(0f32, counter.sum());
+    counter.add(3.1415926);
+    assert_eq!(3.1415926, counter.sum());
+    counter.after(Duration::from_millis(10)).add(3.1415926);
+    sleep(Duration::from_millis(15));
+    let s = counter
+        .with_timeout(Duration::from_millis(10))
+        .sum()
+        .unwrap();
+    assert_eq!(3.1415926 * 2f32, s);
 }
