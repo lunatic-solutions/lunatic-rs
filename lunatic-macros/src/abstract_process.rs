@@ -51,7 +51,7 @@ impl AbstractProcessTransformer {
         self.impl_type_attrs = impl_block.attrs;
         self.impl_type = match *impl_block.self_ty {
             syn::Type::Path(p) => Some(p.path),
-            _ => unreachable!(),
+            _ => unreachable!("The given impl type is not supported"),
         };
         self.impl_type_name = self
             .impl_type

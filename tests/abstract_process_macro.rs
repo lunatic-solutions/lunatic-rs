@@ -405,33 +405,28 @@ fn visibility() {
 
 #[test]
 fn wrapper_rename() {
-    mod m {
-        use super::*;
+    pub struct Counter {
+        count: u32,
+    }
 
-        pub struct Counter {
-            count: u32,
+    #[abstract_process(trait_name = "CounterExt", visibility = pub)]
+    impl Counter {
+        #[init]
+        fn init(_process: ProcessRef<Self>, count: u32) -> Self {
+            Self { count }
         }
 
-        #[abstract_process(trait_name = "CounterExt", visibility = pub)]
-        impl Counter {
-            #[init]
-            fn init(_process: ProcessRef<Self>, count: u32) -> Self {
-                Self { count }
-            }
+        #[handle_message]
+        fn increment(&mut self) {
+            self.count += 1;
+        }
 
-            #[handle_message]
-            fn increment(&mut self) {
-                self.count += 1;
-            }
-
-            #[handle_request]
-            fn count(&self) -> u32 {
-                self.count
-            }
+        #[handle_request]
+        fn count(&self) -> u32 {
+            self.count
         }
     }
 
-    use m::{Counter, CounterExt};
     let counter = Counter::start_link(2, None);
     counter.after(Duration::from_millis(10)).increment();
     assert_eq!(2, counter.count());
