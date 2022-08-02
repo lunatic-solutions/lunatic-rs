@@ -438,3 +438,48 @@ fn wrapper_rename() {
     sleep(Duration::from_millis(15));
     assert_eq!(3, counter.count());
 }
+
+#[test]
+fn generics() {
+    use serde::{de::Deserialize, ser::Serialize};
+    use std::ops::{Add, AddAssign};
+
+    struct GenAdder<T> {
+        count: T,
+    }
+
+    #[abstract_process]
+    impl<T> GenAdder<T>
+    where
+        T: Add + AddAssign + Default + Clone + Serialize + for<'de> Deserialize<'de>,
+    {
+        #[init]
+        fn init(_: ProcessRef<Self>, _: ()) -> Self {
+            Self {
+                count: T::default(),
+            }
+        }
+
+        #[handle_message]
+        fn add(&mut self, value: T) {
+            self.count += value;
+        }
+
+        #[handle_request]
+        fn sum(&self) -> T {
+            self.count.clone()
+        }
+    }
+
+    let counter = GenAdder::<f32>::start_link((), None);
+    assert_eq!(0f32, counter.sum());
+    counter.add(3.1415926);
+    assert_eq!(3.1415926, counter.sum());
+    counter.after(Duration::from_millis(10)).add(3.1415926);
+    sleep(Duration::from_millis(15));
+    let s = counter
+        .with_timeout(Duration::from_millis(10))
+        .sum()
+        .unwrap();
+    assert_eq!(3.1415926 * 2f32, s);
+}

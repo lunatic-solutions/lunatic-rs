@@ -12,7 +12,9 @@ use syn::{
 #[derive(Default)]
 pub struct AbstractProcessTransformer {
     /// impl type
-    impl_type: Option<syn::Type>,
+    impl_type: Option<syn::Path>,
+    impl_type_name: Option<syn::Ident>,
+    impl_type_generics: syn::Generics,
     /// impl type macros
     impl_type_attrs: Vec<syn::Attribute>,
     /// implmentation of trait `AbstractProcess`
@@ -47,32 +49,36 @@ impl AbstractProcessTransformer {
         let impl_block_span = impl_block.span();
 
         self.impl_type_attrs = impl_block.attrs;
-        self.impl_type = Some(*impl_block.self_ty);
+        self.impl_type = match *impl_block.self_ty {
+            syn::Type::Path(p) => Some(p.path),
+            _ => unreachable!(),
+        };
+        self.impl_type_name = self
+            .impl_type
+            .as_ref()
+            .and_then(|t| t.segments.last())
+            .map(|s| s.ident.clone())
+            .or_else(|| {
+                let err = syn::Error::new(
+                    impl_block_span,
+                    "`impl` type is not supported by `#[abstract_process]`",
+                )
+                .to_compile_error();
+                self.errors.push(err);
+                // create temporary to silence error from invalid syntax
+                Some(syn::Ident::new("__Placeholder", Span::call_site()))
+            });
+        self.impl_type_generics = impl_block.generics;
+
         self.handler_wrappers.trait_visibility = args.visibility;
-        self.handler_wrappers.trait_name = Some({
-            args.trait_name
-                .map(|trait_name| format_ident!("{}", trait_name.value()))
-                .unwrap_or_else(|| {
-                    match &self.impl_type {
-                        Some(syn::Type::Path(p)) => {
-                            p.path.get_ident().map(|i| i.to_string()).map(|s| {
-                                syn::Ident::new(&format!("{}Handler", s), Span::call_site())
-                            })
-                        }
-                        _ => None,
-                    }
-                    .unwrap_or_else(|| {
-                        let err = syn::Error::new(
-                            impl_block_span,
-                            "Only path (type) impl is supported by `#[abstract_process]`",
-                        )
-                        .to_compile_error();
-                        self.errors.push(err);
-                        // create temporary to silence error from invalid syntax
-                        syn::Ident::new("__Placeholder", Span::call_site())
-                    })
-                })
-        });
+        self.handler_wrappers.trait_name = args
+            .trait_name
+            .map(|trait_name| format_ident!("{}", trait_name.value()))
+            .or_else(|| {
+                self.impl_type_name
+                    .as_ref()
+                    .map(|n| format_ident!("{}Handler", n))
+            });
 
         for item in &impl_block.items {
             match item {
@@ -107,6 +113,7 @@ impl AbstractProcessTransformer {
     fn render(&self) -> TokenStream {
         let errors = &self.errors;
         let impl_type = &self.impl_type;
+        let (impl_generics, ty_generics, where_clause) = &self.impl_type_generics.split_for_impl();
         let AbstractProcessImpls {
             init: init_impl,
             terminate: terminate_impl,
@@ -129,14 +136,14 @@ impl AbstractProcessTransformer {
         let msg_builder_methods = &self.msg_builder_methods;
         let req_builder_methods = &self.req_builder_methods;
 
-        let msg_builder_struct = proc_macro2::Ident::new(
-            &format!("{}MsgBuilder", quote!(#impl_type)),
-            Span::call_site(),
-        );
-        let req_builder_struct = proc_macro2::Ident::new(
-            &format!("{}ReqBuilder", quote!(#impl_type)),
-            Span::call_site(),
-        );
+        let msg_builder_struct = self
+            .impl_type_name
+            .as_ref()
+            .map(|i| format_ident!("{}MsgBuilder", i));
+        let req_builder_struct = self
+            .impl_type_name
+            .as_ref()
+            .map(|i| format_ident!("{}ReqBuilder", i));
 
         quote! {
             #(#errors)*
@@ -144,13 +151,13 @@ impl AbstractProcessTransformer {
             #(#message_structs)*
 
             #(#impl_attrs)*
-            impl #impl_type {
+            impl #impl_generics #impl_type #where_clause {
                 #terminate
                 #handle_link_trapped
                 #(#skipped_items)*
             }
 
-            impl lunatic::process::AbstractProcess for #impl_type {
+            impl #impl_generics lunatic::process::AbstractProcess for #impl_type #where_clause {
                 type State = #impl_type;
                 #init_impl
                 #terminate_impl
@@ -159,32 +166,33 @@ impl AbstractProcessTransformer {
 
             #(#handler_impls)*
 
-            #handler_visibility trait #handler_trait {
+            #handler_visibility trait #handler_trait #ty_generics #where_clause {
                 #(#handler_wrapper_defs)*
 
-                fn after(&self, duration: Duration) -> #msg_builder_struct;
+                fn after(&self, duration: Duration) -> #msg_builder_struct #ty_generics;
 
-                fn with_timeout(&self, duration: Duration) -> #req_builder_struct;
+                fn with_timeout(&self, duration: Duration) -> #req_builder_struct #ty_generics;
             }
 
-            impl #handler_trait for lunatic::process::ProcessRef<#impl_type> {
+            impl #impl_generics #handler_trait #ty_generics for lunatic::process::ProcessRef<#impl_type>
+            #where_clause {
                 #(#handler_wrapper_impls)*
 
-                fn after(&self, duration: Duration) -> #msg_builder_struct {
+                fn after(&self, duration: Duration) -> #msg_builder_struct #ty_generics {
                     #msg_builder_struct::new(duration, self.clone())
                 }
 
-                fn with_timeout(&self, duration: Duration) -> #req_builder_struct {
+                fn with_timeout(&self, duration: Duration) -> #req_builder_struct #ty_generics {
                     #req_builder_struct::new(duration, self.clone())
                 }
             }
 
-            #handler_visibility struct #msg_builder_struct {
+            #handler_visibility struct #msg_builder_struct #ty_generics #where_clause {
                 duration: std::time::Duration,
                 process_ref: lunatic::process::ProcessRef<#impl_type>,
             }
 
-            impl #msg_builder_struct {
+            impl #impl_generics #msg_builder_struct #ty_generics #where_clause {
                 fn new(duration: Duration, process_ref: ProcessRef<#impl_type>) -> Self {
                     Self { duration, process_ref }
                 }
@@ -192,12 +200,12 @@ impl AbstractProcessTransformer {
                 #(#handler_visibility #msg_builder_methods)*
             }
 
-            #handler_visibility struct #req_builder_struct {
+            #handler_visibility struct #req_builder_struct #ty_generics #where_clause {
                 duration: std::time::Duration,
                 process_ref: lunatic::process::ProcessRef<#impl_type>,
             }
 
-            impl #req_builder_struct {
+            impl #impl_generics #req_builder_struct #ty_generics #where_clause {
                 fn new(duration: Duration, process_ref: ProcessRef<#impl_type>) -> Self {
                     Self { duration, process_ref }
                 }
@@ -347,20 +355,33 @@ impl AbstractProcessTransformer {
             handler_arg_names,
             handler_arg_types,
             message_destructuring,
-        } = self.extract_handler_input(&method);
+        } = self.parse_handler_input(&method);
 
         let ident = &self.impl_type.clone().unwrap();
 
+        let (impl_generics, ty_generics, where_clause) = &self.impl_type_generics.split_for_impl();
+
+        let (msg_phantom, arg_phantom) = if self.impl_type_generics.params.is_empty() {
+            (None, None)
+        } else {
+            (
+                Some(quote! { std::marker::PhantomData #ty_generics, }),
+                Some(quote! { std::marker::PhantomData, }),
+            )
+        };
+
         self.message_structs.push(quote! {
             #[derive(serde::Serialize, serde::Deserialize)]
-            struct #message_type (
+            struct #message_type #ty_generics (
+                #msg_phantom
                 #(#handler_arg_types),*
             );
         });
         self.handler_impls.push(quote! {
             #(#attrs)*
-            impl lunatic::process::MessageHandler<#message_type> for #ident {
-                fn handle(state: &mut Self::State, message: #message_type) {
+            impl #impl_generics lunatic::process::MessageHandler<#message_type #ty_generics>
+            for #ident #where_clause {
+                fn handle(state: &mut Self::State, message: #message_type #ty_generics) {
                     state.#fn_ident(#(#message_destructuring),*)
                 }
             }
@@ -373,13 +394,15 @@ impl AbstractProcessTransformer {
             #(#attrs)*
             fn #fn_ident(&self, #(#handler_args),*) {
                 use lunatic::process::Message;
-                self.send(#message_type(#(#handler_arg_names),*));
+                let msg = #message_type(#arg_phantom #(#handler_arg_names),*);
+                self.send(msg);
             }
         });
         self.msg_builder_methods.push(quote! {
             fn #fn_ident(&self, #(#handler_args),*) {
                 use lunatic::process::Message;
-                self.process_ref.send_after(#message_type(#(#handler_arg_names),*), self.duration);
+                let msg = #message_type(#arg_phantom #(#handler_arg_names),*);
+                self.process_ref.send_after(msg, self.duration);
             }
         });
         self.type_impls.skipped_items.push(quote! { #method });
@@ -399,9 +422,20 @@ impl AbstractProcessTransformer {
             handler_arg_names,
             handler_arg_types,
             message_destructuring,
-        } = self.extract_handler_input(&method);
+        } = self.parse_handler_input(&method);
 
         let ident = &self.impl_type.clone().unwrap();
+
+        let (impl_generics, ty_generics, where_clause) = &self.impl_type_generics.split_for_impl();
+
+        let (msg_phantom, arg_phantom) = if self.impl_type_generics.params.is_empty() {
+            (None, None)
+        } else {
+            (
+                Some(quote! { std::marker::PhantomData #ty_generics, }),
+                Some(quote! { std::marker::PhantomData, }),
+            )
+        };
 
         let response_type = match &method.sig.output {
             syn::ReturnType::Type(_, ty) => quote! { #ty },
@@ -412,15 +446,17 @@ impl AbstractProcessTransformer {
 
         self.message_structs.push(quote! {
             #[derive(serde::Serialize, serde::Deserialize)]
-            struct #message_type (
+            struct #message_type #ty_generics (
+                #msg_phantom
                 #(#handler_arg_types),*
             );
         });
         self.handler_impls.push(quote! {
             #(#attrs)*
-            impl lunatic::process::RequestHandler<#message_type> for #ident {
+            impl #impl_generics lunatic::process::RequestHandler<#message_type #ty_generics>
+            for #ident #where_clause {
                 type Response = #response_type;
-                fn handle(state: &mut Self::State, message: #message_type) -> #response_type {
+                fn handle(state: &mut Self::State, message: #message_type #ty_generics) -> #response_type {
                     state.#fn_ident(#(#message_destructuring),*)
                 }
             }
@@ -433,19 +469,21 @@ impl AbstractProcessTransformer {
             #(#attrs)*
             fn #fn_ident(&self, #(#handler_args),*) -> #response_type {
                 use lunatic::process::Request;
-                self.request(#message_type(#(#handler_arg_names),*))
+                let req = #message_type(#arg_phantom #(#handler_arg_names),*);
+                self.request(req)
             }
         });
         self.req_builder_methods.push(quote! {
             fn #fn_ident(&self, #(#handler_args),*) -> Result<#response_type, lunatic::ReceiveError> {
                 use lunatic::process::Request;
-                self.process_ref.request_timeout(#message_type(#(#handler_arg_names),*), self.duration)
+                let req = #message_type(#arg_phantom #(#handler_arg_names),*);
+                self.process_ref.request_timeout(req, self.duration)
             }
         });
         self.type_impls.skipped_items.push(quote! { #method });
     }
 
-    fn extract_handler_input(&self, item: &syn::ImplItemMethod) -> HandlerComponents {
+    fn parse_handler_input(&self, item: &syn::ImplItemMethod) -> HandlerComponents {
         let sig = &item.sig;
         let fn_ident = &sig.ident;
         let message_type = proc_macro2::Ident::new(
@@ -476,9 +514,12 @@ impl AbstractProcessTransformer {
             handler_arg_names.push(ident);
             handler_arg_types.push(ty);
         }
+        let has_generics = !self.impl_type_generics.params.is_empty();
         let message_destructuring = (0..handler_arg_types.len())
             .map(|i| {
-                let i = proc_macro2::Literal::usize_unsuffixed(i);
+                // offset for PhantomData
+                let offset = if has_generics { 1 } else { 0 };
+                let i = proc_macro2::Literal::usize_unsuffixed(i + offset);
                 quote! { message.#i }
             })
             .collect();
