@@ -110,7 +110,7 @@ What currently works:
 - [x] **TCP networking** (with this library)
 - [x] **Filesystem access**
 - [x] **Environment variables**
-- [ ] **Distributed lunatic**
+- [x] **Distributed lunatic**
 
 > **NOTE:**
 > Some libraries currently don't compile under the target `wasm32-wasi` and can't be used inside
