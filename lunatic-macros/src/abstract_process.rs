@@ -169,20 +169,20 @@ impl AbstractProcessTransformer {
             #handler_visibility trait #handler_trait #ty_generics #where_clause {
                 #(#handler_wrapper_defs)*
 
-                fn after(&self, duration: Duration) -> #msg_builder_struct #ty_generics;
+                fn after(&self, duration: std::time::Duration) -> #msg_builder_struct #ty_generics;
 
-                fn with_timeout(&self, duration: Duration) -> #req_builder_struct #ty_generics;
+                fn with_timeout(&self, duration: std::time::Duration) -> #req_builder_struct #ty_generics;
             }
 
             impl #impl_generics #handler_trait #ty_generics for lunatic::process::ProcessRef<#impl_type>
             #where_clause {
                 #(#handler_wrapper_impls)*
 
-                fn after(&self, duration: Duration) -> #msg_builder_struct #ty_generics {
+                fn after(&self, duration: std::time::Duration) -> #msg_builder_struct #ty_generics {
                     #msg_builder_struct::new(duration, self.clone())
                 }
 
-                fn with_timeout(&self, duration: Duration) -> #req_builder_struct #ty_generics {
+                fn with_timeout(&self, duration: std::time::Duration) -> #req_builder_struct #ty_generics {
                     #req_builder_struct::new(duration, self.clone())
                 }
             }
@@ -193,7 +193,7 @@ impl AbstractProcessTransformer {
             }
 
             impl #impl_generics #msg_builder_struct #ty_generics #where_clause {
-                fn new(duration: Duration, process_ref: ProcessRef<#impl_type>) -> Self {
+                fn new(duration: std::time::Duration, process_ref: ProcessRef<#impl_type>) -> Self {
                     Self { duration, process_ref }
                 }
 
@@ -206,7 +206,7 @@ impl AbstractProcessTransformer {
             }
 
             impl #impl_generics #req_builder_struct #ty_generics #where_clause {
-                fn new(duration: Duration, process_ref: ProcessRef<#impl_type>) -> Self {
+                fn new(duration: std::time::Duration, process_ref: ProcessRef<#impl_type>) -> Self {
                     Self { duration, process_ref }
                 }
 
