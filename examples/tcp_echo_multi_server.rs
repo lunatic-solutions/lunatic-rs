@@ -39,7 +39,7 @@ fn main(mailbox: Mailbox<()>) {
     let _ = mailbox.receive();
 }
 
-// Creates a TcpServer Listener that spawns TcpPeers upon accept
+/// Creates a TcpServer Listener that spawns TcpPeers upon accept
 fn listen(input: TcpServer) {
     let listener = net::TcpListener::bind(input.local_address.clone()).unwrap();
     println!("Listening on addr: {}", listener.local_addr().unwrap());
@@ -53,7 +53,7 @@ fn listen(input: TcpServer) {
     }
 }
 
-// Respond back to Line buffered input
+/// Respond back to Line buffered input
 fn respond(mut peer: TcpPeer) {
     let mut buf_reader = BufReader::new(peer.tcp_stream.clone());
     loop {

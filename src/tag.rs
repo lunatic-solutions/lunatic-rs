@@ -10,7 +10,7 @@
 pub struct Tag(i64);
 
 impl Tag {
-    // Create tag of any value.
+    /// Create tag of any value.
     pub(crate) fn from(id: i64) -> Tag {
         Tag(id)
     }

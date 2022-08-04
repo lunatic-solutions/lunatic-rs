@@ -44,7 +44,7 @@ impl<P: 'static, S> Drop for Protocol<P, S> {
 }
 
 impl<P, S> Protocol<P, S> {
-    // Turn a process into a protocol
+    /// Turn a process into a protocol
     fn from_process<M, S2>(process: Process<M, S2>, tag: Tag) -> Self {
         // The transformation shouldn't drop the process resource.
         let process = ManuallyDrop::new(process);
@@ -56,7 +56,7 @@ impl<P, S> Protocol<P, S> {
         }
     }
 
-    // Cast the protocol to another type.
+    /// Cast the protocol to another type.
     fn cast<P2>(self) -> Protocol<P2, S> {
         // Don't drop the session yet.
         let self_ = ManuallyDrop::new(self);
@@ -173,7 +173,7 @@ where
     }
 }
 
-// A special case of the protocol with a `result()` function.
+/// A special case of the protocol with a `result()` function.
 pub struct TaskEnd;
 
 /// End of communication session
@@ -285,7 +285,7 @@ where
     }
 }
 
-// Wrapper function to help transfer the generic types C, P & S into the new process.
+/// Wrapper function to help transfer the generic types C, P & S into the new process.
 fn type_helper_wrapper<C, P, S>(function: i32)
 where
     S: Serializer<ProtocolCapture<C>>,

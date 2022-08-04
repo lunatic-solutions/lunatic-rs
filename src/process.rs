@@ -294,7 +294,7 @@ where
     })
 }
 
-// Entry point of the process.
+/// Entry point of the process.
 fn starter<T>(
     (parent, tag, capture, name, entry): (Process<(), Bincode>, Tag, T::Arg, Option<String>, i32),
     _: Mailbox<(), Bincode>,
@@ -496,9 +496,9 @@ where
     }
 }
 
-// This is a wrapper around the message/request that is sent to a process.
-//
-// The first `i32` value is a pointer
+/// This is a wrapper around the message/request that is sent to a process.
+///
+/// The first `i32` value is a pointer
 #[derive(serde::Serialize, serde::Deserialize)]
 enum Sendable {
     Message(i32),
@@ -698,7 +698,7 @@ where
     }
 }
 
-// Processes are equal if their UUID is equal.
+/// Processes are equal if their UUID is equal.
 impl<T> PartialEq for ProcessRef<T> {
     fn eq(&self, other: &Self) -> bool {
         self.id() == other.id()

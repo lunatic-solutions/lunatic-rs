@@ -17,14 +17,14 @@ use crate::{error::LunaticError, host, net::TcpStream};
 /// # Examples
 ///
 /// ```no_run
-/// use lunatic::{net, process, Mailbox};
+/// use lunatic::{net, Mailbox, Process};
 /// use std::io::{BufRead, BufReader, Write};
 ///
 /// fn main() {
-///     let listener = net::TcpListener::bind("127.0.0.1:1337").unwrap();
+///     let listener = net::TcpListener::bind("127.0.0.1:0").unwrap();
 ///     while let Ok((tcp_stream, _peer)) = listener.accept() {
 ///         // Handle connections in a new process
-///         process::spawn_with(tcp_stream, handle).unwrap();
+///         Process::spawn(tcp_stream, handle);
 ///     }
 /// }
 ///
