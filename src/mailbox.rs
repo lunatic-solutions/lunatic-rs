@@ -241,7 +241,7 @@ where
     }
 }
 
-// Wrapper function to help transfer the generic types C, M & S into the new process.
+/// Wrapper function to help transfer the generic types C, M & S into the new process.
 fn type_helper_wrapper<C, M, S>(function: i32)
 where
     S: Serializer<C> + Serializer<M>,

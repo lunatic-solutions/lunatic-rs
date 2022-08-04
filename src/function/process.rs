@@ -336,7 +336,7 @@ where
     }
 }
 
-// Processes are equal if their process id and node id are equal.
+/// Processes are equal if their process id and node id are equal.
 impl<M, S> PartialEq for Process<M, S> {
     fn eq(&self, other: &Self) -> bool {
         self.id() == other.id() && self.node_id() == other.node_id()

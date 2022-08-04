@@ -7,15 +7,15 @@ use crate::{
     LunaticError, ProcessConfig, Tag,
 };
 
-// Performs the low level dance that will turn a high level rust function into a lunatic process.
-//
-// Returns the process resource ID as an u64 in case of success.
-//
-// If `config` is None, the configuration used by the currently running process will be inherited.
-// If link is `Some`, the newly crated process will be linked to the caller.
-//
-// The function `entry` will be used as entry point into the process. It will be called with the
-// argument `arg`.
+/// Performs the low level dance that will turn a high level rust function into a lunatic process.
+///
+/// Returns the process resource ID as an u64 in case of success.
+///
+/// If `config` is None, the configuration used by the currently running process will be inherited.
+/// If link is `Some`, the newly crated process will be linked to the caller.
+///
+/// The function `entry` will be used as entry point into the process. It will be called with the
+/// argument `arg`.
 pub(crate) fn spawn(
     node: Option<u64>,
     config: Option<&ProcessConfig>,

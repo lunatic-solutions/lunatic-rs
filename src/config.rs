@@ -7,9 +7,9 @@ use crate::host;
 pub struct ProcessConfig(ProcessConfigType);
 
 enum ProcessConfigType {
-    // ID of a configuration held by the host as a resource.
+    /// ID of a configuration held by the host as a resource.
     Config(u64),
-    // Indicates that the configuration should be inherited from the parent process.
+    /// Indicates that the configuration should be inherited from the parent process.
     Inherit,
 }
 
