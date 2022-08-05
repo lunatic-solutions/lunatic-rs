@@ -72,6 +72,7 @@ pub trait Serializer<M> {
 /// messages are extracted from a stream that lives inside of the VM, has an unknown lifetime and
 /// can't be referenced from the guest. `serde::de::DeserializeOwned` is automatically implemented
 /// for each type that also implements `serde::Deserialize<'de>`.
+#[derive(Hash, Debug)]
 pub struct Bincode {}
 
 impl<M> Serializer<M> for Bincode
@@ -95,6 +96,7 @@ where
 ///
 /// Refer to the [`Bincode`] docs for the difference between `serde::de::DeserializeOwned` and
 /// `serde::Deserialize<'de>`.
+#[derive(Debug, Hash)]
 pub struct MessagePack {}
 
 impl<M> Serializer<M> for MessagePack
@@ -118,6 +120,7 @@ where
 ///
 /// Refer to the [`Bincode`] docs for the difference between `serde::de::DeserializeOwned` and
 /// `serde::Deserialize<'de>`.
+#[derive(Debug, Hash)]
 pub struct Json {}
 
 impl<M> Serializer<M> for Json
@@ -135,6 +138,7 @@ where
 
 /// The `ProtocolBuffers` serializer can serialize any message that satisfies the trait
 /// `protobuf::Message`.
+#[derive(Debug, Hash)]
 pub struct ProtocolBuffers {}
 
 impl<M> Serializer<M> for ProtocolBuffers
@@ -156,6 +160,7 @@ where
 ///
 /// It simplifies streaming serialization/deserialization directly from the host and avoids copies.
 /// Most serde based serializers can work directly with streaming serialization.
+#[derive(Debug, Hash)]
 pub struct MessageRw {}
 
 impl std::io::Read for MessageRw {

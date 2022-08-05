@@ -343,6 +343,14 @@ impl<M, S> PartialEq for Process<M, S> {
     }
 }
 
+// Implement Hash explicitly to match the behavior of PartialEq
+impl<M, S> std::hash::Hash for Process<M, S> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.node_id.hash(state);
+        self.id.hash(state);
+    }
+}
+
 impl<M, S> std::fmt::Debug for Process<M, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Process")
