@@ -698,10 +698,10 @@ where
     }
 }
 
-/// Processes are equal if their UUID is equal.
+/// Processes are equal if their process id and node id are equal
 impl<T> PartialEq for ProcessRef<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.id() == other.id()
+        self.process == other.process
     }
 }
 
