@@ -13,7 +13,7 @@ use crate::{
 /// the user (`capture`). For a protocol to work it needs to have a reference to the parent, so it
 /// knows where to send messages to. And it needs a unique tag inside the parent so that protocol
 /// messages don't mix with other messages received by the parent.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Hash)]
 pub struct ProtocolCapture<C> {
     process: Process<()>,
     tag: Tag,
@@ -24,6 +24,7 @@ pub struct ProtocolCapture<C> {
 ///
 /// It uses session types to check during compile time that all messages exchanged between two
 /// processes are in the correct order and of the correct type.
+#[derive(Debug, Hash)]
 pub struct Protocol<P: 'static, S = Bincode> {
     id: u64,
     node_id: u64,

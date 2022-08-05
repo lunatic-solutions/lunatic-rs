@@ -705,6 +705,13 @@ impl<T> PartialEq for ProcessRef<T> {
     }
 }
 
+// Implement Hash explicitly to match the behavior of PartialEq
+impl<T> std::hash::Hash for ProcessRef<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.process.hash(state);
+    }
+}
+
 impl<T> std::fmt::Debug for ProcessRef<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ProcessRef")
