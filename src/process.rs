@@ -705,6 +705,9 @@ impl<T> PartialEq for ProcessRef<T> {
     }
 }
 
+/// Proccess equality comparison is an equivalance relation
+impl<T> Eq for ProcessRef<T> {}
+
 // Implement Hash explicitly to match the behavior of PartialEq
 impl<T> std::hash::Hash for ProcessRef<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
