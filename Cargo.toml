@@ -6,6 +6,7 @@ authors = ["Bernard Kolobara <bernard@lunatic.solutions>"]
 description = "Helper library for building Rust applications that run on lunatic."
 license = "Apache-2.0/MIT"
 readme = "Readme.md"
+repository = "https://github.com/lunatic-solutions/lunatic-rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
