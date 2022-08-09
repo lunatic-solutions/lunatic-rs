@@ -1,6 +1,6 @@
 [package]
 name = "lunatic"
-version = "0.10.4"
+version = "0.10.5"
 edition = "2021"
 authors = ["Bernard Kolobara <bernard@lunatic.solutions>"]
 description = "Helper library for building Rust applications that run on lunatic."
@@ -44,3 +44,4 @@ members = [
 [package.metadata.docs.rs]
 targets = ["wasm32-wasi"]
 all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
