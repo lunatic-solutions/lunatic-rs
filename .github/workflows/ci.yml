@@ -22,8 +22,8 @@ jobs:
           override: true
           components: rustfmt, clippy
       - name: "Run tests"
-        run: cargo test --workspace
+        run: cargo test --workspace --features json_serializer,msgpack_serializer,protobuf_serializer
       - name: "Run clippy"
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --features json_serializer,msgpack_serializer,protobuf_serializer -- -D warnings
       - name: "Check formatting"
         run: cargo fmt -- --check
