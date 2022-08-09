@@ -210,7 +210,7 @@ checksum = "505e71a4706fa491e9b1b55f51b95d4037d0821ee40131190475f692b35b009b"
 
 [[package]]
 name = "lunatic"
-version = "0.10.2"
+version = "0.10.3"
 dependencies = [
  "bincode",
  "criterion",
