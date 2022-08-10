@@ -169,8 +169,10 @@ impl AbstractProcessTransformer {
             #handler_visibility trait #handler_trait #ty_generics #where_clause {
                 #(#handler_wrapper_defs)*
 
+                /// set a delay before sending the message
                 fn after(&self, duration: std::time::Duration) -> #msg_builder_struct #ty_generics;
 
+                /// set a timeout for the request
                 fn with_timeout(&self, duration: std::time::Duration) -> #req_builder_struct #ty_generics;
             }
 
@@ -399,6 +401,7 @@ impl AbstractProcessTransformer {
             }
         });
         self.msg_builder_methods.push(quote! {
+            #(#attrs)*
             fn #fn_ident(&self, #(#handler_args),*) {
                 use lunatic::process::Message;
                 let msg = #message_type(#arg_phantom #(#handler_arg_names),*);
@@ -474,6 +477,7 @@ impl AbstractProcessTransformer {
             }
         });
         self.req_builder_methods.push(quote! {
+            #(#attrs)*
             fn #fn_ident(&self, #(#handler_args),*) -> Result<#response_type, lunatic::ReceiveError> {
                 use lunatic::process::Request;
                 let req = #message_type(#arg_phantom #(#handler_arg_names),*);
