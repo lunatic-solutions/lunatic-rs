@@ -67,19 +67,19 @@ macro_rules! spawn {
         }
     };
     // A process with a mailbox that is not capturing any variables.
-    ($(&$config:ident,)? |$mailbox:ident : Mailbox<$mailbox_ty:ty>| $body:expr) => {
+    ($(&$config:ident,)? |$mailbox:ident : Mailbox<$mailbox_ty:ty $( , $mailbox_s:ty )?>| $body:expr) => {
         lunatic::spawn_link_config!($($config)?) (
             $(&$config,)?
             (),
-            |_, $mailbox: lunatic::Mailbox<$mailbox_ty>| $body
+            |_, $mailbox: lunatic::Mailbox<$mailbox_ty $( , $mailbox_s )?>| $body
         )
     };
     // A process capturing variable `$argument`.
-    ($(&$config:ident,)? |$argument:ident, $mailbox:ident : Mailbox<$mailbox_ty:ty>| $body:expr) => {
+    ($(&$config:ident,)? |$argument:ident, $mailbox:ident : Mailbox<$mailbox_ty:ty $( , $mailbox_s:ty )?>| $body:expr) => {
         lunatic::spawn_link_config!($($config)?) (
             $(&$config,)?
             $argument,
-            |$argument, $mailbox: lunatic::Mailbox<$mailbox_ty>| $body,
+            |$argument, $mailbox: lunatic::Mailbox<$mailbox_ty $( , $mailbox_s )?>| $body,
         )
     };
 }
@@ -147,19 +147,19 @@ macro_rules! spawn_link {
         }
     };
     // A process with a mailbox that is not capturing any variables.
-    ($(&$config:ident,)? |$mailbox:ident : Mailbox<$mailbox_ty:ty>| $body:expr) => {
+    ($(&$config:ident,)? |$mailbox:ident : Mailbox<$mailbox_ty:ty $( , $mailbox_s:ty )?>| $body:expr) => {
         lunatic::spawn_link_config!(@link $($config)?) (
             $(&$config,)?
             (),
-            |_, $mailbox: lunatic::Mailbox<$mailbox_ty>| $body
+            |_, $mailbox: lunatic::Mailbox<$mailbox_ty $( , $mailbox_s )?>| $body
         )
     };
     // A process with a mailbox capturing variable `$argument`.
-    ($(&$config:ident,)? |$argument:ident, $mailbox:ident : Mailbox<$mailbox_ty:ty>| $body:expr) => {
+    ($(&$config:ident,)? |$argument:ident, $mailbox:ident : Mailbox<$mailbox_ty:ty $( , $mailbox_s:ty )?>| $body:expr) => {
         lunatic::spawn_link_config!(@link $($config)?) (
             $(&$config,)?
             $argument,
-            |$argument, $mailbox: lunatic::Mailbox<$mailbox_ty>| $body,
+            |$argument, $mailbox: lunatic::Mailbox<$mailbox_ty $( , $mailbox_s )?>| $body,
         )
     };
 
