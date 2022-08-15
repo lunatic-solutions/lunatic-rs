@@ -9,8 +9,8 @@ use syn::{
 };
 
 /// Transform and expand the `abstract_process` macro
-#[derive(Default)]
 pub struct AbstractProcessTransformer {
+    serializer: syn::Path,
     /// impl type
     impl_type: Option<syn::Path>,
     impl_type_name: Option<syn::Ident>,
@@ -35,6 +35,26 @@ pub struct AbstractProcessTransformer {
     errors: Vec<TokenStream>,
 }
 
+impl Default for AbstractProcessTransformer {
+    fn default() -> Self {
+        Self {
+            serializer: syn::parse_quote! { ::lunatic::serializer::Bincode },
+            impl_type: Default::default(),
+            impl_type_name: Default::default(),
+            impl_type_generics: Default::default(),
+            impl_type_attrs: Default::default(),
+            ap_impls: Default::default(),
+            type_impls: Default::default(),
+            handler_wrappers: Default::default(),
+            msg_builder_methods: Default::default(),
+            req_builder_methods: Default::default(),
+            message_structs: Default::default(),
+            handler_impls: Default::default(),
+            errors: Default::default(),
+        }
+    }
+}
+
 impl AbstractProcessTransformer {
     pub fn new() -> Self {
         Self::default()
@@ -46,6 +66,10 @@ impl AbstractProcessTransformer {
     }
 
     fn extract(&mut self, args: Args, impl_block: syn::ItemImpl) {
+        self.serializer = args.serializer.unwrap_or_else(|| {
+            syn::parse_quote! { ::lunatic::serializer::Bincode }
+        });
+
         let impl_block_span = impl_block.span();
 
         self.impl_type_attrs = impl_block.attrs;
@@ -112,6 +136,7 @@ impl AbstractProcessTransformer {
 
     fn render(&self) -> TokenStream {
         let errors = &self.errors;
+        let serializer = &self.serializer;
         let impl_type = &self.impl_type;
         let (impl_generics, ty_generics, where_clause) = &self.impl_type_generics.split_for_impl();
         let AbstractProcessImpls {
@@ -157,7 +182,7 @@ impl AbstractProcessTransformer {
                 #(#skipped_items)*
             }
 
-            impl #impl_generics lunatic::process::AbstractProcess for #impl_type #where_clause {
+            impl #impl_generics lunatic::process::AbstractProcess<#serializer> for #impl_type #where_clause {
                 type State = #impl_type;
                 #init_impl
                 #terminate_impl
@@ -174,7 +199,7 @@ impl AbstractProcessTransformer {
                 fn with_timeout(&self, duration: std::time::Duration) -> #req_builder_struct #ty_generics;
             }
 
-            impl #impl_generics #handler_trait #ty_generics for lunatic::process::ProcessRef<#impl_type>
+            impl #impl_generics #handler_trait #ty_generics for lunatic::process::ProcessRef<#impl_type, #serializer>
             #where_clause {
                 #(#handler_wrapper_impls)*
 
@@ -189,11 +214,11 @@ impl AbstractProcessTransformer {
 
             #handler_visibility struct #msg_builder_struct #ty_generics #where_clause {
                 duration: std::time::Duration,
-                process_ref: lunatic::process::ProcessRef<#impl_type>,
+                process_ref: lunatic::process::ProcessRef<#impl_type, #serializer>,
             }
 
             impl #impl_generics #msg_builder_struct #ty_generics #where_clause {
-                fn new(duration: std::time::Duration, process_ref: ProcessRef<#impl_type>) -> Self {
+                fn new(duration: std::time::Duration, process_ref: lunatic::process::ProcessRef<#impl_type, #serializer>) -> Self {
                     Self { duration, process_ref }
                 }
 
@@ -202,11 +227,11 @@ impl AbstractProcessTransformer {
 
             #handler_visibility struct #req_builder_struct #ty_generics #where_clause {
                 duration: std::time::Duration,
-                process_ref: lunatic::process::ProcessRef<#impl_type>,
+                process_ref: lunatic::process::ProcessRef<#impl_type, #serializer>,
             }
 
             impl #impl_generics #req_builder_struct #ty_generics #where_clause {
-                fn new(duration: std::time::Duration, process_ref: ProcessRef<#impl_type>) -> Self {
+                fn new(duration: std::time::Duration, process_ref: lunatic::process::ProcessRef<#impl_type, #serializer>) -> Self {
                     Self { duration, process_ref }
                 }
 
@@ -451,9 +476,10 @@ impl AbstractProcessTransformer {
                 #(#handler_arg_types),*
             );
         });
+        let serializer = &self.serializer;
         self.handler_impls.push(quote! {
             #(#attrs)*
-            impl #impl_generics lunatic::process::RequestHandler<#message_type #ty_generics>
+            impl #impl_generics lunatic::process::RequestHandler<#message_type #ty_generics, #serializer>
             for #ident #where_clause {
                 type Response = #response_type;
                 fn handle(state: &mut Self::State, message: #message_type #ty_generics) -> #response_type {
@@ -539,6 +565,7 @@ impl AbstractProcessTransformer {
 pub struct Args {
     trait_name: Option<syn::LitStr>,
     visibility: Option<syn::Visibility>,
+    serializer: Option<syn::Path>,
 }
 
 impl Args {
@@ -567,6 +594,15 @@ impl Args {
             }
 
             self.visibility = Some(input.parse()?);
+        } else if ident == "serializer" {
+            if self.serializer.is_some() {
+                return Err(syn::Error::new(
+                    ident.span(),
+                    "serializer already specified",
+                ));
+            }
+
+            self.serializer = Some(input.parse()?);
         } else {
             return Err(syn::Error::new(ident.span(), "unknown argument"));
         }
