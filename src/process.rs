@@ -567,7 +567,7 @@ impl<M, S, T> Request<M, S> for ProcessRef<T>
 where
     T: AbstractProcess,
     T: RequestHandler<M, S>,
-    S: Serializer<M> + Serializer<Sendable> + Serializer<<T as RequestHandler<M, S>>::Response>,
+    S: Serializer<M> + Serializer<<T as RequestHandler<M, S>>::Response>,
 {
     type Result = <T as RequestHandler<M, S>>::Response;
 
