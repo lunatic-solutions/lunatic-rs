@@ -1,7 +1,10 @@
 //! Serializer implementations for messages.
 
+use std::io::{Read, Write};
+
 use crate::host::api::message;
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -72,7 +75,7 @@ pub trait Serializer<M> {
 /// messages are extracted from a stream that lives inside of the VM, has an unknown lifetime and
 /// can't be referenced from the guest. `serde::de::DeserializeOwned` is automatically implemented
 /// for each type that also implements `serde::Deserialize<'de>`.
-#[derive(Hash, Debug)]
+#[derive(Hash, Debug, Serialize, Deserialize)]
 pub struct Bincode {}
 
 impl<M> Serializer<M> for Bincode
@@ -96,7 +99,7 @@ where
 ///
 /// Refer to the [`Bincode`] docs for the difference between `serde::de::DeserializeOwned` and
 /// `serde::Deserialize<'de>`.
-#[derive(Debug, Hash)]
+#[derive(Debug, Hash, Serialize, Deserialize)]
 pub struct MessagePack {}
 
 impl<M> Serializer<M> for MessagePack
@@ -120,7 +123,7 @@ where
 ///
 /// Refer to the [`Bincode`] docs for the difference between `serde::de::DeserializeOwned` and
 /// `serde::Deserialize<'de>`.
-#[derive(Debug, Hash)]
+#[derive(Debug, Hash, Serialize, Deserialize)]
 pub struct Json {}
 
 impl<M> Serializer<M> for Json
@@ -128,17 +131,27 @@ where
     M: serde::Serialize + serde::de::DeserializeOwned,
 {
     fn encode(message: &M) -> Result<(), EncodeError> {
-        serde_json::to_writer(MessageRw {}, message).map_err(|err| err.into())
+        let bytes = serde_json::to_vec(message)?;
+        MessageRw {}.write_all(&bytes.len().to_le_bytes()).unwrap();
+        MessageRw {}.write_all(&bytes).unwrap();
+        Ok(())
     }
 
     fn decode() -> Result<M, DecodeError> {
-        serde_json::from_reader(MessageRw {}).map_err(|err| err.into())
+        let mut le_bytes = [0; 4];
+        MessageRw {}.read_exact(&mut le_bytes).unwrap();
+
+        let size = usize::from_le_bytes(le_bytes);
+        let mut buf = vec![0; size];
+        MessageRw {}.read_exact(&mut buf).unwrap();
+
+        serde_json::from_slice(&buf).map_err(|err| err.into())
     }
 }
 
 /// The `ProtocolBuffers` serializer can serialize any message that satisfies the trait
 /// `protobuf::Message`.
-#[derive(Debug, Hash)]
+#[derive(Debug, Hash, Serialize, Deserialize)]
 pub struct ProtocolBuffers {}
 
 impl<M> Serializer<M> for ProtocolBuffers
@@ -160,7 +173,7 @@ where
 ///
 /// It simplifies streaming serialization/deserialization directly from the host and avoids copies.
 /// Most serde based serializers can work directly with streaming serialization.
-#[derive(Debug, Hash)]
+#[derive(Debug, Hash, Serialize, Deserialize)]
 pub struct MessageRw {}
 
 impl std::io::Read for MessageRw {

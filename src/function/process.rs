@@ -26,7 +26,7 @@ pub trait IntoProcess<M, S> {
         node: Option<u64>,
     ) -> Self::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>;
+        S: Serializer<C> + Serializer<ProtocolCapture<C, S>>;
 }
 
 /// A marker trait expressing that a process can be spawned from this type without linking.
@@ -110,7 +110,7 @@ pub trait NoLink {}
 ///
 /// If a protocol based process is dropped before the `End` state is reached, the drop will panic.
 #[derive(Serialize, Deserialize)]
-pub struct Process<M, S = Bincode> {
+pub struct Process<M, S> {
     node_id: u64,
     id: u64,
     #[serde(skip_serializing, default)]
@@ -132,7 +132,7 @@ impl<M, S> Process<M, S> {
     /// Spawn a process.
     pub fn spawn<C, T>(capture: C, entry: fn(C, T)) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: Serializer<C> + Serializer<ProtocolCapture<C, S>>,
         T: IntoProcess<M, S>,
         T: NoLink,
     {
@@ -142,7 +142,7 @@ impl<M, S> Process<M, S> {
     /// Spawn a process on a remote node.
     pub fn spawn_node<C, T>(node_id: u64, capture: C, entry: fn(C, T)) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: Serializer<C> + Serializer<ProtocolCapture<C, S>>,
         T: IntoProcess<M, S>,
         T: NoLink,
     {
@@ -157,7 +157,7 @@ impl<M, S> Process<M, S> {
         entry: fn(C, T),
     ) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: Serializer<C> + Serializer<ProtocolCapture<C, S>>,
         T: IntoProcess<M, S>,
         T: NoLink,
     {
@@ -167,7 +167,7 @@ impl<M, S> Process<M, S> {
     /// Spawn a linked process.
     pub fn spawn_link<C, T>(capture: C, entry: fn(C, T)) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: Serializer<C> + Serializer<ProtocolCapture<C, S>>,
         T: IntoProcess<M, S>,
     {
         T::spawn(capture, entry, Some(Tag::new()), None, None)
@@ -178,7 +178,7 @@ impl<M, S> Process<M, S> {
     /// Allows the caller to provide a tag for the link.
     pub fn spawn_link_tag<C, T>(capture: C, tag: Tag, entry: fn(C, T)) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: Serializer<C> + Serializer<ProtocolCapture<C, S>>,
         T: IntoProcess<M, S>,
     {
         T::spawn(capture, entry, Some(tag), None, None)
@@ -187,7 +187,7 @@ impl<M, S> Process<M, S> {
     /// Spawn a process with a custom configuration.
     pub fn spawn_config<C, T>(config: &ProcessConfig, capture: C, entry: fn(C, T)) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: Serializer<C> + Serializer<ProtocolCapture<C, S>>,
         T: IntoProcess<M, S>,
         T: NoLink,
     {
@@ -201,7 +201,7 @@ impl<M, S> Process<M, S> {
         entry: fn(C, T),
     ) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: Serializer<C> + Serializer<ProtocolCapture<C, S>>,
         T: IntoProcess<M, S>,
     {
         T::spawn(capture, entry, Some(Tag::new()), Some(config), None)
@@ -215,7 +215,7 @@ impl<M, S> Process<M, S> {
         entry: fn(C, T),
     ) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: Serializer<C> + Serializer<ProtocolCapture<C, S>>,
         T: IntoProcess<M, S>,
     {
         T::spawn(capture, entry, Some(tag), Some(config), None)
