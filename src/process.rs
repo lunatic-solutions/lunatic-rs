@@ -600,7 +600,7 @@ where
         // First encode the handler inside the message buffer.
         let handler = unpacker::<T, M, S> as usize as i32;
         let handler_message = Sendable::Request(handler, this);
-        S::encode(&handler_message).unwrap();
+        Bincode::encode(&handler_message).unwrap();
         // Then the message itself.
         S::encode(&request).unwrap();
         // Send it & wait on a response!
