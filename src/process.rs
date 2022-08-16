@@ -7,11 +7,19 @@ use crate::{
     host::{self, api},
     mailbox::{LinkMailbox, LinkTrapped},
     protocol::ProtocolCapture,
-    serializer::Serializer,
+    serializer::{Bincode, Serializer},
     supervisor::{Supervisable, Supervisor, SupervisorConfig},
     timer::TimerRef,
     Mailbox, Process, ProcessConfig, ReceiveError, Tag,
 };
+
+pub(super) type StartFields<T, S> = (
+    Process<(), S>,
+    Tag,
+    <T as AbstractProcess<S>>::Arg,
+    Option<String>,
+    i32,
+);
 
 pub fn process_id() -> u64 {
     unsafe { api::process::process_id() }
@@ -67,7 +75,7 @@ pub fn process_id() -> u64 {
 /// counter.send(Inc);
 /// assert_eq!(counter.request(Count), 6);
 /// ```
-pub trait AbstractProcess<S> {
+pub trait AbstractProcess<S = Bincode> {
     /// The argument received by the `init` function.
     ///
     /// This argument is sent from the parent to the child and needs to be serializable.
@@ -97,7 +105,7 @@ pub trait AbstractProcess<S> {
 }
 
 /// Defines a handler for a message of type `M`.
-pub trait MessageHandler<M, S>: AbstractProcess<S>
+pub trait MessageHandler<M, S = Bincode>: AbstractProcess<S>
 where
     S: Serializer<M>,
 {
@@ -105,7 +113,7 @@ where
 }
 
 /// Defines a handler for a request of type `M`.
-pub trait RequestHandler<M, S>: AbstractProcess<S>
+pub trait RequestHandler<M, S = Bincode>: AbstractProcess<S>
 where
     S: Serializer<M>,
 {
@@ -114,7 +122,7 @@ where
     fn handle(state: &mut Self::State, request: M) -> Self::Response;
 }
 
-pub trait StartProcess<T, S>
+pub trait StartProcess<T, S = Bincode>
 where
     T: AbstractProcess<S>,
 {
@@ -150,24 +158,8 @@ where
         + Serializer<Sendable<S>>
         + Serialize
         + DeserializeOwned
-        + Serializer<(
-            Process<(), S>,
-            Tag,
-            <T as AbstractProcess<S>>::Arg,
-            Option<String>,
-            i32,
-        )> + Serializer<
-            ProtocolCapture<
-                (
-                    Process<(), S>,
-                    Tag,
-                    <T as AbstractProcess<S>>::Arg,
-                    Option<String>,
-                    i32,
-                ),
-                S,
-            >,
-        >,
+        + Serializer<StartFields<T, S>>
+        + Serializer<ProtocolCapture<StartFields<T, S>, S>>,
 {
     /// Start a process.
     fn start(arg: T::Arg, name: Option<&str>) -> ProcessRef<T, S> {
@@ -217,7 +209,7 @@ where
     }
 }
 
-pub trait SelfReference<T, S> {
+pub trait SelfReference<T, S = Bincode> {
     /// Returns a reference to the currently running process.
     fn process(&self) -> ProcessRef<T, S>;
 }
@@ -236,7 +228,7 @@ where
 /// Only "link" functions are provided, because a panic can't be propagated to the parent without a
 /// link. Currently, only the `Supervisor` uses this functionality to check for failures inside of
 /// children.
-pub(crate) trait StartFailableProcess<T, S>
+pub(crate) trait StartFailableProcess<T, S = Bincode>
 where
     T: AbstractProcess<S>,
 {
@@ -259,24 +251,8 @@ where
         + Serializer<Sendable<S>>
         + Serialize
         + DeserializeOwned
-        + Serializer<(
-            Process<(), S>,
-            Tag,
-            <T as AbstractProcess<S>>::Arg,
-            Option<String>,
-            i32,
-        )> + Serializer<
-            ProtocolCapture<
-                (
-                    Process<(), S>,
-                    Tag,
-                    <T as AbstractProcess<S>>::Arg,
-                    Option<String>,
-                    i32,
-                ),
-                S,
-            >,
-        >,
+        + Serializer<StartFields<T, S>>
+        + Serializer<ProtocolCapture<StartFields<T, S>, S>>,
 {
     /// Start a linked process.
     fn start_link_or_fail(
@@ -313,24 +289,8 @@ where
         + Serializer<Sendable<S>>
         + Serialize
         + DeserializeOwned
-        + Serializer<(
-            Process<(), S>,
-            Tag,
-            <T as AbstractProcess<S>>::Arg,
-            Option<String>,
-            i32,
-        )> + Serializer<
-            ProtocolCapture<
-                (
-                    Process<(), S>,
-                    Tag,
-                    <T as AbstractProcess<S>>::Arg,
-                    Option<String>,
-                    i32,
-                ),
-                S,
-            >,
-        >,
+        + Serializer<StartFields<T, S>>
+        + Serializer<ProtocolCapture<StartFields<T, S>, S>>,
 {
     // If a link tag is provided, use the same tag for message matching.
     let tag = if let Some(tag) = link {
@@ -452,7 +412,7 @@ fn starter<T, S>(
     }
 }
 
-pub trait Message<M, S>
+pub trait Message<M, S = Bincode>
 where
     S: Serializer<M>,
 {
@@ -460,7 +420,7 @@ where
     fn send_after(&self, message: M, duration: Duration) -> TimerRef;
 }
 
-pub trait Request<M, S>
+pub trait Request<M, S = Bincode>
 where
     S: Serializer<M>,
 {
@@ -488,7 +448,7 @@ where
 /// `ProcessRef<T>` is different from a `Process` in the ability to handle messages of different
 /// types, as long as the traits `MessageHandler<M>` or `RequestHandler<R>` are implemented for T.
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct ProcessRef<T, S>
+pub struct ProcessRef<T, S = Bincode>
 where
     T: ?Sized,
 {
@@ -593,7 +553,7 @@ where
 ///
 /// The first `i32` value is a pointer
 #[derive(serde::Serialize, serde::Deserialize)]
-pub enum Sendable<S> {
+pub enum Sendable<S = Bincode> {
     Message(i32),
     // The process type can't be carried over as a generic and is set here to `()`, but overwritten
     // at the time of returning with the correct type.
@@ -713,7 +673,7 @@ where
 /// Subscriber represents a process that can be notified by a tagged message with the same tag that
 /// is used when registering the subscription.
 #[derive(Debug)]
-pub(crate) struct Subscriber<S> {
+pub(crate) struct Subscriber<S = Bincode> {
     process: Process<(), S>,
     tag: Tag,
 }

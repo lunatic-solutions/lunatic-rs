@@ -2,8 +2,8 @@ use std::marker::PhantomData;
 
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{host, protocol::ProtocolCapture, Tag};
-use crate::{process::Sendable, Process};
+use crate::process::Sendable;
+use crate::{host, process::StartFields, protocol::ProtocolCapture, serializer::Bincode, Tag};
 use crate::{
     process::{AbstractProcess, ProcessRef, StartFailableProcess, Subscriber},
     serializer::Serializer,
@@ -37,7 +37,7 @@ use crate::{
 /// let count2 = hello.request(Count);
 /// assert_eq!(count1, count2);
 /// ```
-pub trait Supervisor<S>
+pub trait Supervisor<S = Bincode>
 where
     Self: Sized,
 {
@@ -99,7 +99,7 @@ pub enum SupervisorStrategy {
     RestForOne,
 }
 
-pub struct SupervisorConfig<T, S>
+pub struct SupervisorConfig<T, S = Bincode>
 where
     T: Supervisor<S>,
 {
@@ -156,7 +156,7 @@ where
     }
 }
 
-pub trait Supervisable<T, S>
+pub trait Supervisable<T, S = Bincode>
 where
     T: Supervisor<S>,
 {
@@ -176,24 +176,8 @@ where
         + DeserializeOwned
         + Serializer<()>
         + Serializer<Sendable<S>>
-        + Serializer<(
-            Process<(), S>,
-            Tag,
-            <T1 as AbstractProcess<S>>::Arg,
-            Option<String>,
-            i32,
-        )> + Serializer<
-            ProtocolCapture<
-                (
-                    Process<(), S>,
-                    Tag,
-                    <T1 as AbstractProcess<S>>::Arg,
-                    Option<String>,
-                    i32,
-                ),
-                S,
-            >,
-        >,
+        + Serializer<StartFields<T1, S>>
+        + Serializer<ProtocolCapture<StartFields<T1, S>, S>>,
     T1: AbstractProcess<S>,
     T1::Arg: Clone,
 {

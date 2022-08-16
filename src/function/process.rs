@@ -15,7 +15,7 @@ use crate::{
 /// Decides what can be turned into a process.
 ///
 /// It's only implemented for two types: Mailbox & Protocol.
-pub trait IntoProcess<M, S> {
+pub trait IntoProcess<M, S = Bincode> {
     type Process;
 
     fn spawn<C>(
@@ -110,7 +110,7 @@ pub trait NoLink {}
 ///
 /// If a protocol based process is dropped before the `End` state is reached, the drop will panic.
 #[derive(Serialize, Deserialize)]
-pub struct Process<M, S> {
+pub struct Process<M, S = Bincode> {
     node_id: u64,
     id: u64,
     #[serde(skip_serializing, default)]

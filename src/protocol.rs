@@ -14,7 +14,7 @@ use crate::{
 /// knows where to send messages to. And it needs a unique tag inside the parent so that protocol
 /// messages don't mix with other messages received by the parent.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Hash)]
-pub struct ProtocolCapture<C, S> {
+pub struct ProtocolCapture<C, S = Bincode> {
     process: Process<(), S>,
     tag: Tag,
     capture: C,
@@ -25,7 +25,7 @@ pub struct ProtocolCapture<C, S> {
 /// It uses session types to check during compile time that all messages exchanged between two
 /// processes are in the correct order and of the correct type.
 #[derive(Debug, Hash)]
-pub struct Protocol<P: 'static, S> {
+pub struct Protocol<P: 'static, S = Bincode> {
     id: u64,
     node_id: u64,
     tag: Tag,

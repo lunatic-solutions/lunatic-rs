@@ -5,7 +5,7 @@ use thiserror::Error;
 use crate::{
     function::process::{IntoProcess, NoLink},
     host::{self, api::message},
-    serializer::{DecodeError, Serializer},
+    serializer::{Bincode, DecodeError, Serializer},
     Process, ProcessConfig, Tag,
 };
 
@@ -14,7 +14,7 @@ const TIMEOUT: u32 = 9027;
 
 /// Mailbox of a [`Process`](crate::Process).
 #[derive(Debug, Clone, Copy)]
-pub struct Mailbox<M, S>
+pub struct Mailbox<M, S = Bincode>
 where
     S: Serializer<M>,
 {
@@ -122,7 +122,7 @@ pub enum ReceiveError {
 
 /// A special Mailbox that can catch if links trapped.
 #[derive(Debug)]
-pub(crate) struct LinkMailbox<M, S>
+pub(crate) struct LinkMailbox<M, S = Bincode>
 where
     S: Serializer<M>,
 {
