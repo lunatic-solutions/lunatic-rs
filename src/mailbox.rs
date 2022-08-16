@@ -257,33 +257,33 @@ where
     function(captured, mailbox);
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use lunatic_test::test;
-//     use std::time::Duration;
+#[cfg(test)]
+mod tests {
+    use lunatic_test::test;
+    use std::time::Duration;
 
-//     use super::*;
-//     use crate::{sleep, Mailbox};
+    use super::*;
+    use crate::{sleep, Mailbox};
 
-//     #[test]
-//     fn mailbox() {
-//         let child = Process::spawn(1, |capture, mailbox: Mailbox<i32>| {
-//             assert_eq!(capture, 1);
-//             assert_eq!(mailbox.receive(), 2);
-//         });
+    #[test]
+    fn mailbox() {
+        let child = Process::spawn(1, |capture, mailbox: Mailbox<i32>| {
+            assert_eq!(capture, 1);
+            assert_eq!(mailbox.receive(), 2);
+        });
 
-//         child.send(2);
-//         sleep(Duration::from_millis(100));
-//     }
+        child.send(2);
+        sleep(Duration::from_millis(100));
+    }
 
-//     #[test]
-//     #[should_panic]
-//     fn mailbox_link() {
-//         Process::spawn_link((), |_, _: Mailbox<()>| {
-//             panic!("fails");
-//         });
+    #[test]
+    #[should_panic]
+    fn mailbox_link() {
+        Process::spawn_link((), |_, _: Mailbox<()>| {
+            panic!("fails");
+        });
 
-//         // This process should fail before 100ms, because the link panics.
-//         sleep(Duration::from_millis(100));
-//     }
-// }
+        // This process should fail before 100ms, because the link panics.
+        sleep(Duration::from_millis(100));
+    }
+}

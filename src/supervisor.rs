@@ -433,44 +433,44 @@ mod macros {
     pub(crate) use tag;
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use std::time::Duration;
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
 
-//     use lunatic_test::test;
+    use lunatic_test::test;
 
-//     use super::{Supervisor, SupervisorConfig};
-//     use crate::{
-//         process::{AbstractProcess, ProcessRef, StartProcess},
-//         serializer::Bincode,
-//         sleep,
-//     };
+    use super::{Supervisor, SupervisorConfig};
+    use crate::{
+        process::{AbstractProcess, ProcessRef, StartProcess},
+        serializer::Bincode,
+        sleep,
+    };
 
-//     struct SimpleServer;
+    struct SimpleServer;
 
-//     impl AbstractProcess for SimpleServer {
-//         type Arg = ();
-//         type State = Self;
+    impl AbstractProcess for SimpleServer {
+        type Arg = ();
+        type State = Self;
 
-//         fn init(_: ProcessRef<Self>, _arg: ()) -> Self::State {
-//             SimpleServer
-//         }
-//     }
+        fn init(_: ProcessRef<Self>, _arg: ()) -> Self::State {
+            SimpleServer
+        }
+    }
 
-//     struct SimpleSup;
+    struct SimpleSup;
 
-//     impl Supervisor<Bincode> for SimpleSup {
-//         type Arg = ();
-//         type Children = SimpleServer;
+    impl Supervisor<Bincode> for SimpleSup {
+        type Arg = ();
+        type Children = SimpleServer;
 
-//         fn init(config: &mut SupervisorConfig<Self, Bincode>, _: ()) {
-//             config.children_args(((), None));
-//         }
-//     }
+        fn init(config: &mut SupervisorConfig<Self, Bincode>, _: ()) {
+            config.children_args(((), None));
+        }
+    }
 
-//     #[test]
-//     fn supervisor_test() {
-//         SimpleSup::start_link((), None);
-//         sleep(Duration::from_millis(100));
-//     }
-// }
+    #[test]
+    fn supervisor_test() {
+        SimpleSup::start_link((), None);
+        sleep(Duration::from_millis(100));
+    }
+}

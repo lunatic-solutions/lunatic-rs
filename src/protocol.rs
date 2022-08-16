@@ -299,26 +299,26 @@ where
     function(capture, protocol);
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use lunatic_test::test;
+#[cfg(test)]
+mod tests {
+    use lunatic_test::test;
 
-//     use super::*;
+    use super::*;
 
-//     type AddProtocol = Recv<i32, Recv<i32, Send<i32, End>>>;
+    type AddProtocol = Recv<i32, Recv<i32, Send<i32, End>>>;
 
-//     #[test]
-//     fn protocol() {
-//         let child = Process::spawn_link(1, |capture: i32, protocol: Protocol<AddProtocol>| {
-//             assert_eq!(capture, 1);
-//             let (protocol, a) = protocol.receive();
-//             let (protocol, b) = protocol.receive();
-//             let _ = protocol.send(capture + a + b);
-//         });
+    #[test]
+    fn protocol() {
+        let child = Process::spawn_link(1, |capture: i32, protocol: Protocol<AddProtocol>| {
+            assert_eq!(capture, 1);
+            let (protocol, a) = protocol.receive();
+            let (protocol, b) = protocol.receive();
+            let _ = protocol.send(capture + a + b);
+        });
 
-//         let child = child.send(2);
-//         let child = child.send(2);
-//         let (_, result) = child.receive();
-//         assert_eq!(result, 5);
-//     }
-// }
+        let child = child.send(2);
+        let child = child.send(2);
+        let (_, result) = child.receive();
+        assert_eq!(result, 5);
+    }
+}

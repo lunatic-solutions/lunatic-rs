@@ -653,7 +653,7 @@ where
         // First encode the handler inside the message buffer.
         let handler = unpacker::<T, M, S> as usize as i32;
         let handler_message = Sendable::Request(handler, this);
-        Bincode::encode(&handler_message).unwrap();
+        S::encode(&handler_message).unwrap();
         // Then the message itself.
         S::encode(&request).unwrap();
         // Send it & wait on a response!
@@ -783,67 +783,67 @@ impl<T, S> std::fmt::Debug for ProcessRef<T, S> {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use lunatic_test::test;
-//     use std::time::Duration;
+#[cfg(test)]
+mod tests {
+    use lunatic_test::test;
+    use std::time::Duration;
 
-//     use super::*;
-//     use crate::sleep;
+    use super::*;
+    use crate::sleep;
 
-//     struct TestServer(i32);
+    struct TestServer(i32);
 
-//     #[derive(serde::Serialize, serde::Deserialize)]
-//     struct Inc(i32);
-//     #[derive(serde::Serialize, serde::Deserialize)]
-//     struct Count;
-//     #[derive(serde::Serialize, serde::Deserialize)]
-//     struct Panic;
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct Inc(i32);
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct Count;
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct Panic;
 
-//     impl AbstractProcess for TestServer {
-//         type Arg = ();
-//         type State = Self;
+    impl AbstractProcess for TestServer {
+        type Arg = ();
+        type State = Self;
 
-//         fn init(_: ProcessRef<Self>, _: ()) -> Self {
-//             TestServer(0)
-//         }
-//     }
+        fn init(_: ProcessRef<Self>, _: ()) -> Self {
+            TestServer(0)
+        }
+    }
 
-//     impl MessageHandler<Inc> for TestServer {
-//         fn handle(state: &mut Self::State, message: Inc) {
-//             state.0 += message.0;
-//         }
-//     }
+    impl MessageHandler<Inc> for TestServer {
+        fn handle(state: &mut Self::State, message: Inc) {
+            state.0 += message.0;
+        }
+    }
 
-//     impl RequestHandler<Count> for TestServer {
-//         type Response = i32;
+    impl RequestHandler<Count> for TestServer {
+        type Response = i32;
 
-//         fn handle(state: &mut Self::State, _: Count) -> Self::Response {
-//             state.0
-//         }
-//     }
+        fn handle(state: &mut Self::State, _: Count) -> Self::Response {
+            state.0
+        }
+    }
 
-//     impl MessageHandler<Panic> for TestServer {
-//         fn handle(_: &mut Self::State, _: Panic) {
-//             panic!("fail");
-//         }
-//     }
+    impl MessageHandler<Panic> for TestServer {
+        fn handle(_: &mut Self::State, _: Panic) {
+            panic!("fail");
+        }
+    }
 
-//     #[test]
-//     fn spawn_test() {
-//         let child = TestServer::start((), None);
-//         child.send(Inc(33));
-//         child.send(Inc(55));
-//         let result = child.request(Count);
-//         assert_eq!(result, 88);
-//     }
+    #[test]
+    fn spawn_test() {
+        let child = TestServer::start((), None);
+        child.send(Inc(33));
+        child.send(Inc(55));
+        let result = child.request(Count);
+        assert_eq!(result, 88);
+    }
 
-//     #[test]
-//     #[should_panic]
-//     fn spawn_link_test() {
-//         let child = TestServer::start_link((), None);
-//         child.send(Panic);
-//         // This process should fail too before 100ms
-//         sleep(Duration::from_millis(100));
-//     }
-// }
+    #[test]
+    #[should_panic]
+    fn spawn_link_test() {
+        let child = TestServer::start_link((), None);
+        child.send(Panic);
+        // This process should fail too before 100ms
+        sleep(Duration::from_millis(100));
+    }
+}
