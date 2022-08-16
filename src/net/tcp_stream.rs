@@ -10,7 +10,7 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 
-use crate::{error::LunaticError, host};
+use crate::{self as lunatic, error::LunaticError, host, spawn_link, Mailbox, Process};
 
 /// A TCP connection.
 ///
@@ -31,6 +31,12 @@ pub struct TcpStream {
     // If the TCP stream is serialized it will be removed from our resources, so we can't call
     // `drop_tcp_stream()` anymore on it.
     consumed: UnsafeCell<bool>,
+    // Duration of the read timeout for this particular TcpStream. If set to `None` then the read blocks indefinitely
+    // If within the given `Duration` no data is read from the TcpStream an Error with `ErrorKind::TimedOut` is returned
+    read_timeout: Option<Duration>,
+    // Duration of the write timeout for this particular TcpStream. If set to `None` then the read blocks indefinitely
+    // If within the given `Duration` no data is written to the TcpStream an Error with `ErrorKind::TimedOut` is returned
+    write_timeout: Option<Duration>,
 }
 
 impl Drop for TcpStream {
@@ -48,6 +54,8 @@ impl Clone for TcpStream {
         Self {
             id,
             consumed: UnsafeCell::new(false),
+            read_timeout: None,
+            write_timeout: None,
         }
     }
 }
@@ -95,6 +103,8 @@ impl TcpStream {
         TcpStream {
             id,
             consumed: UnsafeCell::new(false),
+            read_timeout: None,
+            write_timeout: None,
         }
     }
 
@@ -171,10 +181,25 @@ impl TcpStream {
         let lunatic_error = LunaticError::from(id);
         Err(Error::new(ErrorKind::Other, lunatic_error))
     }
+
+    pub fn set_write_timeout(&mut self, dur: Option<Duration>) -> Result<()> {
+        self.write_timeout = dur;
+        Ok(())
+    }
+
+    pub fn set_read_timeout(&mut self, dur: Option<Duration>) -> Result<()> {
+        // Only drop stream if it's not already consumed
+        if unsafe { !*self.consumed.get() } {
+            self.read_timeout = dur;
+            return Ok(());
+        }
+        Err(Error::from(ErrorKind::InvalidInput))
+    }
 }
 
 impl Write for TcpStream {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
+        // if let Some(duration) = self.read_timeout {}
         let io_slice = IoSlice::new(buf);
         self.write_vectored(&[io_slice])
     }
@@ -209,8 +234,46 @@ impl Write for TcpStream {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+pub(crate) enum TcpTimeoutResponse {
+    Read(Vec<u8>),
+    ReadError(u64),
+    Write(usize),
+    WriteError(u64),
+    TimedOut,
+}
+
 impl Read for TcpStream {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+        let stream = self.clone();
+        if let Some(duration) = self.read_timeout {
+            let len = buf.len();
+            let reader_process = Process::spawn_link(
+                (stream, len, duration),
+                |(stream, len, duration),
+
+                 protocol: lunatic::protocol::Protocol<
+                    lunatic::protocol::Send<_, lunatic::protocol::TaskEnd>,
+                >| {
+                    let mailbox: Mailbox<TcpTimeoutResponse> = unsafe { Mailbox::new() };
+                    let _ = protocol.send(read_with_timeout(stream, len, duration, mailbox));
+                },
+            );
+            return match reader_process.result() {
+                TcpTimeoutResponse::Read(new_buf) => {
+                    let old_len = buf.len();
+                    buf[old_len..old_len + new_buf.len()].copy_from_slice(new_buf.as_slice());
+                    Ok(new_buf.len())
+                }
+                TcpTimeoutResponse::TimedOut => Err(Error::from(ErrorKind::TimedOut)),
+                TcpTimeoutResponse::Write(size) => Ok(size),
+                TcpTimeoutResponse::ReadError(code) | TcpTimeoutResponse::WriteError(code) => {
+                    let lunatic_error = LunaticError::from(code);
+                    Err(Error::new(ErrorKind::Other, lunatic_error))
+                }
+            };
+        }
+        // if no timeout was provided, continue with default blocking behaviour
         let mut nread_or_error_id: u64 = 0;
         let result = unsafe {
             host::api::networking::tcp_read(
@@ -228,3 +291,61 @@ impl Read for TcpStream {
         }
     }
 }
+
+fn read_with_timeout(
+    stream: TcpStream,
+    len: usize,
+    duration: Duration,
+    mailbox: Mailbox<TcpTimeoutResponse>,
+) -> TcpTimeoutResponse {
+    // invoke timeout call
+    let this = mailbox.this();
+    this.send_after(TcpTimeoutResponse::TimedOut, duration);
+    let _ = spawn_link!(@task |stream, len, this| {
+        let mut buf = Vec::with_capacity(len);
+        let mut nread_or_error_id: u64 = 0;
+        let result = unsafe {
+            host::api::networking::tcp_read(
+                stream.id,
+                buf.as_mut_ptr(),
+                len,
+                &mut nread_or_error_id as *mut u64,
+            )
+        };
+        if result == 0 {
+            this.send(TcpTimeoutResponse::Read(buf));
+        } else {
+            this.send(TcpTimeoutResponse::ReadError(nread_or_error_id));
+        }
+    });
+    mailbox.receive()
+}
+
+// TODO: needs to serialize IoSlice
+// fn write_with_timeout(
+//     stream: TcpStream,
+//     bufs: &[IoSlice<'_>],
+//     duration: Duration,
+//     mailbox: Mailbox<TcpTimeoutResponse>,
+// ) -> TcpTimeoutResponse {
+//     // invoke timeout call
+//     let this = mailbox.this();
+//     this.send_after(TcpTimeoutResponse::TimedOut, duration);
+//     let _ = spawn_link!(@task |stream, bufs, this| {
+//             let mut nwritten_or_error_id: u64 = 0;
+//             let result = unsafe {
+//                 host::api::networking::tcp_write_vectored(
+//                     stream.id,
+//                     bufs.as_ptr() as *const u32,
+//                     bufs.len(),
+//                     &mut nwritten_or_error_id as *mut u64,
+//                 )
+//             };
+//             if result == 0 {
+//                 this.send(TcpTimeoutResponse::Write(result as usize));
+//             } else {
+//                 this.send(TcpTimeoutResponse::ReadError(nwritten_or_error_id));
+//             }
+//     });
+//     mailbox.receive()
+// }
