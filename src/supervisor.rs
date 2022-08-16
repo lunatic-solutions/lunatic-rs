@@ -1,7 +1,5 @@
 use std::marker::PhantomData;
 
-use serde::{de::DeserializeOwned, Serialize};
-
 use crate::process::Sendable;
 use crate::{host, process::StartFields, protocol::ProtocolCapture, serializer::Bincode, Tag};
 use crate::{
@@ -160,7 +158,7 @@ pub trait Supervisable<T, S = Bincode>
 where
     T: Supervisor<S>,
 {
-    type Processes: serde::Serialize + serde::de::DeserializeOwned + Clone;
+    type Processes: Clone;
     type Args: Clone;
     type Tags;
 
@@ -172,9 +170,7 @@ where
 impl<T1, K, S> Supervisable<K, S> for T1
 where
     K: Supervisor<S, Children = Self>,
-    S: Serialize
-        + DeserializeOwned
-        + Serializer<()>
+    S: Serializer<()>
         + Serializer<Sendable<S>>
         + Serializer<StartFields<T1, S>>
         + Serializer<ProtocolCapture<StartFields<T1, S>, S>>,
