@@ -1,6 +1,5 @@
 use lunatic::{
-    protocol::{End, Protocol, Recv, Send},
-    serializer::MessagePack,
+    protocol::{End, Protocol, Send},
     Process,
 };
 use lunatic_test::test;
@@ -14,8 +13,12 @@ fn drop_unfinished() {
     let _ = protocol.receive();
 }
 
+#[cfg(feature = "msgpack_serializer")]
 #[test]
 fn msg_pack_serializer() {
+    use lunatic::protocol::Recv;
+    use lunatic::serializer::MessagePack;
+
     let protocol = Process::spawn_link(
         (),
         |_, proto: Protocol<Recv<Vec<f64>, Send<f64, End>>, MessagePack>| {

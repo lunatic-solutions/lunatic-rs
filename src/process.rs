@@ -653,7 +653,7 @@ where
         // First encode the handler inside the message buffer.
         let handler = unpacker::<T, M, S> as usize as i32;
         let handler_message = Sendable::Request(handler, this);
-        S::encode(&handler_message).unwrap();
+        Bincode::encode(&handler_message).unwrap();
         // Then the message itself.
         S::encode(&request).unwrap();
         // Send it & wait on a response!
@@ -764,6 +764,9 @@ impl<T, S> PartialEq for ProcessRef<T, S> {
         self.process == other.process
     }
 }
+
+/// Proccess equality comparison is an equivalance relation
+impl<T> Eq for ProcessRef<T> {}
 
 // Implement Hash explicitly to match the behavior of PartialEq
 impl<T, S> std::hash::Hash for ProcessRef<T, S> {
