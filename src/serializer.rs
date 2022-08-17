@@ -95,7 +95,7 @@ pub struct Bincode {}
 
 impl<M> Serializer<M> for Bincode
 where
-    M: serde::Serialize + serde::de::DeserializeOwned,
+    M: serde::Serialize + serde::de::DeserializeOwned + 'static,
 {
     fn encode(message: &M) -> Result<(), EncodeError> {
         let data = bincode::serialize(message)?;
