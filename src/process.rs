@@ -138,17 +138,13 @@ where
         arg: <T as AbstractProcess<S>>::Arg,
         name: Option<&str>,
         node: u64,
-    ) -> ProcessRef<T, S>
-    where
-        T: Supervisor<S>;
+    ) -> ProcessRef<T, S>;
     fn start_node_config(
         arg: <T as AbstractProcess<S>>::Arg,
         name: Option<&str>,
         node: u64,
         config: &ProcessConfig,
-    ) -> ProcessRef<T, S>
-    where
-        T: Supervisor<S>;
+    ) -> ProcessRef<T, S>;
 }
 
 impl<T, S> StartProcess<T, S> for T
@@ -187,10 +183,7 @@ where
         arg: <T as AbstractProcess<S>>::Arg,
         name: Option<&str>,
         node: u64,
-    ) -> ProcessRef<T, S>
-    where
-        T: Supervisor<S>,
-    {
+    ) -> ProcessRef<T, S> {
         start::<T, S>(arg, name, None, None, Some(node)).unwrap()
     }
 
@@ -199,10 +192,7 @@ where
         name: Option<&str>,
         node: u64,
         config: &ProcessConfig,
-    ) -> ProcessRef<T, S>
-    where
-        T: Supervisor<S>,
-    {
+    ) -> ProcessRef<T, S> {
         start::<T, S>(arg, name, None, Some(config), Some(node)).unwrap()
     }
 }
