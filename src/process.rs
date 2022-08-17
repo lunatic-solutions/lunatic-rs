@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, time::Duration};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     distributed::node_id,
@@ -13,7 +13,7 @@ use crate::{
     Mailbox, Process, ProcessConfig, ReceiveError, Tag,
 };
 
-pub(super) type StartFields<T, S> = (
+pub(super) type StartFields<T, S = Bincode> = (
     Process<(), S>,
     Tag,
     <T as AbstractProcess<S>>::Arg,
@@ -441,6 +441,7 @@ where
 ///
 /// `ProcessRef<T>` is different from a `Process` in the ability to handle messages of different
 /// types, as long as the traits `MessageHandler<M>` or `RequestHandler<R>` are implemented for T.
+#[derive(Serialize, Deserialize)]
 pub struct ProcessRef<T, S = Bincode>
 where
     T: ?Sized,
@@ -539,35 +540,6 @@ where
             return Err(ReceiveError::Timeout);
         }
         Ok(())
-    }
-}
-
-// Manually implement serialize and deserialize since the derive macro serializes PhantomData and generates
-// a lot of unecessary code.
-impl<T, S> serde::Serialize for ProcessRef<T, S>
-where
-    T: ?Sized,
-    S: serde::Serialize,
-{
-    fn serialize<S_>(&self, serializer: S_) -> Result<S_::Ok, S_::Error>
-    where
-        S_: serde::Serializer,
-    {
-        let mut state = serde::Serializer::serialize_struct(serializer, "ProcessRef", 1)?;
-        serde::ser::SerializeStruct::serialize_field(&mut state, "process", &self.process)?;
-        serde::ser::SerializeStruct::end(state)
-    }
-}
-
-impl<'de, T, S> Deserialize<'de> for ProcessRef<T, S> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Ok(ProcessRef {
-            process: Deserialize::deserialize(deserializer)?,
-            phantom: PhantomData::default(),
-        })
     }
 }
 

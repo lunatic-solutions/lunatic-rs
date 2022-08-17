@@ -1,7 +1,5 @@
 //! Serializer implementations for messages.
 
-use std::io::{Read, Write};
-
 use crate::host::api::message;
 
 use serde::{Deserialize, Serialize};
@@ -151,6 +149,8 @@ where
     M: serde::Serialize + serde::de::DeserializeOwned,
 {
     fn encode(message: &M) -> Result<(), EncodeError> {
+        use std::io::Write;
+
         let bytes = serde_json::to_vec(message)?;
         MessageRw {}.write_all(&bytes.len().to_le_bytes()).unwrap();
         MessageRw {}.write_all(&bytes).unwrap();
@@ -158,6 +158,8 @@ where
     }
 
     fn decode() -> Result<M, DecodeError> {
+        use std::io::{Read, Write};
+
         let mut le_bytes = [0; 4];
         MessageRw {}.read_exact(&mut le_bytes).unwrap();
 

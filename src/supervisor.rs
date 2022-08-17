@@ -167,21 +167,17 @@ where
     fn handle_failure(config: &mut SupervisorConfig<T, S>, tag: Tag);
 }
 
-impl<T1, K, S> Supervisable<K, S> for T1
+impl<T1, K> Supervisable<K> for T1
 where
-    K: Supervisor<S, Children = Self>,
-    S: Serializer<()>
-        + Serializer<Sendable<S>>
-        + Serializer<StartFields<T1, S>>
-        + Serializer<ProtocolCapture<StartFields<T1, S>, S>>,
-    T1: AbstractProcess<S>,
+    K: Supervisor<Children = Self>,
+    T1: AbstractProcess,
     T1::Arg: Clone,
 {
-    type Processes = ProcessRef<T1, S>;
+    type Processes = ProcessRef<T1>;
     type Args = (T1::Arg, Option<String>);
     type Tags = Tag;
 
-    fn start_links(config: &mut SupervisorConfig<K, S>, args: Self::Args) {
+    fn start_links(config: &mut SupervisorConfig<K>, args: Self::Args) {
         config.children_args = Some(args.clone());
         let (proc, tag) = match T1::start_link_or_fail(args.0, args.1.as_deref()) {
             Ok(result) => result,
@@ -194,11 +190,11 @@ where
         config.children_tags = Some(tag);
     }
 
-    fn terminate(config: SupervisorConfig<K, S>) {
+    fn terminate(config: SupervisorConfig<K>) {
         config.children.unwrap().shutdown();
     }
 
-    fn handle_failure(config: &mut SupervisorConfig<K, S>, tag: Tag) {
+    fn handle_failure(config: &mut SupervisorConfig<K>, tag: Tag) {
         // Since there is only one children process, the behavior is the same for all
         // strategies -- after a failure, restart the child process
         if tag == config.children_tags.unwrap() {
@@ -224,18 +220,19 @@ where
 }
 
 // Auto-implement Supervisable for up to 12 children.
-// macros::impl_supervisable!(T0 0, T1 1);
-// macros::impl_supervisable!(T0 0, T1 1, T2 2);
-// macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3);
-// macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3, T4 4);
-// macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5);
-// macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6);
-// macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7);
-// macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8);
-// macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9);
-// macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9, T10 10);
-// macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9, T10 10, T11 11);
-// macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9, T10 10, T11 11, T12 12);
+macros::impl_supervisable!(T0 0);
+macros::impl_supervisable!(T0 0, T1 1);
+macros::impl_supervisable!(T0 0, T1 1, T2 2);
+macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3);
+macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3, T4 4);
+macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5);
+macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6);
+macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7);
+macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8);
+macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9);
+macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9, T10 10);
+macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9, T10 10, T11 11);
+macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9, T10 10, T11 11, T12 12);
 
 mod macros {
     // Replace any identifier with `Tag`
@@ -273,17 +270,23 @@ mod macros {
 
     macro_rules! impl_supervisable {
         ($($args:ident $i:tt),*) => {
-            impl<$($args),*, S, K> Supervisable<K, S> for ($($args),*)
+            impl<$($args),*, K, S> Supervisable<K, S> for ($($args),*,)
             where
                 K: Supervisor<S, Children = Self>,
+                S: Serializer<()>
+                    + Serializer<Sendable<S>>
+                    $(
+                        + Serializer<StartFields<$args, S>>
+                        + Serializer<ProtocolCapture<StartFields<$args, S>, S>>
+                    )*,
                 $(
                     $args : AbstractProcess<S>,
                     $args ::Arg : Clone,
                 )*
             {
                 type Processes = ($(ProcessRef<$args, S>,)*);
-                type Args = ($(($args ::Arg, Option<String>)),*);
-                type Tags = ($(macros::tag!($args)),*);
+                type Args = ($(($args ::Arg, Option<String>)),*,);
+                type Tags = ($(macros::tag!($args)),*,);
 
                 fn start_links(config: &mut SupervisorConfig<K, S>, args: Self::Args) {
                     config.children_args = Some(args.clone());
@@ -299,8 +302,8 @@ mod macros {
                         };
                     )*
 
-                    config.children = Some(($(paste::paste!([<proc$i>])),*));
-                    config.children_tags = Some(($(paste::paste!([<tag$i>])),*));
+                    config.children = Some(($(paste::paste!([<proc$i>])),*,));
+                    config.children_tags = Some(($(paste::paste!([<tag$i>])),*,));
                 }
 
                 fn terminate(config: SupervisorConfig<K, S>) {
