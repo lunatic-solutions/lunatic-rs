@@ -29,17 +29,19 @@ lunatic-test = { version = "^0.10", path = "./lunatic-test" }
 
 [dev-dependencies]
 # WASI branch
-criterion = { git = "https://github.com/bheisler/criterion.rs", branch = "version-0.4", default-features = false  }
+criterion = { git = "https://github.com/bheisler/criterion.rs", branch = "version-0.4", default-features = false }
+lunatic = { path = ".", features = ["json_serializer"] }
+
+[[bench]]
+name = "serializer"
+harness = false
 
 [[bench]]
 name = "spawning"
 harness = false
 
 [workspace]
-members = [
-  "lunatic-macros",
-  "lunatic-test",
-]
+members = ["lunatic-macros", "lunatic-test"]
 
 [package.metadata.docs.rs]
 targets = ["wasm32-wasi"]
