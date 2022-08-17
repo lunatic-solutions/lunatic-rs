@@ -285,6 +285,8 @@ mod macros {
                 K: Supervisor<S, Children = Self>,
                 S: Serializer<()>
                     + Serializer<Sendable<S>>
+                    + serde::Serialize
+                    + serde::de::DeserializeOwned
                     $(
                         + Serializer<StartFields<$args, S>>
                         + Serializer<ProtocolCapture<StartFields<$args, S>, S>>

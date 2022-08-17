@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, time::Duration};
 
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{
     distributed::node_id,
@@ -153,7 +153,9 @@ where
     S: Serializer<()>
         + Serializer<Sendable<S>>
         + Serializer<StartFields<T, S>>
-        + Serializer<ProtocolCapture<StartFields<T, S>, S>>,
+        + Serializer<ProtocolCapture<StartFields<T, S>, S>>
+        + Serialize
+        + DeserializeOwned,
 {
     /// Start a process.
     fn start(arg: T::Arg, name: Option<&str>) -> ProcessRef<T, S> {
@@ -238,7 +240,9 @@ where
     S: Serializer<()>
         + Serializer<Sendable<S>>
         + Serializer<StartFields<T, S>>
-        + Serializer<ProtocolCapture<StartFields<T, S>, S>>,
+        + Serializer<ProtocolCapture<StartFields<T, S>, S>>
+        + Serialize
+        + DeserializeOwned,
 {
     /// Start a linked process.
     fn start_link_or_fail(
@@ -274,7 +278,9 @@ where
     S: Serializer<()>
         + Serializer<Sendable<S>>
         + Serializer<StartFields<T, S>>
-        + Serializer<ProtocolCapture<StartFields<T, S>, S>>,
+        + Serializer<ProtocolCapture<StartFields<T, S>, S>>
+        + Serialize
+        + DeserializeOwned,
 {
     // If a link tag is provided, use the same tag for message matching.
     let tag = if let Some(tag) = link {
@@ -335,7 +341,7 @@ fn starter<T, S>(
     _: Mailbox<(), S>,
 ) where
     T: AbstractProcess<S>,
-    S: Serializer<()> + Serializer<Sendable<S>>,
+    S: Serializer<()> + Serializer<Sendable<S>> + Serialize + DeserializeOwned,
 {
     let entry: fn(this: ProcessRef<T, S>, arg: T::Arg) -> T::State =
         unsafe { std::mem::transmute(entry) };
@@ -362,7 +368,7 @@ fn starter<T, S>(
     // Let parent know that the `init()` call finished
     parent.tag_send(tag, ());
 
-    let mailbox: LinkMailbox<Sendable<S>, S> = unsafe { LinkMailbox::new() };
+    let mailbox: LinkMailbox<Sendable<S>, Bincode> = unsafe { LinkMailbox::new() };
     // Run process forever and respond to requests.
     loop {
         let dispatcher = mailbox.tag_receive(None);
@@ -549,7 +555,7 @@ impl<M, S, T> Message<M, S> for ProcessRef<T, S>
 where
     T: AbstractProcess<S>,
     T: MessageHandler<M, S>,
-    S: Serializer<M> + Serializer<Sendable<S>>,
+    S: Serializer<M> + Serializer<Sendable<S>> + Serialize + DeserializeOwned,
 {
     /// Send message to the process.
     fn send(&self, message: M) {
@@ -567,7 +573,7 @@ where
         // First encode the handler inside the message buffer.
         let handler = unpacker::<T, M, S> as usize as i32;
         let handler_message = Sendable::<S>::Message(handler);
-        S::encode(&handler_message).unwrap();
+        Bincode::encode(&handler_message).unwrap();
         // Then the message itself.
         S::encode(&message).unwrap();
         // Send the message
@@ -590,7 +596,7 @@ where
         // First encode the handler inside the message buffer.
         let handler = unpacker::<T, M, S> as usize as i32;
         let handler_message = Sendable::<S>::Message(handler);
-        S::encode(&handler_message).unwrap();
+        Bincode::encode(&handler_message).unwrap();
         // Then the message itself.
         S::encode(&message).unwrap();
         // Send the message
@@ -604,7 +610,11 @@ impl<M, S, T> Request<M, S> for ProcessRef<T, S>
 where
     T: AbstractProcess<S>,
     T: RequestHandler<M, S>,
-    S: Serializer<M> + Serializer<Sendable<S>> + Serializer<<T as RequestHandler<M, S>>::Response>,
+    S: Serializer<M>
+        + Serializer<Sendable<S>>
+        + Serializer<<T as RequestHandler<M, S>>::Response>
+        + Serialize
+        + DeserializeOwned,
 {
     type Result = <T as RequestHandler<M, S>>::Response;
 
@@ -637,7 +647,7 @@ where
         // First encode the handler inside the message buffer.
         let handler = unpacker::<T, M, S> as usize as i32;
         let handler_message = Sendable::Request(handler, this);
-        S::encode(&handler_message).unwrap();
+        Bincode::encode(&handler_message).unwrap();
         // Then the message itself.
         S::encode(&request).unwrap();
         // Send it & wait on a response!
@@ -649,7 +659,7 @@ where
             host::send_receive_skip_search(self.process.node_id(), self.process.id(), timeout_ms);
         if result == 9027 {
             return Err(ReceiveError::Timeout);
-        };
+        }
         Ok(S::decode().unwrap())
     }
 }
@@ -679,7 +689,7 @@ impl<T, S> ProcessRef<T, S>
 where
     T: Supervisor<S>,
     T: AbstractProcess<S, State = SupervisorConfig<T, S>>,
-    S: Serializer<()> + Serializer<Sendable<S>>,
+    S: Serializer<()> + Serializer<Sendable<S>> + Serialize + DeserializeOwned,
 {
     /// Block until the Supervisor shuts down.
     ///
@@ -708,7 +718,7 @@ where
         // First encode the handler inside the message buffer.
         let handler = unpacker::<T, S> as usize as i32;
         let handler_message = Sendable::Request(handler, this);
-        S::encode(&handler_message).unwrap();
+        Bincode::encode(&handler_message).unwrap();
         // Send it & wait on a response!
         unsafe {
             host::api::message::send_receive_skip_search(self.process.id(), 0);
@@ -736,7 +746,9 @@ where
     T: RequestHandler<GetChildren, S>,
     S: Serializer<GetChildren>
         + Serializer<Sendable<S>>
-        + Serializer<<T as RequestHandler<GetChildren, S>>::Response>,
+        + Serializer<<T as RequestHandler<GetChildren, S>>::Response>
+        + Serialize
+        + DeserializeOwned,
 {
     pub fn children(&self) -> <T as RequestHandler<GetChildren, S>>::Response {
         self.request(GetChildren)
