@@ -158,7 +158,7 @@ where
     }
 
     fn decode() -> Result<M, DecodeError> {
-        use std::io::{Read, Write};
+        use std::io::Read;
 
         let mut le_bytes = [0; 4];
         MessageRw {}.read_exact(&mut le_bytes).unwrap();

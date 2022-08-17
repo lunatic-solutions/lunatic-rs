@@ -167,57 +167,13 @@ where
     fn handle_failure(config: &mut SupervisorConfig<T, S>, tag: Tag);
 }
 
-impl<T1, K> Supervisable<K> for T1
-where
-    K: Supervisor<Children = Self>,
-    T1: AbstractProcess,
-    T1::Arg: Clone,
-{
-    type Processes = ProcessRef<T1>;
-    type Args = (T1::Arg, Option<String>);
-    type Tags = Tag;
-
-    fn start_links(config: &mut SupervisorConfig<K>, args: Self::Args) {
-        config.children_args = Some(args.clone());
-        let (proc, tag) = match T1::start_link_or_fail(args.0, args.1.as_deref()) {
-            Ok(result) => result,
-            Err(_) => panic!(
-                "Supervisor failed to start child `{}`",
-                std::any::type_name::<T1>()
-            ),
-        };
-        config.children = Some(proc);
-        config.children_tags = Some(tag);
-    }
-
-    fn terminate(config: SupervisorConfig<K>) {
-        config.children.unwrap().shutdown();
-    }
-
-    fn handle_failure(config: &mut SupervisorConfig<K>, tag: Tag) {
-        // Since there is only one children process, the behavior is the same for all
-        // strategies -- after a failure, restart the child process
-        if tag == config.children_tags.unwrap() {
-            let (proc, tag) = match T1::start_link_or_fail(
-                config.children_args.as_ref().unwrap().0.clone(),
-                config.children_args.as_ref().unwrap().1.as_deref(),
-            ) {
-                Ok(result) => result,
-                Err(_) => panic!(
-                    "Supervisor failed to start child `{}`",
-                    std::any::type_name::<T1>()
-                ),
-            };
-            *config.children.as_mut().unwrap() = proc;
-            *config.children_tags.as_mut().unwrap() = tag;
-        } else {
-            panic!(
-                "Supervisor {} received kill signal",
-                std::any::type_name::<K>()
-            );
-        }
-    }
-}
+macros::impl_supervisable_single!(crate::serializer::Bincode);
+#[cfg(feature = "msgpack_serializer")]
+macros::impl_supervisable_single!(crate::serializer::MessagePack);
+#[cfg(feature = "json_serializer")]
+macros::impl_supervisable_single!(crate::serializer::Json);
+#[cfg(feature = "protobuf_serializer")]
+macros::impl_supervisable_single!(crate::serializer::ProtocolBuffers);
 
 // Auto-implement Supervisable for up to 12 children.
 macros::impl_supervisable!(T0 0);
@@ -266,6 +222,62 @@ mod macros {
                 macros::reverse_shutdown!($config, after $tag, [$($rest_i)*]);
             }
         };
+    }
+
+    macro_rules! impl_supervisable_single {
+        ($serializer:path) => {
+            impl<T1, K> Supervisable<K, $serializer> for T1
+            where
+                K: Supervisor<$serializer, Children = Self>,
+                T1: AbstractProcess<$serializer>,
+                T1::Arg: Clone,
+            {
+                type Processes = ProcessRef<T1, $serializer>;
+                type Args = (T1::Arg, Option<String>);
+                type Tags = Tag;
+            
+                fn start_links(config: &mut SupervisorConfig<K, $serializer>, args: Self::Args) {
+                    config.children_args = Some(args.clone());
+                    let (proc, tag) = match T1::start_link_or_fail(args.0, args.1.as_deref()) {
+                        Ok(result) => result,
+                        Err(_) => panic!(
+                            "Supervisor failed to start child `{}`",
+                            std::any::type_name::<T1>()
+                        ),
+                    };
+                    config.children = Some(proc);
+                    config.children_tags = Some(tag);
+                }
+            
+                fn terminate(config: SupervisorConfig<K, $serializer>) {
+                    config.children.unwrap().shutdown();
+                }
+            
+                fn handle_failure(config: &mut SupervisorConfig<K, $serializer>, tag: Tag) {
+                    // Since there is only one children process, the behavior is the same for all
+                    // strategies -- after a failure, restart the child process
+                    if tag == config.children_tags.unwrap() {
+                        let (proc, tag) = match T1::start_link_or_fail(
+                            config.children_args.as_ref().unwrap().0.clone(),
+                            config.children_args.as_ref().unwrap().1.as_deref(),
+                        ) {
+                            Ok(result) => result,
+                            Err(_) => panic!(
+                                "Supervisor failed to start child `{}`",
+                                std::any::type_name::<T1>()
+                            ),
+                        };
+                        *config.children.as_mut().unwrap() = proc;
+                        *config.children_tags.as_mut().unwrap() = tag;
+                    } else {
+                        panic!(
+                            "Supervisor {} received kill signal",
+                            std::any::type_name::<K>()
+                        );
+                    }
+                }
+            }
+        }
     }
 
     macro_rules! impl_supervisable {
@@ -427,6 +439,7 @@ mod macros {
         };
     }
 
+    pub(crate) use impl_supervisable_single;
     pub(crate) use impl_supervisable;
     pub(crate) use reverse_shutdown;
     pub(crate) use tag;
