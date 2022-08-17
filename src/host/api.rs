@@ -98,12 +98,26 @@ pub mod networking {
             ciovec_array_len: usize,
             opaque: *mut u64,
         ) -> u32;
+        pub fn tcp_write_vectored_timeout(
+            tcp_stream_id: u64,
+            ciovec_array: *const u32,
+            ciovec_array_len: usize,
+            opaque: *mut u64,
+            timeout_duration: u64,
+        ) -> u32;
         pub fn tcp_read(
             tcp_stream_id: u64,
             buffer: *mut u8,
             buffer_len: usize,
 
             opaque: *mut u64,
+        ) -> u32;
+        pub fn tcp_read_timeout(
+            tcp_stream_id: u64,
+            buffer: *mut u8,
+            buffer_len: usize,
+            opaque: *mut u64,
+            timeout_duration: u64,
         ) -> u32;
         pub fn udp_send(
             udp_socket_id: u64,
