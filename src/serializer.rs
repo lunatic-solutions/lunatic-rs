@@ -1,5 +1,7 @@
 //! Serializer implementations for messages.
 
+use std::io::Write;
+
 use crate::host::api::message;
 
 use thiserror::Error;
@@ -21,6 +23,8 @@ pub enum EncodeError {
     #[error("serialization to Protocol Buffers failed: {0}")]
     ProtocolBuffers(#[from] protobuf::Error),
     #[error("serialization failed: {0}")]
+    IO(#[from] std::io::Error),
+    #[error("serialization failed: {0}")]
     Custom(String),
 }
 
@@ -40,6 +44,8 @@ pub enum DecodeError {
     #[cfg_attr(docsrs, doc(cfg(feature = "protobuf_serializer")))]
     #[error("deserialization from Protocol Buffers failed: {0}")]
     ProtocolBuffers(#[from] protobuf::Error),
+    #[error("serialization failed: {0}")]
+    IO(#[from] std::io::Error),
     #[error("deserialization failed: {0}")]
     Custom(String),
 }
@@ -92,11 +98,12 @@ where
     M: serde::Serialize + serde::de::DeserializeOwned,
 {
     fn encode(message: &M) -> Result<(), EncodeError> {
-        bincode::serialize_into(MessageRw {}, message).map_err(|err| err.into())
+        let data = bincode::serialize(message)?;
+        Ok(MessageRw {}.write_all(&data)?)
     }
 
     fn decode() -> Result<M, DecodeError> {
-        bincode::deserialize_from(MessageRw {}).map_err(|err| err.into())
+        Ok(bincode::deserialize_from(MessageRw {})?)
     }
 }
 
@@ -120,11 +127,12 @@ where
     M: serde::Serialize + serde::de::DeserializeOwned,
 {
     fn encode(message: &M) -> Result<(), EncodeError> {
-        rmp_serde::encode::write(&mut MessageRw {}, message).map_err(|err| err.into())
+        let data = rmp_serde::to_vec(message)?;
+        Ok(MessageRw {}.write_all(&data)?)
     }
 
     fn decode() -> Result<M, DecodeError> {
-        rmp_serde::decode::from_read(MessageRw {}).map_err(|err| err.into())
+        Ok(rmp_serde::decode::from_read(MessageRw {})?)
     }
 }
 
@@ -148,11 +156,12 @@ where
     M: serde::Serialize + serde::de::DeserializeOwned,
 {
     fn encode(message: &M) -> Result<(), EncodeError> {
-        serde_json::to_writer(MessageRw {}, message).map_err(|err| err.into())
+        let data = serde_json::to_vec(message)?;
+        Ok(MessageRw {}.write_all(&data)?)
     }
 
     fn decode() -> Result<M, DecodeError> {
-        serde_json::from_reader(MessageRw {}).map_err(|err| err.into())
+        Ok(serde_json::from_reader(MessageRw {})?)
     }
 }
 
@@ -170,13 +179,13 @@ where
     M: protobuf::Message,
 {
     fn encode(message: &M) -> Result<(), EncodeError> {
-        message
-            .write_to_writer(&mut MessageRw {})
-            .map_err(|err| err.into())
+        let mut data = Vec::new();
+        message.write_to_vec(&mut data)?;
+        Ok(MessageRw {}.write_all(&data)?)
     }
 
     fn decode() -> Result<M, DecodeError> {
-        M::parse_from_reader(&mut MessageRw {}).map_err(|err| err.into())
+        Ok(M::parse_from_reader(&mut MessageRw {})?)
     }
 }
 
