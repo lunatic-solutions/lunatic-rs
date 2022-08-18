@@ -524,7 +524,7 @@ where
         // Create reference to self
         let this: Process<()> = Process::this();
 
-        S::encode(&Sendable::Shutdown(this)).unwrap();
+        Bincode::encode(&Sendable::Shutdown(this)).unwrap();
         let timeout_ms = match timeout {
             Some(timeout) => timeout.as_millis() as u64,
             None => u64::MAX,
