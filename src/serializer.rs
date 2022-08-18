@@ -1,6 +1,6 @@
 //! Serializer implementations for messages.
 
-use std::io::{Read, Write};
+use std::io::Write;
 
 use crate::host::api::message;
 
@@ -95,7 +95,7 @@ pub struct Bincode {}
 
 impl<M> Serializer<M> for Bincode
 where
-    M: serde::Serialize + serde::de::DeserializeOwned + 'static,
+    M: serde::Serialize + serde::de::DeserializeOwned,
 {
     fn encode(message: &M) -> Result<(), EncodeError> {
         let data = bincode::serialize(message)?;
@@ -103,9 +103,7 @@ where
     }
 
     fn decode() -> Result<M, DecodeError> {
-        let mut buf = Vec::new();
-        MessageRw {}.read_to_end(&mut buf)?;
-        Ok(bincode::deserialize(&buf)?)
+        Ok(bincode::deserialize_from(MessageRw {})?)
     }
 }
 
@@ -134,9 +132,7 @@ where
     }
 
     fn decode() -> Result<M, DecodeError> {
-        let mut buf = Vec::new();
-        MessageRw {}.read_to_end(&mut buf)?;
-        Ok(rmp_serde::from_slice(&buf)?)
+        Ok(rmp_serde::decode::from_read(MessageRw {})?)
     }
 }
 
@@ -165,9 +161,7 @@ where
     }
 
     fn decode() -> Result<M, DecodeError> {
-        let mut buf = Vec::new();
-        MessageRw {}.read_to_end(&mut buf)?;
-        Ok(serde_json::from_slice(&buf)?)
+        Ok(serde_json::from_reader(MessageRw {})?)
     }
 }
 
@@ -191,9 +185,7 @@ where
     }
 
     fn decode() -> Result<M, DecodeError> {
-        let mut buf = Vec::new();
-        MessageRw {}.read_to_end(&mut buf)?;
-        Ok(M::parse_from_bytes(&buf)?)
+        Ok(M::parse_from_reader(&mut MessageRw {})?)
     }
 }
 

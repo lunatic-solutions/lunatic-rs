@@ -68,7 +68,7 @@ pub trait AbstractProcess {
     /// The argument received by the `init` function.
     ///
     /// This argument is sent from the parent to the child and needs to be serializable.
-    type Arg: serde::Serialize + serde::de::DeserializeOwned + 'static;
+    type Arg: serde::Serialize + serde::de::DeserializeOwned;
 
     /// The state of the process.
     ///
@@ -692,7 +692,6 @@ impl<T> ProcessRef<T>
 where
     T: Supervisor,
     T: AbstractProcess<State = SupervisorConfig<T>>,
-    <<T as Supervisor>::Children as Supervisable<T>>::Processes: 'static
 {
     pub fn children(&self) -> <<T as Supervisor>::Children as Supervisable<T>>::Processes {
         self.request(GetChildren)

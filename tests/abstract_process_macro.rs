@@ -446,7 +446,7 @@ fn generics() {
     #[abstract_process]
     impl<T> GenAdder<T>
     where
-        T: Add + AddAssign + Default + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
+        T: Add + AddAssign + Default + Clone + Serialize + for<'de> Deserialize<'de>,
     {
         #[init]
         fn init(_: ProcessRef<Self>, _: ()) -> Self {

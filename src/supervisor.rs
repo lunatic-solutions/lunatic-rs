@@ -38,7 +38,7 @@ where
     /// The argument received by the `init` function.
     ///
     /// This argument is sent from the parent to the child and needs to be serializable.
-    type Arg: serde::Serialize + serde::de::DeserializeOwned + 'static;
+    type Arg: serde::Serialize + serde::de::DeserializeOwned;
 
     /// A tuple of types that implement `AbstractProcess`.
     ///
