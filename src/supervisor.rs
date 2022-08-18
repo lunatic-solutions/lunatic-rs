@@ -284,7 +284,7 @@ mod macros {
             where
                 K: Supervisor<S, Children = Self>,
                 S: Serializer<()>
-                    + Serializer<Sendable<S>>
+                    + Serializer<Sendable>
                     + serde::Serialize
                     + serde::de::DeserializeOwned
                     $(
