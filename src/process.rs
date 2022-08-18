@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, time::Duration};
 
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     distributed::node_id,
@@ -79,7 +79,7 @@ pub trait AbstractProcess<S = Bincode> {
     /// The argument received by the `init` function.
     ///
     /// This argument is sent from the parent to the child and needs to be serializable.
-    type Arg: serde::Serialize + serde::de::DeserializeOwned;
+    type Arg;
 
     /// The state of the process.
     ///
@@ -154,8 +154,6 @@ where
         + Serializer<Sendable>
         + Serializer<StartFields<T, S>>
         + Serializer<ProtocolCapture<StartFields<T, S>, S>>
-        + Serialize
-        + DeserializeOwned,
 {
     /// Start a process.
     fn start(arg: T::Arg, name: Option<&str>) -> ProcessRef<T, S> {
@@ -241,8 +239,6 @@ where
         + Serializer<Sendable>
         + Serializer<StartFields<T, S>>
         + Serializer<ProtocolCapture<StartFields<T, S>, S>>
-        + Serialize
-        + DeserializeOwned,
 {
     /// Start a linked process.
     fn start_link_or_fail(
@@ -279,8 +275,6 @@ where
         + Serializer<Sendable>
         + Serializer<StartFields<T, S>>
         + Serializer<ProtocolCapture<StartFields<T, S>, S>>
-        + Serialize
-        + DeserializeOwned,
 {
     // If a link tag is provided, use the same tag for message matching.
     let tag = if let Some(tag) = link {
@@ -341,7 +335,7 @@ fn starter<T, S>(
     _: Mailbox<(), S>,
 ) where
     T: AbstractProcess<S>,
-    S: Serializer<()> + Serializer<Sendable> + Serialize + DeserializeOwned,
+    S: Serializer<()> + Serializer<Sendable> ,
 {
     let entry: fn(this: ProcessRef<T, S>, arg: T::Arg) -> T::State =
         unsafe { std::mem::transmute(entry) };
@@ -542,7 +536,7 @@ where
 /// This is a wrapper around the message/request that is sent to a process.
 ///
 /// The first `i32` value is a pointer
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub enum Sendable {
     Message(i32),
     // The process type can't be carried over as a generic and is set here to `()`, but overwritten
@@ -551,11 +545,11 @@ pub enum Sendable {
     Shutdown(Process<()>),
 }
 
-impl<M, S, T> Message<M, S> for ProcessRef<T, S>
+impl<M, S, AS, T> Message<M, S> for ProcessRef<T, AS>
 where
-    T: AbstractProcess<S>,
+    T: AbstractProcess<AS>,
     T: MessageHandler<M, S>,
-    S: Serializer<M> + Serializer<Sendable> + Serialize + DeserializeOwned,
+    S: Serializer<M> + Serializer<Sendable>,
 {
     /// Send message to the process.
     fn send(&self, message: M) {
@@ -613,8 +607,6 @@ where
     S: Serializer<M>
         + Serializer<Sendable>
         + Serializer<<T as RequestHandler<M, S>>::Response>
-        + Serialize
-        + DeserializeOwned,
 {
     type Result = <T as RequestHandler<M, S>>::Response;
 
@@ -689,7 +681,7 @@ impl<T, S> ProcessRef<T, S>
 where
     T: Supervisor<S>,
     T: AbstractProcess<S, State = SupervisorConfig<T, S>>,
-    S: Serializer<()> + Serializer<Sendable> + Serialize + DeserializeOwned,
+    S: Serializer<()> + Serializer<Sendable>,
 {
     /// Block until the Supervisor shuts down.
     ///
@@ -747,8 +739,6 @@ where
     S: Serializer<GetChildren>
         + Serializer<Sendable>
         + Serializer<<T as RequestHandler<GetChildren, S>>::Response>
-        + Serialize
-        + DeserializeOwned,
 {
     pub fn children(&self) -> <T as RequestHandler<GetChildren, S>>::Response {
         self.request(GetChildren)

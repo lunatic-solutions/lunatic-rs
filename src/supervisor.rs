@@ -42,7 +42,7 @@ where
     /// The argument received by the `init` function.
     ///
     /// This argument is sent from the parent to the child and needs to be serializable.
-    type Arg: serde::Serialize + serde::de::DeserializeOwned;
+    type Arg;
 
     /// A tuple of types that implement `AbstractProcess`.
     ///
@@ -167,11 +167,13 @@ where
     fn handle_failure(config: &mut SupervisorConfig<T, S>, tag: Tag);
 }
 
-macros::impl_supervisable_single!(crate::serializer::Bincode);
+macros::impl_supervisable_single!(crate::serializer::Bincode, serde::Serialize + serde::de::DeserializeOwned);
 #[cfg(feature = "msgpack_serializer")]
-macros::impl_supervisable_single!(crate::serializer::MessagePack);
+macros::impl_supervisable_single!(crate::serializer::MessagePack, serde::Serialize + serde::de::DeserializeOwned);
 #[cfg(feature = "json_serializer")]
-macros::impl_supervisable_single!(crate::serializer::Json);
+macros::impl_supervisable_single!(crate::serializer::Json, serde::Serialize + serde::de::DeserializeOwned);
+#[cfg(feature = "protobuf_serializer")]
+macros::impl_supervisable_single!(crate::serializer::Protobuf);
 
 // Auto-implement Supervisable for up to 12 children.
 macros::impl_supervisable!(T0 0);
@@ -223,12 +225,13 @@ mod macros {
     }
 
     macro_rules! impl_supervisable_single {
-        ($serializer:path) => {
+        ($serializer:path$( , $( $bounds:tt )* )?) => {
             impl<T1, K> Supervisable<K, $serializer> for T1
             where
                 K: Supervisor<$serializer, Children = Self>,
                 T1: AbstractProcess<$serializer>,
                 T1::Arg: Clone,
+                $( T1::Arg: $( $bounds )*, )?
             {
                 type Processes = ProcessRef<T1, $serializer>;
                 type Args = (T1::Arg, Option<String>);
@@ -285,8 +288,6 @@ mod macros {
                 K: Supervisor<S, Children = Self>,
                 S: Serializer<()>
                     + Serializer<Sendable>
-                    + serde::Serialize
-                    + serde::de::DeserializeOwned
                     $(
                         + Serializer<StartFields<$args, S>>
                         + Serializer<ProtocolCapture<StartFields<$args, S>, S>>
