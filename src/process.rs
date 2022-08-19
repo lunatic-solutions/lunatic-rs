@@ -737,8 +737,9 @@ where
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct GetChildren;
+
 impl<T, S, AS> RequestHandler<GetChildren, S, AS> for T
 where
     T: Supervisor<S> + Supervisor<AS>,
@@ -758,24 +759,24 @@ where
 
 impl<T, S> ProcessRef<T, S>
 where
-    T: Supervisor,
     T: Supervisor<S>,
-    T: RequestHandler<GetChildren, S, Bincode>,
-    T: AbstractProcess<S>,
-    T: RequestHandler<GetChildren, S, S>,
-    <T as AbstractProcess>::Arg: Serialize + for<'de> Deserialize<'de>,
-    S: Serializer<()>,
-    S: Serializer<GetChildren>,
-    S: Serializer<Sendable>,
-    S: Serializer<<T as AbstractProcess>::Arg>,
-    S: Serializer<<T as AbstractProcess<S>>::Arg>,
-    S: Serializer<<T as RequestHandler<GetChildren, S, S>>::Response>,
+    T: AbstractProcess<S, State = SupervisorConfig<T, S>>,
+    S: Serializer<()>
+        + Serializer<GetChildren>
+        + Serializer<Sendable>
+        + Serializer<<T as AbstractProcess<S>>::Arg>
+        + Serializer<<T as Supervisor<S>>::Arg>
+        + Serializer<<<T as Supervisor<S>>::Children as Supervisable<T, S>>::Processes>,
 {
-    pub fn children(&self) -> <T as RequestHandler<GetChildren, S, S>>::Response {
+    pub fn children<AS>(&self) -> <<T as Supervisor<S>>::Children as Supervisable<T, S>>::Processes
+    where
+        T: RequestHandler<GetChildren, S, AS>,
+        S: Serializer<<T as AbstractProcess<AS>>::Arg>,
+        AS: Serializer<<T as AbstractProcess<AS>>::Arg>,
+    {
         self.request(GetChildren)
     }
 }
-
 /// Processes are equal if their process id and node id are equal
 impl<T, S> PartialEq for ProcessRef<T, S> {
     fn eq(&self, other: &Self) -> bool {
