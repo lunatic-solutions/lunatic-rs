@@ -167,11 +167,20 @@ where
     fn handle_failure(config: &mut SupervisorConfig<T, S>, tag: Tag);
 }
 
-macros::impl_supervisable_single!(crate::serializer::Bincode, serde::Serialize + serde::de::DeserializeOwned);
+macros::impl_supervisable_single!(
+    crate::serializer::Bincode,
+    serde::Serialize + serde::de::DeserializeOwned
+);
 #[cfg(feature = "msgpack_serializer")]
-macros::impl_supervisable_single!(crate::serializer::MessagePack, serde::Serialize + serde::de::DeserializeOwned);
+macros::impl_supervisable_single!(
+    crate::serializer::MessagePack,
+    serde::Serialize + serde::de::DeserializeOwned
+);
 #[cfg(feature = "json_serializer")]
-macros::impl_supervisable_single!(crate::serializer::Json, serde::Serialize + serde::de::DeserializeOwned);
+macros::impl_supervisable_single!(
+    crate::serializer::Json,
+    serde::Serialize + serde::de::DeserializeOwned
+);
 #[cfg(feature = "protobuf_serializer")]
 macros::impl_supervisable_single!(crate::serializer::Protobuf);
 
@@ -447,44 +456,44 @@ mod macros {
     pub(crate) use tag;
 }
 
-#[cfg(test)]
-mod tests {
-    use std::time::Duration;
+// #[cfg(test)]
+// mod tests {
+//     use std::time::Duration;
 
-    use lunatic_test::test;
+//     use lunatic_test::test;
 
-    use super::{Supervisor, SupervisorConfig};
-    use crate::{
-        process::{AbstractProcess, ProcessRef, StartProcess},
-        serializer::Bincode,
-        sleep,
-    };
+//     use super::{Supervisor, SupervisorConfig};
+//     use crate::{
+//         process::{AbstractProcess, ProcessRef, StartProcess},
+//         serializer::Bincode,
+//         sleep,
+//     };
 
-    struct SimpleServer;
+//     struct SimpleServer;
 
-    impl AbstractProcess for SimpleServer {
-        type Arg = ();
-        type State = Self;
+//     impl AbstractProcess for SimpleServer {
+//         type Arg = ();
+//         type State = Self;
 
-        fn init(_: ProcessRef<Self>, _arg: ()) -> Self::State {
-            SimpleServer
-        }
-    }
+//         fn init(_: ProcessRef<Self>, _arg: ()) -> Self::State {
+//             SimpleServer
+//         }
+//     }
 
-    struct SimpleSup;
+//     struct SimpleSup;
 
-    impl Supervisor<Bincode> for SimpleSup {
-        type Arg = ();
-        type Children = SimpleServer;
+//     impl Supervisor<Bincode> for SimpleSup {
+//         type Arg = ();
+//         type Children = SimpleServer;
 
-        fn init(config: &mut SupervisorConfig<Self, Bincode>, _: ()) {
-            config.children_args(((), None));
-        }
-    }
+//         fn init(config: &mut SupervisorConfig<Self, Bincode>, _: ()) {
+//             config.children_args(((), None));
+//         }
+//     }
 
-    #[test]
-    fn supervisor_test() {
-        SimpleSup::start_link((), None);
-        sleep(Duration::from_millis(100));
-    }
-}
+//     #[test]
+//     fn supervisor_test() {
+//         SimpleSup::start_link((), None);
+//         sleep(Duration::from_millis(100));
+//     }
+// }

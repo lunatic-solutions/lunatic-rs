@@ -108,17 +108,19 @@ where
 }
 
 /// Defines a handler for a message of type `M`.
-pub trait MessageHandler<M, S = Bincode>: AbstractProcess<S>
+pub trait MessageHandler<M, S = Bincode, AS = Bincode>: AbstractProcess<AS>
 where
     S: Serializer<M> + Serializer<Self::Arg>,
+    AS: Serializer<Self::Arg>,
 {
     fn handle(state: &mut Self::State, message: M);
 }
 
 /// Defines a handler for a request of type `M`.
-pub trait RequestHandler<M, S = Bincode>: AbstractProcess<S>
+pub trait RequestHandler<M, S = Bincode, AS = Bincode>: AbstractProcess<AS>
 where
     S: Serializer<M> + Serializer<Self::Arg>,
+    AS: Serializer<Self::Arg>,
 {
     type Response;
 
@@ -557,26 +559,27 @@ pub enum Sendable {
 impl<M, S, AS, T> Message<M, S> for ProcessRef<T, AS>
 where
     T: AbstractProcess<AS>,
-    T: MessageHandler<M, S>,
-    S: Serializer<M> + Serializer<Sendable>,
-    S: Serializer<<T as AbstractProcess<S>>::Arg>,
+    T: MessageHandler<M, S, AS>,
+    S: Serializer<()> + Serializer<M> + Serializer<Sendable>,
+    S: Serializer<<T as AbstractProcess<AS>>::Arg>,
     AS: Serializer<<T as AbstractProcess<AS>>::Arg>,
 {
     /// Send message to the process.
     fn send(&self, message: M) {
-        fn unpacker<TU, MU, SU>(this: &mut TU::State)
+        fn unpacker<TU, MU, SU, ASU>(this: &mut TU::State)
         where
-            TU: MessageHandler<MU, SU>,
+            TU: MessageHandler<MU, SU, ASU>,
             SU: Serializer<MU> + Serializer<TU::Arg>,
+            ASU: Serializer<<TU as AbstractProcess<ASU>>::Arg>,
         {
             let message: MU = SU::decode().unwrap();
-            <TU as MessageHandler<MU, SU>>::handle(this, message);
+            <TU as MessageHandler<MU, SU, ASU>>::handle(this, message);
         }
 
         // Create new message buffer.
         unsafe { host::api::message::create_data(Tag::none().id(), 0) };
         // First encode the handler inside the message buffer.
-        let handler = unpacker::<T, M, S> as usize as i32;
+        let handler = unpacker::<T, M, S, AS> as usize as i32;
         let handler_message = Sendable::Message(handler);
         Bincode::encode(&handler_message).unwrap();
         // Then the message itself.
@@ -587,19 +590,20 @@ where
 
     /// Send message to the process after the specified duration has passed.
     fn send_after(&self, message: M, duration: Duration) -> TimerRef {
-        fn unpacker<TU, MU, SU>(this: &mut TU::State)
+        fn unpacker<TU, MU, SU, ASU>(this: &mut TU::State)
         where
-            TU: MessageHandler<MU, SU>,
+            TU: MessageHandler<MU, SU, ASU>,
             SU: Serializer<MU> + Serializer<TU::Arg>,
+            ASU: Serializer<<TU as AbstractProcess<ASU>>::Arg>,
         {
             let message: MU = SU::decode().unwrap();
-            <TU as MessageHandler<MU, SU>>::handle(this, message);
+            <TU as MessageHandler<MU, SU, ASU>>::handle(this, message);
         }
 
         // Create new message buffer.
         unsafe { host::api::message::create_data(Tag::none().id(), 0) };
         // First encode the handler inside the message buffer.
-        let handler = unpacker::<T, M, S> as usize as i32;
+        let handler = unpacker::<T, M, S, AS> as usize as i32;
         let handler_message = Sendable::Message(handler);
         Bincode::encode(&handler_message).unwrap();
         // Then the message itself.
@@ -611,37 +615,38 @@ where
     }
 }
 
-impl<M, S, T> Request<M, S> for ProcessRef<T, S>
+impl<M, S, AS, T> Request<M, S> for ProcessRef<T, AS>
 where
-    T: AbstractProcess<S>,
-    T: RequestHandler<M, S>,
-    S: Serializer<M>
-        + Serializer<T::Arg>
-        + Serializer<Sendable>
-        + Serializer<<T as RequestHandler<M, S>>::Response>,
+    T: AbstractProcess<AS>,
+    T: RequestHandler<M, S, AS>,
+    S: Serializer<()> + Serializer<M> + Serializer<Sendable>,
+    S: Serializer<<T as AbstractProcess<AS>>::Arg>
+        + Serializer<<T as RequestHandler<M, S, AS>>::Response>,
+    AS: Serializer<<T as AbstractProcess<AS>>::Arg>,
 {
-    type Result = <T as RequestHandler<M, S>>::Response;
+    type Result = <T as RequestHandler<M, S, AS>>::Response;
 
     fn request_timeout_(
         &self,
         request: M,
         timeout: Option<Duration>,
     ) -> Result<Self::Result, ReceiveError> {
-        fn unpacker<TU, MU, SU>(
+        fn unpacker<TU, MU, SU, ASU>(
             this: &mut TU::State,
-            sender: Process<<TU as RequestHandler<MU, SU>>::Response, SU>,
+            sender: Process<<TU as RequestHandler<MU, SU, ASU>>::Response, SU>,
         ) where
-            TU: RequestHandler<MU, SU>,
+            TU: RequestHandler<MU, SU, ASU>,
             SU: Serializer<MU>
                 + Serializer<TU::Arg>
-                + Serializer<<TU as RequestHandler<MU, SU>>::Response>,
+                + Serializer<<TU as RequestHandler<MU, SU, ASU>>::Response>,
+            ASU: Serializer<<TU as AbstractProcess<ASU>>::Arg>,
         {
             // Get content out of message
             let message: MU = SU::decode().unwrap();
             // Get tag out of message before the handler function maybe manipulates it.
             let tag = unsafe { host::api::message::get_tag() };
             let tag = Tag::from(tag);
-            let result = <TU as RequestHandler<MU, SU>>::handle(this, message);
+            let result = <TU as RequestHandler<MU, SU, ASU>>::handle(this, message);
             sender.tag_send(tag, result);
         }
 
@@ -651,7 +656,7 @@ where
         // Create reference to self
         let this: Process<()> = Process::new(node_id(), process_id());
         // First encode the handler inside the message buffer.
-        let handler = unpacker::<T, M, S> as usize as i32;
+        let handler = unpacker::<T, M, S, AS> as usize as i32;
         let handler_message = Sendable::Request(handler, this);
         Bincode::encode(&handler_message).unwrap();
         // Then the message itself.
@@ -695,7 +700,7 @@ impl<T, S> ProcessRef<T, S>
 where
     T: Supervisor<S>,
     T: AbstractProcess<S, State = SupervisorConfig<T, S>>,
-    S: Serializer<()> + Serializer<<T as AbstractProcess<S>>::Arg> + Serializer<Sendable>,
+    S: Serializer<()> + Serializer<<T as AbstractProcess<S>>::Arg>,
 {
     /// Block until the Supervisor shuts down.
     ///
@@ -734,13 +739,17 @@ where
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct GetChildren;
-impl<T, S> RequestHandler<GetChildren, S> for T
+impl<T, S, AS> RequestHandler<GetChildren, S, AS> for T
 where
-    T: Supervisor<S>,
+    T: Supervisor<S> + Supervisor<AS>,
     T: AbstractProcess<S, State = SupervisorConfig<T, S>>,
-    S: Serializer<()> + Serializer<<T as AbstractProcess<S>>::Arg> + Serializer<GetChildren>,
+    S: Serializer<()>
+        + Serializer<<T as AbstractProcess<S>>::Arg>
+        + Serializer<<T as Supervisor<AS>>::Arg>
+        + Serializer<GetChildren>,
+    AS: Serializer<()> + Serializer<<T as Supervisor<AS>>::Arg>,
 {
-    type Response = <<T as Supervisor<S>>::Children as Supervisable<T, S>>::Processes;
+    type Response = <<T as Supervisor<AS>>::Children as Supervisable<T, AS>>::Processes;
 
     fn handle(state: &mut Self::State, _: GetChildren) -> Self::Response {
         state.get_children()
@@ -749,13 +758,20 @@ where
 
 impl<T, S> ProcessRef<T, S>
 where
-    T: RequestHandler<GetChildren, S>,
-    S: Serializer<T::Arg>
-        + Serializer<GetChildren>
-        + Serializer<Sendable>
-        + Serializer<<T as RequestHandler<GetChildren, S>>::Response>,
+    T: Supervisor,
+    T: Supervisor<S>,
+    T: RequestHandler<GetChildren, S, Bincode>,
+    T: AbstractProcess<S>,
+    T: RequestHandler<GetChildren, S, S>,
+    <T as AbstractProcess>::Arg: Serialize + for<'de> Deserialize<'de>,
+    S: Serializer<()>,
+    S: Serializer<GetChildren>,
+    S: Serializer<Sendable>,
+    S: Serializer<<T as AbstractProcess>::Arg>,
+    S: Serializer<<T as AbstractProcess<S>>::Arg>,
+    S: Serializer<<T as RequestHandler<GetChildren, S, S>>::Response>,
 {
-    pub fn children(&self) -> <T as RequestHandler<GetChildren, S>>::Response {
+    pub fn children(&self) -> <T as RequestHandler<GetChildren, S, S>>::Response {
         self.request(GetChildren)
     }
 }
