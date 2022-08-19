@@ -404,9 +404,10 @@ impl AbstractProcessTransformer {
                 #(#handler_arg_types),*
             );
         });
+        let serializer = &self.serializer;
         self.handler_impls.push(quote! {
             #(#attrs)*
-            impl #impl_generics lunatic::process::MessageHandler<#message_type #ty_generics>
+            impl #impl_generics lunatic::process::MessageHandler<#message_type #ty_generics, #serializer, #serializer>
             for #ident #where_clause {
                 fn handle(state: &mut Self::State, message: #message_type #ty_generics) {
                     state.#fn_ident(#(#message_destructuring),*)
@@ -482,7 +483,7 @@ impl AbstractProcessTransformer {
         let serializer = &self.serializer;
         self.handler_impls.push(quote! {
             #(#attrs)*
-            impl #impl_generics lunatic::process::RequestHandler<#message_type #ty_generics, #serializer>
+            impl #impl_generics lunatic::process::RequestHandler<#message_type #ty_generics, #serializer, #serializer>
             for #ident #where_clause {
                 type Response = #response_type;
                 fn handle(state: &mut Self::State, message: #message_type #ty_generics) -> #response_type {
