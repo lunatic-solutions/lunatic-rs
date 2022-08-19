@@ -171,6 +171,93 @@ impl TcpStream {
         let lunatic_error = LunaticError::from(id);
         Err(Error::new(ErrorKind::Other, lunatic_error))
     }
+
+    /// Sets write timeout for TcpStream
+    ///
+    /// This method will change the timeout for everyone holding a reference to the TcpStream
+    /// Once a timeout is set, it can be removed by sending `None`
+    pub fn set_write_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
+        unsafe {
+            if let code @ 1.. = host::api::networking::set_write_timeout(
+                self.id,
+                duration.map_or(u64::MAX, |d| d.as_millis() as u64),
+            ) {
+                let lunatic_error = LunaticError::from(code as u64);
+                return Err(Error::new(ErrorKind::Other, lunatic_error));
+            }
+        }
+        Ok(())
+    }
+
+    /// Gets write timeout for TcpStream
+    ///
+    /// This method retrieves the write timeout duration of the TcpStream if any
+    pub fn write_timeout(&self) -> Option<Duration> {
+        unsafe {
+            match host::api::networking::get_write_timeout(self.id) {
+                u64::MAX => None,
+                millis => Some(Duration::from_millis(millis)),
+            }
+        }
+    }
+
+    /// Sets read timeout for TcpStream
+    ///
+    /// This method will change the timeout for everyone holding a reference to the TcpStream
+    /// Once a timeout is set, it can be removed by sending `None`
+    pub fn set_read_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
+        unsafe {
+            if let code @ 1.. = host::api::networking::set_read_timeout(
+                self.id,
+                duration.map_or(u64::MAX, |d| d.as_millis() as u64),
+            ) {
+                let lunatic_error = LunaticError::from(code as u64);
+                return Err(Error::new(ErrorKind::Other, lunatic_error));
+            }
+        }
+        Ok(())
+    }
+
+    /// Gets read timeout for TcpStream
+    ///
+    /// This method retrieves the read timeout duration of the TcpStream if any
+    pub fn read_timeout(&self) -> Option<Duration> {
+        unsafe {
+            match host::api::networking::get_read_timeout(self.id) {
+                u64::MAX => None,
+                millis => Some(Duration::from_millis(millis)),
+            }
+        }
+    }
+
+    /// Sets peek timeout for TcpStream
+    ///
+    /// This method will change the timeout for everyone holding a reference to the TcpStream
+    /// Once a timeout is set, it can be removed by sending `None`
+    pub fn set_peek_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
+        unsafe {
+            if let code @ 1.. = host::api::networking::set_peek_timeout(
+                self.id,
+                duration.map_or(u64::MAX, |d| d.as_millis() as u64),
+            ) {
+                let lunatic_error = LunaticError::from(code as u64);
+                return Err(Error::new(ErrorKind::Other, lunatic_error));
+            }
+        }
+        Ok(())
+    }
+
+    /// Gets peek timeout for TcpStream
+    ///
+    /// This method retrieves the peek timeout duration of the TcpStream if any
+    pub fn peek_timeout(&self) -> Option<Duration> {
+        unsafe {
+            match host::api::networking::get_peek_timeout(self.id) {
+                u64::MAX => None,
+                millis => Some(Duration::from_millis(millis)),
+            }
+        }
+    }
 }
 
 impl Write for TcpStream {
