@@ -181,8 +181,6 @@ macros::impl_supervisable_single!(
     crate::serializer::Json,
     serde::Serialize + serde::de::DeserializeOwned
 );
-#[cfg(feature = "protobuf_serializer")]
-macros::impl_supervisable_single!(crate::serializer::Protobuf);
 
 // Auto-implement Supervisable for up to 12 children.
 macros::impl_supervisable!(T0 0);
