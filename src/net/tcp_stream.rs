@@ -5,10 +5,7 @@ use std::{
     time::Duration,
 };
 
-use serde::{
-    de::{self, Visitor},
-    Deserialize, Deserializer, Serialize, Serializer,
-};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{error::LunaticError, host};
 
@@ -64,29 +61,15 @@ impl Serialize for TcpStream {
         serializer.serialize_u64(index)
     }
 }
-struct TcpStreamVisitor;
-impl<'de> Visitor<'de> for TcpStreamVisitor {
-    type Value = TcpStream;
-
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("an u64 index")
-    }
-
-    fn visit_u64<E>(self, index: u64) -> std::result::Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        let id = unsafe { host::api::message::take_tcp_stream(index) };
-        Ok(TcpStream::from(id))
-    }
-}
 
 impl<'de> Deserialize<'de> for TcpStream {
     fn deserialize<D>(deserializer: D) -> std::result::Result<TcpStream, D::Error>
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_u64(TcpStreamVisitor)
+        let index = Deserialize::deserialize(deserializer)?;
+        let id = unsafe { host::api::message::take_tcp_stream(index) };
+        Ok(TcpStream::from(id))
     }
 }
 

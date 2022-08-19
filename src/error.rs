@@ -1,4 +1,5 @@
 use crate::host::api::error;
+use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display, Formatter};
 use thiserror::Error;
 
@@ -8,7 +9,7 @@ use thiserror::Error;
 /// them. This is especially true for calls that involve compiling raw binary data to WebAssembly
 /// modules. Because of this an opaque error ID is returned from host that can be transformed to
 /// a string.
-#[derive(Error)]
+#[derive(Error, Serialize, Deserialize)]
 pub enum LunaticError {
     Error(u64),
     PermissionDenied,

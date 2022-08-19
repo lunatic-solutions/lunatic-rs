@@ -20,6 +20,8 @@ pub mod message {
         pub fn get_tag() -> i64;
         #[allow(dead_code)]
         pub fn data_size() -> u64;
+        pub fn push_module(module_id: u64) -> u64;
+        pub fn take_module(index: u64) -> u64;
         pub fn push_tcp_stream(tcp_stream_id: u64) -> u64;
         pub fn take_tcp_stream(index: u64) -> u64;
         pub fn send(process_id: u64);
