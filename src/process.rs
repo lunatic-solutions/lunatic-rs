@@ -75,7 +75,10 @@ pub fn process_id() -> u64 {
 /// counter.send(Inc);
 /// assert_eq!(counter.request(Count), 6);
 /// ```
-pub trait AbstractProcess<S = Bincode> {
+pub trait AbstractProcess<S = Bincode>
+where
+    S: Serializer<Self::Arg>,
+{
     /// The argument received by the `init` function.
     ///
     /// This argument is sent from the parent to the child and needs to be serializable.
@@ -107,7 +110,7 @@ pub trait AbstractProcess<S = Bincode> {
 /// Defines a handler for a message of type `M`.
 pub trait MessageHandler<M, S = Bincode>: AbstractProcess<S>
 where
-    S: Serializer<M>,
+    S: Serializer<M> + Serializer<Self::Arg>,
 {
     fn handle(state: &mut Self::State, message: M);
 }
@@ -115,7 +118,7 @@ where
 /// Defines a handler for a request of type `M`.
 pub trait RequestHandler<M, S = Bincode>: AbstractProcess<S>
 where
-    S: Serializer<M>,
+    S: Serializer<M> + Serializer<Self::Arg>,
 {
     type Response;
 
@@ -125,6 +128,7 @@ where
 pub trait StartProcess<T, S = Bincode>
 where
     T: AbstractProcess<S>,
+    S: Serializer<T::Arg>,
 {
     fn start(arg: T::Arg, name: Option<&str>) -> ProcessRef<T, S>;
     fn start_config(arg: T::Arg, name: Option<&str>, config: &ProcessConfig) -> ProcessRef<T, S>;
@@ -151,9 +155,10 @@ impl<T, S> StartProcess<T, S> for T
 where
     T: AbstractProcess<S>,
     S: Serializer<()>
+        + Serializer<T::Arg>
         + Serializer<Sendable>
         + Serializer<StartFields<T, S>>
-        + Serializer<ProtocolCapture<StartFields<T, S>, S>>
+        + Serializer<ProtocolCapture<StartFields<T, S>, S>>,
 {
     /// Start a process.
     fn start(arg: T::Arg, name: Option<&str>) -> ProcessRef<T, S> {
@@ -205,6 +210,7 @@ pub trait SelfReference<T, S = Bincode> {
 impl<T, S> SelfReference<T, S> for T
 where
     T: AbstractProcess<S>,
+    S: Serializer<T::Arg>,
 {
     fn process(&self) -> ProcessRef<T, S> {
         unsafe { ProcessRef::new(node_id(), process_id()) }
@@ -219,6 +225,7 @@ where
 pub(crate) trait StartFailableProcess<T, S = Bincode>
 where
     T: AbstractProcess<S>,
+    S: Serializer<T::Arg>,
 {
     fn start_link_or_fail(
         arg: T::Arg,
@@ -236,9 +243,10 @@ impl<T, S> StartFailableProcess<T, S> for T
 where
     T: AbstractProcess<S>,
     S: Serializer<()>
+        + Serializer<T::Arg>
         + Serializer<Sendable>
         + Serializer<StartFields<T, S>>
-        + Serializer<ProtocolCapture<StartFields<T, S>, S>>
+        + Serializer<ProtocolCapture<StartFields<T, S>, S>>,
 {
     /// Start a linked process.
     fn start_link_or_fail(
@@ -272,9 +280,10 @@ fn start<T, S>(
 where
     T: AbstractProcess<S>,
     S: Serializer<()>
+        + Serializer<T::Arg>
         + Serializer<Sendable>
         + Serializer<StartFields<T, S>>
-        + Serializer<ProtocolCapture<StartFields<T, S>, S>>
+        + Serializer<ProtocolCapture<StartFields<T, S>, S>>,
 {
     // If a link tag is provided, use the same tag for message matching.
     let tag = if let Some(tag) = link {
@@ -335,7 +344,7 @@ fn starter<T, S>(
     _: Mailbox<(), S>,
 ) where
     T: AbstractProcess<S>,
-    S: Serializer<()> + Serializer<Sendable> ,
+    S: Serializer<()> + Serializer<T::Arg> + Serializer<Sendable>,
 {
     let entry: fn(this: ProcessRef<T, S>, arg: T::Arg) -> T::State =
         unsafe { std::mem::transmute(entry) };
@@ -498,7 +507,7 @@ impl<T, S> Clone for ProcessRef<T, S> {
 impl<T, S> ProcessRef<T, S>
 where
     T: AbstractProcess<S>,
-    S: Serializer<Sendable>,
+    S: Serializer<T::Arg> + Serializer<Sendable>,
 {
     /// Shut down process
     pub fn shutdown(&self) {
@@ -550,13 +559,15 @@ where
     T: AbstractProcess<AS>,
     T: MessageHandler<M, S>,
     S: Serializer<M> + Serializer<Sendable>,
+    S: Serializer<<T as AbstractProcess<S>>::Arg>,
+    AS: Serializer<<T as AbstractProcess<AS>>::Arg>,
 {
     /// Send message to the process.
     fn send(&self, message: M) {
         fn unpacker<TU, MU, SU>(this: &mut TU::State)
         where
             TU: MessageHandler<MU, SU>,
-            SU: Serializer<MU>,
+            SU: Serializer<MU> + Serializer<TU::Arg>,
         {
             let message: MU = SU::decode().unwrap();
             <TU as MessageHandler<MU, SU>>::handle(this, message);
@@ -579,7 +590,7 @@ where
         fn unpacker<TU, MU, SU>(this: &mut TU::State)
         where
             TU: MessageHandler<MU, SU>,
-            SU: Serializer<MU>,
+            SU: Serializer<MU> + Serializer<TU::Arg>,
         {
             let message: MU = SU::decode().unwrap();
             <TU as MessageHandler<MU, SU>>::handle(this, message);
@@ -605,8 +616,9 @@ where
     T: AbstractProcess<S>,
     T: RequestHandler<M, S>,
     S: Serializer<M>
+        + Serializer<T::Arg>
         + Serializer<Sendable>
-        + Serializer<<T as RequestHandler<M, S>>::Response>
+        + Serializer<<T as RequestHandler<M, S>>::Response>,
 {
     type Result = <T as RequestHandler<M, S>>::Response;
 
@@ -620,7 +632,9 @@ where
             sender: Process<<TU as RequestHandler<MU, SU>>::Response, SU>,
         ) where
             TU: RequestHandler<MU, SU>,
-            SU: Serializer<MU> + Serializer<<TU as RequestHandler<MU, SU>>::Response>,
+            SU: Serializer<MU>
+                + Serializer<TU::Arg>
+                + Serializer<<TU as RequestHandler<MU, SU>>::Response>,
         {
             // Get content out of message
             let message: MU = SU::decode().unwrap();
@@ -681,7 +695,7 @@ impl<T, S> ProcessRef<T, S>
 where
     T: Supervisor<S>,
     T: AbstractProcess<S, State = SupervisorConfig<T, S>>,
-    S: Serializer<()> + Serializer<Sendable>,
+    S: Serializer<()> + Serializer<<T as AbstractProcess<S>>::Arg> + Serializer<Sendable>,
 {
     /// Block until the Supervisor shuts down.
     ///
@@ -694,7 +708,7 @@ where
         where
             TU: Supervisor<S>,
             TU: AbstractProcess<S, State = SupervisorConfig<TU, S>>,
-            S: Serializer<()>,
+            S: Serializer<()> + Serializer<<TU as AbstractProcess<S>>::Arg>,
         {
             let tag = unsafe { host::api::message::get_tag() };
             let tag = Tag::from(tag);
@@ -724,7 +738,7 @@ impl<T, S> RequestHandler<GetChildren, S> for T
 where
     T: Supervisor<S>,
     T: AbstractProcess<S, State = SupervisorConfig<T, S>>,
-    S: Serializer<()> + Serializer<GetChildren>,
+    S: Serializer<()> + Serializer<<T as AbstractProcess<S>>::Arg> + Serializer<GetChildren>,
 {
     type Response = <<T as Supervisor<S>>::Children as Supervisable<T, S>>::Processes;
 
@@ -736,9 +750,10 @@ where
 impl<T, S> ProcessRef<T, S>
 where
     T: RequestHandler<GetChildren, S>,
-    S: Serializer<GetChildren>
+    S: Serializer<T::Arg>
+        + Serializer<GetChildren>
         + Serializer<Sendable>
-        + Serializer<<T as RequestHandler<GetChildren, S>>::Response>
+        + Serializer<<T as RequestHandler<GetChildren, S>>::Response>,
 {
     pub fn children(&self) -> <T as RequestHandler<GetChildren, S>>::Response {
         self.request(GetChildren)

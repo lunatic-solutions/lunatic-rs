@@ -59,7 +59,7 @@ where
 impl<T, S> AbstractProcess<S> for T
 where
     T: Supervisor<S>,
-    S: Serializer<()>,
+    S: Serializer<()> + Serializer<T::Arg>,
 {
     type Arg = T::Arg;
     type State = SupervisorConfig<T, S>;
@@ -289,6 +289,7 @@ mod macros {
                 S: Serializer<()>
                     + Serializer<Sendable>
                     $(
+                        + Serializer<$args::Arg>
                         + Serializer<StartFields<$args, S>>
                         + Serializer<ProtocolCapture<StartFields<$args, S>, S>>
                     )*,
