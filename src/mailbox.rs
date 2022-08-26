@@ -58,7 +58,7 @@ where
     /// with serializer `S`.
     #[track_caller]
     pub fn receive(&self) -> M {
-        self.receive_(Some(&[1]), None).unwrap()
+        self.receive_(&[], None).unwrap()
     }
 
     /// Gets next message from process' mailbox that is tagged with one of the `tags`.
@@ -72,8 +72,7 @@ where
     /// with serializer `S`.
     #[track_caller]
     pub fn tag_receive(&self, tags: &[Tag]) -> M {
-        let tags: Vec<i64> = tags.iter().map(|tag| tag.id()).collect();
-        self.receive_(Some(&tags), None).unwrap()
+        self.receive_(&tags, None).unwrap()
     }
 
     /// Allow this mailbox to catch link failures.
@@ -100,7 +99,7 @@ where
     /// A message indicating that a linked process died is returned as [`Message::LinkDied`]
     /// with the [`Tag`] used to spawn the linked process.
     pub fn receive(&self) -> MailboxResult<M> {
-        self.receive_(Some(&[1]), None)
+        self.receive_(&[], None)
     }
 
     /// Gets next message from process' mailbox that is tagged with one of the `tags`.
@@ -111,8 +110,7 @@ where
     /// This function can also be used to await the death of specific linked processes. In this case
     /// the `tags` array should contain tags coresponding to the processes we are awaiting to die.
     pub fn tag_receive(&self, tags: &[Tag]) -> MailboxResult<M> {
-        let tags: Vec<i64> = tags.iter().map(|tag| tag.id()).collect();
-        self.receive_(Some(&tags), None)
+        self.receive_(tags, None)
     }
 }
 
@@ -128,24 +126,23 @@ where
     /// Same as `receive`, but doesn't panic in case the deserialization fails. Instead it will
     /// return [`Message::DeserializationFailed`].
     pub fn try_receive(&self, timeout: Duration) -> MailboxResult<M> {
-        self.receive_(None, Some(timeout))
+        self.receive_(&[], Some(timeout))
     }
 
     /// Same as `receive`, but only waits for the duration of timeout for the message. If the
     /// timeout expires it will return [`Message::TimedOut`].
     pub fn receive_timeout(&self, timeout: Duration) -> MailboxResult<M> {
-        self.receive_(None, Some(timeout))
+        self.receive_(&[], Some(timeout))
     }
 
     /// Same as `tag_receive`, but only waits for the duration of timeout for the message. If the
     /// timeout expires it will return [`Message::TimedOut`].
     pub fn tag_receive_timeout(&self, tags: &[Tag], timeout: Duration) -> MailboxResult<M> {
-        let tags: Vec<i64> = tags.iter().map(|tag| tag.id()).collect();
-        self.receive_(Some(&tags), Some(timeout))
+        self.receive_(tags, Some(timeout))
     }
 
-    fn receive_(&self, tags: Option<&[i64]>, timeout: Option<Duration>) -> MailboxResult<M> {
-        let tags = if let Some(tags) = tags { tags } else { &[] };
+    fn receive_(&self, tags: &[Tag], timeout: Option<Duration>) -> MailboxResult<M> {
+        let tags: Vec<i64> = tags.iter().map(|tag| tag.id()).collect();
         let timeout_ms = match timeout {
             Some(timeout) => timeout.as_millis() as u64,
             None => u64::MAX,

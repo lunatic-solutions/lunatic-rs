@@ -26,12 +26,11 @@ impl Tag {
         }
     }
 
-    /// Returns a special tag that is used by [`Process::send`](crate::Process) and awaited on by
-    /// [Mailbox::receive](crate::Mailbox).
+    /// Returns a special tag that is used by [`Process::send`](crate::Process).
     ///
     /// Most messages where the order is not significant use this tag.
     pub fn none() -> Tag {
-        Tag(1)
+        Tag(0)
     }
 
     /// Create a special purpose tag.
