@@ -72,7 +72,7 @@ where
     /// with serializer `S`.
     #[track_caller]
     pub fn tag_receive(&self, tags: &[Tag]) -> M {
-        self.receive_(&tags, None).unwrap()
+        self.receive_(tags, None).unwrap()
     }
 
     /// Allow this mailbox to catch link failures.
