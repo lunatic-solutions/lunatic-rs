@@ -368,7 +368,7 @@ fn request_timeout() {
     let a = A::start_link((), None);
     let response = a.request_timeout("Hello".to_owned(), Duration::from_millis(10));
 
-    assert!(response.is_err());
+    assert!(response.is_timed_out());
 }
 
 #[test]
@@ -391,5 +391,5 @@ fn shutdown_timeout() {
     let a = A::start_link((), None);
     let response = a.shutdown_timeout(Duration::from_millis(10));
 
-    assert!(response.is_err());
+    assert!(response.is_timed_out());
 }

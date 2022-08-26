@@ -1,7 +1,5 @@
 use std::{marker::PhantomData, time::Duration};
 
-use thiserror::Error;
-
 use crate::{
     function::process::{IntoProcess, NoLink},
     host::{self, api::message},
@@ -9,27 +7,47 @@ use crate::{
     Process, ProcessConfig, Tag,
 };
 
-const LINK_TRAPPED: u32 = 1;
+const LINK_DIED: u32 = 1;
 const TIMEOUT: u32 = 9027;
 
-/// Mailbox of a [`Process`](crate::Process).
+/// Marker type indicating that the [`Mailbox`] **IS** catching deaths of linked processes.
+pub struct Catching;
+
+/// The mailbox of a [`Process`].
+///
+/// Each process in lunatic gets one dedicated mailbox. Messages sent to the process will end up in
+/// this mailbox. Each [`Process`] and [`Mailbox`] pair have matching message and serializer types,
+/// because of this de/serialization should never fail.
+///
+/// One case where deserialization might fail is when the `Mailbox` type is used on a function inside
+/// an external WebAssembly module that is loaded by [`WasmModule`](crate::WasmModule). In this case
+/// we don't have any compile-time information about what messages are going to be received by this
+/// mailbox. For such cases the function [`try_receive`] can be used. It will not panic in case it
+/// can't deserialize the message buffer.
+///
+/// ## Message ordering
+///
+/// Lunatic guarantees that messages sent between two processes will arrive in the same order they
+/// were sent. Ordering is not gueranteed if more than two processes are involved.
+///
+/// ## Link deaths
+///
+/// By default, if a linked process fails all the links will die too. This behaviour can be changed
+/// by using the [`catch_link_failure`] function. The returned [`Mailbox<_, _, Catching>`] will
+/// receive a special [`Message::LinkDied`] in its mailbox containing the [`Tag`] used when the
+/// process was spawned ([`spawn_link_tag`](Process::spawn_link_tag)).
 #[derive(Debug, Clone, Copy)]
-pub struct Mailbox<M, S = Bincode>
+pub struct Mailbox<M, S = Bincode, L = ()>
 where
     S: Serializer<M>,
 {
-    phantom: PhantomData<(M, S)>,
+    phantom: PhantomData<(M, S, L)>,
 }
 
-impl<M, S> Mailbox<M, S>
+impl<M, S> Mailbox<M, S, ()>
 where
     S: Serializer<M>,
 {
-    /// Returns a reference to the currently running process
-    pub fn this(&self) -> Process<M, S> {
-        Process::new(host::node_id(), host::process_id())
-    }
-
     /// Gets next message from process' mailbox.
     ///
     /// If the mailbox is empty, this function will block until a new message arrives.
@@ -38,6 +56,7 @@ where
     ///
     /// This function will panic if the received message can't be deserialized into `M`
     /// with serializer `S`.
+    #[track_caller]
     pub fn receive(&self) -> M {
         self.receive_(Some(&[1]), None).unwrap()
     }
@@ -45,56 +64,101 @@ where
     /// Gets next message from process' mailbox that is tagged with one of the `tags`.
     ///
     /// If no such message exists, this function will block until a new message arrives.
-    /// If `tags` is `None` it will take the first available message.
+    /// If `tags` is an empty array, it will behave the same as `receive`.
     ///
     /// # Panics
     ///
     /// This function will panic if the received message can't be deserialized into `M`
     /// with serializer `S`.
-    pub fn tag_receive(&self, tags: Option<&[Tag]>) -> M {
-        match tags {
-            Some(tags) => {
-                let tags: Vec<i64> = tags.iter().map(|tag| tag.id()).collect();
-                self.receive_(Some(&tags), None).unwrap()
-            }
-            None => self.receive_(None, None).unwrap(),
-        }
+    #[track_caller]
+    pub fn tag_receive(&self, tags: &[Tag]) -> M {
+        let tags: Vec<i64> = tags.iter().map(|tag| tag.id()).collect();
+        self.receive_(Some(&tags), None).unwrap()
     }
 
-    /// Same as `receive`, but only waits for the duration of timeout for the message.
-    pub fn receive_timeout(&self, timeout: Duration) -> Result<M, ReceiveError> {
+    /// Allow this mailbox to catch link failures.
+    ///
+    /// This function returns a [`CatchMailbox`] that will get [`MailboxError::LinkDied`] messages
+    /// every time a linked process dies.
+    pub fn catch_link_failure(self) -> Mailbox<M, S, Catching> {
+        unsafe {
+            host::api::process::die_when_link_dies(0);
+            Mailbox::<M, S, Catching>::new()
+        }
+    }
+}
+
+/// A mailbox that is catching dead links.
+impl<M, S> Mailbox<M, S, Catching>
+where
+    S: Serializer<M>,
+{
+    /// Gets next message from process' mailbox.
+    ///
+    /// If the mailbox is empty, this function will block until a new message arrives.
+    ///
+    /// A message indicating that a linked process died is returned as [`Message::LinkDied`]
+    /// with the [`Tag`] used to spawn the linked process.
+    pub fn receive(&self) -> MailboxResult<M> {
+        self.receive_(Some(&[1]), None)
+    }
+
+    /// Gets next message from process' mailbox that is tagged with one of the `tags`.
+    ///
+    /// If no such message exists, this function will block until a new message arrives.
+    /// If `tags` is an empty array, it will behave the same as `receive`.
+    ///
+    /// This function can also be used to await the death of specific linked processes. In this case
+    /// the `tags` array should contain tags coresponding to the processes we are awaiting to die.
+    pub fn tag_receive(&self, tags: &[Tag]) -> MailboxResult<M> {
+        let tags: Vec<i64> = tags.iter().map(|tag| tag.id()).collect();
+        self.receive_(Some(&tags), None)
+    }
+}
+
+impl<M, S, L> Mailbox<M, S, L>
+where
+    S: Serializer<M>,
+{
+    /// Returns a reference to the currently running process
+    pub fn this(&self) -> Process<M, S> {
+        Process::new(host::node_id(), host::process_id())
+    }
+
+    /// Same as `receive`, but doesn't panic in case the deserialization fails. Instead it will
+    /// return [`Message::DeserializationFailed`].
+    pub fn try_receive(&self, timeout: Duration) -> MailboxResult<M> {
         self.receive_(None, Some(timeout))
     }
 
-    /// Same as `tag_receive`, but only waits for the duration of timeout for the message.
-    pub fn tag_receive_timeout(
-        &self,
-        tags: Option<&[Tag]>,
-        timeout: Duration,
-    ) -> Result<M, ReceiveError> {
-        match tags {
-            Some(tags) => {
-                let tags: Vec<i64> = tags.iter().map(|tag| tag.id()).collect();
-                self.receive_(Some(&tags), Some(timeout))
-            }
-            None => self.receive_(None, Some(timeout)),
-        }
+    /// Same as `receive`, but only waits for the duration of timeout for the message. If the
+    /// timeout expires it will return [`Message::TimedOut`].
+    pub fn receive_timeout(&self, timeout: Duration) -> MailboxResult<M> {
+        self.receive_(None, Some(timeout))
     }
 
-    fn receive_(&self, tags: Option<&[i64]>, timeout: Option<Duration>) -> Result<M, ReceiveError> {
+    /// Same as `tag_receive`, but only waits for the duration of timeout for the message. If the
+    /// timeout expires it will return [`Message::TimedOut`].
+    pub fn tag_receive_timeout(&self, tags: &[Tag], timeout: Duration) -> MailboxResult<M> {
+        let tags: Vec<i64> = tags.iter().map(|tag| tag.id()).collect();
+        self.receive_(Some(&tags), Some(timeout))
+    }
+
+    fn receive_(&self, tags: Option<&[i64]>, timeout: Option<Duration>) -> MailboxResult<M> {
         let tags = if let Some(tags) = tags { tags } else { &[] };
         let timeout_ms = match timeout {
             Some(timeout) => timeout.as_millis() as u64,
             None => u64::MAX,
         };
         let message_type = unsafe { message::receive(tags.as_ptr(), tags.len(), timeout_ms) };
-        // Mailbox can't receive LINK_TRAPPED messages.
-        assert_ne!(message_type, LINK_TRAPPED);
-        // In case of timeout, return error.
-        if message_type == TIMEOUT {
-            return Err(ReceiveError::Timeout);
+        match message_type {
+            LINK_DIED => MailboxResult::LinkDied(unsafe { Tag::from(message::get_tag()) }),
+            TIMEOUT => MailboxResult::TimedOut,
+            _ => match S::decode() {
+                Ok(msg) => MailboxResult::Message(msg),
+                Err(err) => MailboxResult::DeserializationFailed(err),
+            },
         }
-        S::decode().map_err(|err| err.into())
     }
 
     /// Create a mailbox with a specific type.
@@ -111,91 +175,39 @@ where
     }
 }
 
-/// Error while receiving a message.
-#[derive(Error, Debug)]
-pub enum ReceiveError {
-    #[error("Deserialization failed")]
-    DeserializationFailed(#[from] DecodeError),
-    #[error("Timed out while waiting for message")]
-    Timeout,
-}
-
-/// A special Mailbox that can catch if links trapped.
+/// Result of a `recieve*` call on a [`Mailbox`].
 #[derive(Debug)]
-pub(crate) struct LinkMailbox<M, S = Bincode>
-where
-    S: Serializer<M>,
-{
-    serializer_type: PhantomData<(M, S)>,
+pub enum MailboxResult<T> {
+    Message(T),
+    DeserializationFailed(DecodeError),
+    TimedOut,
+    LinkDied(Tag),
 }
 
-impl<M, S> LinkMailbox<M, S>
-where
-    S: Serializer<M>,
-{
-    /// Create a `LinkMailbox` with a specific type.
-    ///
-    /// ### Safety
-    ///
-    /// It's not safe to mix different types of mailboxes inside one process. This function should
-    /// never be used directly.
-    pub(crate) unsafe fn new() -> Self {
-        Self {
-            serializer_type: PhantomData {},
+impl<T> MailboxResult<T> {
+    #[track_caller]
+    pub fn unwrap(self) -> T {
+        match self {
+            MailboxResult::Message(msg) => msg,
+            MailboxResult::DeserializationFailed(err) => panic!("{:?}", err),
+            MailboxResult::TimedOut => panic!("TimedOut"),
+            MailboxResult::LinkDied(_) => panic!("LinkDied"),
         }
     }
 
-    /// Gets next message from process' mailbox that is tagged with one of the `tags`.
-    ///
-    /// If no such message exists, this function will block until a new message arrives.
-    /// If `tags` is `None` it will take the first available message.
-    ///
-    /// # Panics
-    ///
-    /// This function will panic if the received message can't be deserialized into `M`.
-    pub fn tag_receive(&self, tags: Option<&[Tag]>) -> Result<M, LinkTrapped> {
-        match tags {
-            Some(tags) => {
-                let tags: Vec<i64> = tags.iter().map(|tag| tag.id()).collect();
-                self.receive_(Some(&tags), None).unwrap()
-            }
-            None => self.receive_(None, None).unwrap(),
-        }
+    // Returns true if it's a regular message.
+    pub fn is_message(&self) -> bool {
+        matches!(self, MailboxResult::Message(_))
     }
 
-    fn receive_(
-        &self,
-        tags: Option<&[i64]>,
-        timeout: Option<Duration>,
-    ) -> Result<Result<M, LinkTrapped>, ReceiveError> {
-        let tags = if let Some(tags) = tags { tags } else { &[] };
-        let timeout_ms = match timeout {
-            Some(timeout) => timeout.as_millis() as u64,
-            None => u64::MAX,
-        };
-        let message_type = unsafe { message::receive(tags.as_ptr(), tags.len(), timeout_ms) };
-        // If we received a LINK_TRAPPED message return
-        if message_type == LINK_TRAPPED {
-            return Ok(Err(LinkTrapped(Tag::from(unsafe { message::get_tag() }))));
-        }
-        // In case of timeout, return error.
-        if message_type == TIMEOUT {
-            return Err(ReceiveError::Timeout);
-        }
-        match S::decode() {
-            Ok(message) => Ok(Ok(message)),
-            Err(err) => Err(err.into()),
-        }
+    // Returns true if it's a link died signal turned into a message.
+    pub fn is_link_died(&self) -> bool {
+        matches!(self, MailboxResult::LinkDied(_))
     }
-}
 
-#[derive(Error, Debug)]
-#[error("The link trapped")]
-pub(crate) struct LinkTrapped(Tag);
-
-impl LinkTrapped {
-    pub(crate) fn tag(&self) -> Tag {
-        self.0
+    // Returns true if it's a timeout.
+    pub fn is_timed_out(&self) -> bool {
+        matches!(self, MailboxResult::TimedOut)
     }
 }
 

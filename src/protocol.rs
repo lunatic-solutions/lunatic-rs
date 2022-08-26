@@ -4,7 +4,7 @@ use crate::{
     function::process::IntoProcess,
     host,
     serializer::{Bincode, Serializer},
-    Mailbox, Process, ProcessConfig, ReceiveError, Tag,
+    Mailbox, MailboxResult, Process, ProcessConfig, Tag,
 };
 
 /// A value that the protocol captures from the parent process.
@@ -96,7 +96,7 @@ where
     pub fn receive(self) -> (Protocol<P, S>, A) {
         // Temporarily cast to right mailbox type.
         let mailbox: Mailbox<A, S> = unsafe { Mailbox::new() };
-        let received = mailbox.tag_receive(Some(&[self.tag]));
+        let received = mailbox.tag_receive(&[self.tag]);
         (self.cast(), received)
     }
 }
@@ -111,17 +111,17 @@ where
     pub fn result(self) -> A {
         // Temporarily cast to right mailbox type.
         let mailbox: Mailbox<A, S> = unsafe { Mailbox::new() };
-        let result = mailbox.tag_receive(Some(&[self.tag]));
+        let result = mailbox.tag_receive(&[self.tag]);
         let _: Protocol<TaskEnd, S> = self.cast(); // Only `End` protocols can be dropped
         result
     }
 
     /// A task is a special case of a protocol spawned with the `spawn!(@task ...)` macro.
     /// It only returns one value.
-    pub fn result_timeout(self, duration: Duration) -> Result<A, ReceiveError> {
+    pub fn result_timeout(self, duration: Duration) -> MailboxResult<A> {
         // Temporarily cast to right mailbox type.
         let mailbox: Mailbox<A, S> = unsafe { Mailbox::new() };
-        let result = mailbox.tag_receive_timeout(Some(&[self.tag]), duration);
+        let result = mailbox.tag_receive_timeout(&[self.tag], duration);
         let _: Protocol<TaskEnd, S> = self.cast(); // Only `End` protocols can be dropped
         result
     }

@@ -478,7 +478,7 @@ impl AbstractProcessTransformer {
         });
         self.req_builder_methods.push(quote! {
             #(#attrs)*
-            fn #fn_ident(&self, #(#handler_args),*) -> Result<#response_type, lunatic::ReceiveError> {
+            fn #fn_ident(&self, #(#handler_args),*) -> lunatic::MailboxResult<#response_type> {
                 use lunatic::process::Request;
                 let req = #message_type(#arg_phantom #(#handler_arg_names),*);
                 self.process_ref.request_timeout(req, self.duration)

@@ -112,7 +112,7 @@ pub mod timer;
 pub use config::ProcessConfig;
 pub use error::LunaticError;
 pub use function::process::Process;
-pub use mailbox::{Mailbox, ReceiveError};
+pub use mailbox::{Mailbox, MailboxResult};
 pub use module::WasmModule;
 pub use tag::Tag;
 

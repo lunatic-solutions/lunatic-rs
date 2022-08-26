@@ -360,11 +360,11 @@ fn request_timeout() {
     assert!(counter
         .with_timeout(Duration::from_millis(10))
         .respond_fast()
-        .is_ok());
+        .is_message());
     assert!(counter
         .with_timeout(Duration::from_millis(10))
         .respond_slow()
-        .is_err());
+        .is_timed_out());
 }
 
 #[test]

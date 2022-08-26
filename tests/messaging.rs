@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use lunatic::{
     process::{AbstractProcess, ProcessRef, Request, RequestHandler, StartProcess},
-    spawn_link, Mailbox, Process, ReceiveError,
+    spawn_link, Mailbox, Process,
 };
 use lunatic_test::test;
 
@@ -107,10 +107,7 @@ fn request_reply(mailbox: Mailbox<u64>) {
 #[test]
 fn timeout(mailbox: Mailbox<u64>) {
     let result = mailbox.receive_timeout(Duration::new(0, 10_000)); // 10 us
-    match result {
-        Err(ReceiveError::Timeout) => (), // success
-        _ => unreachable!(),
-    };
+    assert!(result.is_timed_out())
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

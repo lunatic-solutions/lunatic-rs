@@ -49,7 +49,7 @@ fn parent_and_child_exchange_messages(parent_mailbox: Mailbox<i32>) {
 #[test]
 fn mailbox_timeout(m: Mailbox<i32>) {
     let message = m.receive_timeout(Duration::from_millis(10));
-    assert!(message.is_err());
+    assert!(message.is_timed_out());
 }
 
 #[test]
