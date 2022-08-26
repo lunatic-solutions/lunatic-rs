@@ -62,18 +62,9 @@ mod msgpack {
         let child = Process::spawn_link(
             parent,
             |parent, child_mailbox: Mailbox<u64, MessagePack>| {
-                assert_eq!(
-                    1,
-                    child_mailbox.tag_receive(Some(&[Tag::special(64).unwrap()]))
-                );
-                assert_eq!(
-                    2,
-                    child_mailbox.tag_receive(Some(&[Tag::special(65).unwrap()]))
-                );
-                assert_eq!(
-                    3,
-                    child_mailbox.tag_receive(Some(&[Tag::special(66).unwrap()]))
-                );
+                assert_eq!(1, child_mailbox.tag_receive(&[Tag::special(64).unwrap()]));
+                assert_eq!(2, child_mailbox.tag_receive(&[Tag::special(65).unwrap()]));
+                assert_eq!(3, child_mailbox.tag_receive(&[Tag::special(66).unwrap()]));
                 // Indicate end of sub-process
                 parent.send(());
             },
