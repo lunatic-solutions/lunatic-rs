@@ -26,7 +26,7 @@ pub(crate) fn spawn(
     let entry = entry as usize as i32;
     let params = params_to_vec(&[Param::I32(entry), Param::I32(arg)]);
     let mut id = 0;
-    let func = "_lunatic_spawn_by_index";
+    let func = concat!("_lunatic_spawn_by_index_", env!("CARGO_PKG_VERSION"));
     let link = match link {
         Some(tag) => tag.id(),
         None => 0,
@@ -65,7 +65,10 @@ pub(crate) fn spawn(
     }
 }
 
-#[export_name = "_lunatic_spawn_by_index"]
+/// We attach the version to the exported function to avoid duplicate exports if multiple
+/// dependencies use different versions of this crate. See:
+/// https://github.com/lunatic-solutions/lunatic-rs/issues/71
+#[export_name = concat!("_lunatic_spawn_by_index_", env!("CARGO_PKG_VERSION"))]
 extern "C" fn _lunatic_spawn_by_index(function: i32, arg: i32) {
     let function: fn(i32) = unsafe { std::mem::transmute(function) };
     function(arg);

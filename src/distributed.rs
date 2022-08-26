@@ -23,7 +23,7 @@ pub fn spawn(node_id: u64, config_id: i64, entry: fn(i32), arg: i32) -> Result<u
     let entry = entry as usize as i32;
     let params = params_to_vec(&[Param::I32(entry), Param::I32(arg)]);
     let mut id = 0;
-    let func = "_lunatic_spawn_by_index";
+    let func = concat!("_lunatic_spawn_by_index_", env!("CARGO_PKG_VERSION"));
     let result = unsafe {
         api::distributed::spawn(
             node_id,
