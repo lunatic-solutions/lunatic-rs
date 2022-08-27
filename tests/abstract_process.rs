@@ -1,13 +1,10 @@
 use std::time::Duration;
 
-use lunatic::{
-    host,
-    process::{
-        AbstractProcess, Message, MessageHandler, ProcessRef, Request, RequestHandler,
-        SelfReference, StartProcess,
-    },
-    sleep, spawn_link, test, Tag,
+use lunatic::process::{
+    AbstractProcess, Message, MessageHandler, ProcessRef, Request, RequestHandler, SelfReference,
+    StartProcess,
 };
+use lunatic::{host, sleep, spawn_link, test, Tag};
 
 #[test]
 fn shutdown() {
@@ -368,7 +365,7 @@ fn request_timeout() {
     let a = A::start_link((), None);
     let response = a.request_timeout("Hello".to_owned(), Duration::from_millis(10));
 
-    assert!(response.is_err());
+    assert!(response.is_timed_out());
 }
 
 #[test]
@@ -391,5 +388,5 @@ fn shutdown_timeout() {
     let a = A::start_link((), None);
     let response = a.shutdown_timeout(Duration::from_millis(10));
 
-    assert!(response.is_err());
+    assert!(response.is_timed_out());
 }

@@ -1,4 +1,5 @@
-use std::{fmt, ops::Deref};
+use std::fmt;
+use std::ops::Deref;
 
 /// Any function pointer that can be converted to and from usize
 pub trait Fn<T> {

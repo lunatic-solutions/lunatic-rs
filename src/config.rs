@@ -2,14 +2,15 @@ use crate::host;
 
 /// Process configurations determine permissions of processes.
 ///
-/// The functions `spawn_config` & `spawn_link_config` can be used to create processes with a
-/// specific configuration.
+/// The functions `spawn_config` & `spawn_link_config` can be used to create
+/// processes with a specific configuration.
 pub struct ProcessConfig(ProcessConfigType);
 
 enum ProcessConfigType {
     /// ID of a configuration held by the host as a resource.
     Config(u64),
-    /// Indicates that the configuration should be inherited from the parent process.
+    /// Indicates that the configuration should be inherited from the parent
+    /// process.
     Inherit,
 }
 
@@ -41,8 +42,8 @@ impl std::fmt::Debug for ProcessConfig {
 impl ProcessConfig {
     /// Create a new process configuration with all permissions denied.
     ///
-    /// There is no memory or fuel limit set on the newly created configuration, they are not
-    /// inherited from parent.
+    /// There is no memory or fuel limit set on the newly created configuration,
+    /// they are not inherited from parent.
     pub fn new() -> Self {
         let id = unsafe { host::api::process::create_config() };
         Self(ProcessConfigType::Config(id))
@@ -52,7 +53,8 @@ impl ProcessConfig {
         Self(ProcessConfigType::Inherit)
     }
 
-    /// Returns the id of the configuration resource or -1 in case it's an inherited configuration.
+    /// Returns the id of the configuration resource or -1 in case it's an
+    /// inherited configuration.
     pub fn id(&self) -> i64 {
         match self.0 {
             ProcessConfigType::Config(id) => id as i64,
@@ -60,10 +62,11 @@ impl ProcessConfig {
         }
     }
 
-    /// Sets the maximum amount of memory in bytes that can be used by a process.
+    /// Sets the maximum amount of memory in bytes that can be used by a
+    /// process.
     ///
-    /// If a process tries to allocate more memory with `memory.grow`, the instruction is going to
-    /// return -1.
+    /// If a process tries to allocate more memory with `memory.grow`, the
+    /// instruction is going to return -1.
     pub fn set_max_memory(&mut self, max_memory: u64) {
         unsafe { host::api::process::config_set_max_memory(self.id() as u64, max_memory) };
     }
@@ -75,8 +78,8 @@ impl ProcessConfig {
 
     /// Sets the maximum amount of fuel available to the process.
     ///
-    /// One unit of fuel is approximately 100k wasm instructions. If a process runs out of fuel it
-    /// will trap.
+    /// One unit of fuel is approximately 100k wasm instructions. If a process
+    /// runs out of fuel it will trap.
     pub fn set_max_fuel(&mut self, max_fuel: u64) {
         unsafe { host::api::process::config_set_max_fuel(self.id() as u64, max_fuel) };
     }
@@ -98,9 +101,9 @@ impl ProcessConfig {
 
     /// Sets the ability of a process to create their own sub-configuration.
     ///
-    /// This setting can be dangerous. If a process is missing a permission, but has the
-    /// possibility to create new configurations, it can spawn sub-processes using a new config
-    /// that has the permission enabled.
+    /// This setting can be dangerous. If a process is missing a permission, but
+    /// has the possibility to create new configurations, it can spawn
+    /// sub-processes using a new config that has the permission enabled.
     pub fn set_can_create_configs(&mut self, can: bool) {
         unsafe { host::api::process::config_set_can_create_configs(self.id() as u64, can as u32) };
     }
@@ -144,7 +147,7 @@ impl ProcessConfig {
         }
     }
 
-    /// Mark a directory as preopened.
+    /// Mark a directory as pre-opened.
     pub fn preopen_dir(&self, dir: &str) {
         unsafe { host::api::wasi::config_preopen_dir(self.id() as u64, dir.as_ptr(), dir.len()) }
     }

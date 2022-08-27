@@ -1,6 +1,7 @@
 use std::time::Duration;
 
-use lunatic::{process::process_id, sleep, Mailbox, Process, ProcessConfig};
+use lunatic::process::process_id;
+use lunatic::{sleep, Mailbox, Process, ProcessConfig};
 
 #[lunatic::main]
 fn main(_: Mailbox<()>) {

@@ -1,10 +1,10 @@
 use std::marker::PhantomData;
 
 use crate::process::{AbstractProcess, ProcessRef, StartFailableProcess, Subscriber};
-use crate::{host, Tag};
+use crate::{host, MailboxResult, Tag};
 
-/// A `Supervisor` can detect failures (panics) inside [`AbstractProcesses`](AbstractProcess) and
-/// restart them.
+/// A `Supervisor` can detect failures (panics) inside
+/// [`AbstractProcesses`](AbstractProcess) and restart them.
 ///
 /// # Example
 ///
@@ -37,18 +37,21 @@ where
 {
     /// The argument received by the `init` function.
     ///
-    /// This argument is sent from the parent to the child and needs to be serializable.
+    /// This argument is sent from the parent to the child and needs to be
+    /// serializable.
     type Arg: serde::Serialize + serde::de::DeserializeOwned;
 
     /// A tuple of types that implement `AbstractProcess`.
     ///
-    /// They will be spawned as children. This can also include other supervisors.
+    /// They will be spawned as children. This can also include other
+    /// supervisors.
     type Children: Supervisable<Self>;
 
     /// Entry function of the supervisor.
     ///
-    /// It's used to configure the supervisor. The function `config.children_args()` must be called
-    /// to provide arguments & names for children. If it's not called the supervisor will panic.
+    /// It's used to configure the supervisor. The function
+    /// `config.children_args()` must be called to provide arguments & names
+    /// for children. If it's not called the supervisor will panic.
     fn init(config: &mut SupervisorConfig<Self>, arg: Self::Arg);
 }
 
@@ -66,7 +69,8 @@ where
         let mut config = SupervisorConfig::default();
         <T as Supervisor>::init(&mut config, arg);
 
-        // Check if children arguments are configured inside of supervisor's `init` call.
+        // Check if children arguments are configured inside of supervisor's `init`
+        // call.
         if config.children_args.is_none() {
             panic!(
                 "SupervisorConfig<{0}>::children_args not set inside `{0}:init` function.",
@@ -176,11 +180,12 @@ where
     fn start_links(config: &mut SupervisorConfig<K>, args: Self::Args) {
         config.children_args = Some(args.clone());
         let (proc, tag) = match T1::start_link_or_fail(args.0, args.1.as_deref()) {
-            Ok(result) => result,
-            Err(_) => panic!(
+            MailboxResult::Message(result) => result,
+            MailboxResult::LinkDied(_) => panic!(
                 "Supervisor failed to start child `{}`",
                 std::any::type_name::<T1>()
             ),
+            _ => unreachable!(),
         };
         config.children = Some(proc);
         config.children_tags = Some(tag);
@@ -198,11 +203,12 @@ where
                 config.children_args.as_ref().unwrap().0.clone(),
                 config.children_args.as_ref().unwrap().1.as_deref(),
             ) {
-                Ok(result) => result,
-                Err(_) => panic!(
+                MailboxResult::Message(result) => result,
+                MailboxResult::LinkDied(_) => panic!(
                     "Supervisor failed to start child `{}`",
                     std::any::type_name::<T1>()
                 ),
+                _ => unreachable!(),
             };
             *config.children.as_mut().unwrap() = proc;
             *config.children_tags.as_mut().unwrap() = tag;
@@ -283,11 +289,12 @@ mod macros {
                     $(
                         let (paste::paste!([<proc$i>]),paste::paste!([<tag$i>]))
                                 = match $args ::start_link_or_fail(args.$i.0, args.$i.1.as_deref()) {
-                            Ok(result) => result,
-                            Err(_) => panic!(
+                            MailboxResult::Message(result) => result,
+                            MailboxResult::LinkDied(_) => panic!(
                                 "Supervisor failed to start child `{}`",
-                                std::any::type_name::<$args>()
+                                std::any::type_name::<T1>()
                             ),
+                            _ => unreachable!(),
                         };
                     )*
 
@@ -311,11 +318,12 @@ mod macros {
                                         config.children_args.as_ref().unwrap().$i.0.clone(),
                                         config.children_args.as_ref().unwrap().$i.1.as_deref(),
                                     ) {
-                                        Ok(result) => result,
-                                        Err(_) => panic!(
+                                        MailboxResult::Message(result) => result,
+                                        MailboxResult::LinkDied(_) => panic!(
                                             "Supervisor failed to start child `{}`",
-                                            std::any::type_name::<$args>()
+                                            std::any::type_name::<T1>()
                                         ),
+                                        _ => unreachable!(),
                                     };
                                     (*config.children.as_mut().unwrap()).$i = proc;
                                     (*config.children_tags.as_mut().unwrap()).$i = tag;
@@ -353,11 +361,12 @@ mod macros {
                                     config.children_args.as_ref().unwrap().$i.0.clone(),
                                     config.children_args.as_ref().unwrap().$i.1.as_deref(),
                                 ) {
-                                    Ok(result) => result,
-                                    Err(_) => panic!(
+                                    MailboxResult::Message(result) => result,
+                                    MailboxResult::LinkDied(_) => panic!(
                                         "Supervisor failed to start child `{}`",
-                                        std::any::type_name::<$args>()
+                                        std::any::type_name::<T1>()
                                     ),
+                                    _ => unreachable!(),
                                 };
                                 (*config.children.as_mut().unwrap()).$i = proc;
                                 (*config.children_tags.as_mut().unwrap()).$i = tag;
@@ -397,11 +406,12 @@ mod macros {
                                             config.children_args.as_ref().unwrap().$i.0.clone(),
                                             config.children_args.as_ref().unwrap().$i.1.as_deref(),
                                         ) {
-                                            Ok(result) => result,
-                                            Err(_) => panic!(
+                                            MailboxResult::Message(result) => result,
+                                            MailboxResult::LinkDied(_) => panic!(
                                                 "Supervisor failed to start child `{}`",
-                                                std::any::type_name::<$args>()
+                                                std::any::type_name::<T1>()
                                             ),
+                                            _ => unreachable!(),
                                         };
                                         (*config.children.as_mut().unwrap()).$i = proc;
                                         (*config.children_tags.as_mut().unwrap()).$i = tag;
@@ -416,9 +426,7 @@ mod macros {
         };
     }
 
-    pub(crate) use impl_supervisable;
-    pub(crate) use reverse_shutdown;
-    pub(crate) use tag;
+    pub(crate) use {impl_supervisable, reverse_shutdown, tag};
 }
 
 #[cfg(test)]
@@ -428,10 +436,8 @@ mod tests {
     use lunatic_test::test;
 
     use super::{Supervisor, SupervisorConfig};
-    use crate::{
-        process::{AbstractProcess, ProcessRef, StartProcess},
-        sleep,
-    };
+    use crate::process::{AbstractProcess, ProcessRef, StartProcess};
+    use crate::sleep;
 
     struct SimpleServer;
 

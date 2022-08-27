@@ -1,15 +1,15 @@
 use std::u128;
 
-use crate::{
-    error::LunaticError,
-    host::{self, api::distributed::node_id},
-    serializer::Serializer,
-    Process,
-};
+use crate::error::LunaticError;
+use crate::host::api::distributed::node_id;
+use crate::host::{self};
+use crate::serializer::Serializer;
+use crate::Process;
 
 /// A compiled instance of a WebAssembly module.
 ///
-/// Creating a module will also JIT compile it, this can be a compute intensive tasks.
+/// Creating a module will also JIT compile it, this can be a compute-intensive
+/// tasks.
 pub enum WasmModule {
     Module(u64),
     Inherit,
@@ -29,8 +29,8 @@ impl Drop for WasmModule {
 impl WasmModule {
     /// Compiles a WebAssembly module.
     ///
-    /// Once a module is compiled, functions like [`spawn`](Self::spawn) can be used to spawn new
-    /// processes from it.
+    /// Once a module is compiled, functions like [`spawn`](Self::spawn) can be
+    /// used to spawn new processes from it.
     pub fn new(data: &[u8]) -> Result<Self, LunaticError> {
         let mut module_or_error_id: u64 = 0;
 
@@ -54,7 +54,8 @@ impl WasmModule {
         Self::Inherit
     }
 
-    /// Returns the id of the module resource or -1 in case it's an inherited module.
+    /// Returns the id of the module resource or -1 in case it's an inherited
+    /// module.
     pub fn id(&self) -> i64 {
         match self {
             WasmModule::Module(id) => *id as i64,
@@ -62,8 +63,9 @@ impl WasmModule {
         }
     }
 
-    /// Spawn a new process and use `function` as the entry point. If the function takes arguments
-    /// the passed in `params` need to exactly match their types.
+    /// Spawn a new process and use `function` as the entry point. If the
+    /// function takes arguments the passed in `params` need to exactly
+    /// match their types.
     pub fn spawn<M, S>(
         &self,
         function: &str,

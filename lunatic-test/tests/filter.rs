@@ -4,8 +4,9 @@ pub fn add_two(a: i32) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use lunatic_test::test;
+
+    use super::*;
 
     #[test]
     fn add_two_and_two() {

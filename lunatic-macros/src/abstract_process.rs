@@ -1,12 +1,10 @@
 use convert_case::{Case, Casing};
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{
-    parse::{Parse, ParseStream},
-    spanned::Spanned,
-    ImplItem::Method,
-    Token,
-};
+use syn::parse::{Parse, ParseStream};
+use syn::spanned::Spanned;
+use syn::ImplItem::Method;
+use syn::Token;
 
 /// Transform and expand the `abstract_process` macro
 #[derive(Default)]
@@ -478,7 +476,7 @@ impl AbstractProcessTransformer {
         });
         self.req_builder_methods.push(quote! {
             #(#attrs)*
-            fn #fn_ident(&self, #(#handler_args),*) -> Result<#response_type, lunatic::ReceiveError> {
+            fn #fn_ident(&self, #(#handler_args),*) -> lunatic::MailboxResult<#response_type> {
                 use lunatic::process::Request;
                 let req = #message_type(#arg_phantom #(#handler_arg_names),*);
                 self.process_ref.request_timeout(req, self.duration)

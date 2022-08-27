@@ -1,9 +1,8 @@
 use std::time::Duration;
 
-use lunatic::ProcessConfig;
-use lunatic::{host::node_id, sleep, Mailbox, Process};
-
+use lunatic::host::node_id;
 use lunatic::process::{AbstractProcess, ProcessRef, Request, RequestHandler, StartProcess};
+use lunatic::{sleep, Mailbox, Process, ProcessConfig};
 
 struct Adder;
 impl AbstractProcess for Adder {
