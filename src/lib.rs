@@ -112,16 +112,14 @@ pub mod timer;
 pub use config::ProcessConfig;
 pub use error::LunaticError;
 pub use function::process::Process;
+pub use lunatic_macros::{abstract_process, main};
+pub use lunatic_test::test;
 pub use mailbox::{Mailbox, MailboxResult};
 pub use module::WasmModule;
-pub use tag::Tag;
-
 #[doc(hidden)]
 pub use process_local::statik::Key as __StaticProcessLocalInner;
 pub use process_local::ProcessLocal;
-
-pub use lunatic_macros::{abstract_process, main};
-pub use lunatic_test::test;
+pub use tag::Tag;
 
 /// Implemented for all resources held by the VM.
 pub trait Resource {
@@ -131,8 +129,8 @@ pub trait Resource {
     ///
     /// # Safety
     ///
-    /// Extra care needs to be taken when balancing host side resources. It's easy to create an
-    /// invalid resource reference.
+    /// Extra care needs to be taken when balancing host side resources. It's
+    /// easy to create an invalid resource reference.
     unsafe fn from_id(id: u64) -> Self;
 }
 

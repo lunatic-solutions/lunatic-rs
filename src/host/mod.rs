@@ -2,20 +2,20 @@
 
 pub mod api;
 
-use crate::{
-    module::{params_to_vec, Param, WasmModule},
-    LunaticError, ProcessConfig, Tag,
-};
+use crate::module::{params_to_vec, Param, WasmModule};
+use crate::{LunaticError, ProcessConfig, Tag};
 
-/// Performs the low level dance that will turn a high level rust function into a lunatic process.
+/// Performs the low level dance that will turn a high level rust function into
+/// a lunatic process.
 ///
 /// Returns the process resource ID as an u64 in case of success.
 ///
-/// If `config` is None, the configuration used by the currently running process will be inherited.
-/// If link is `Some`, the newly crated process will be linked to the caller.
+/// If `config` is None, the configuration used by the currently running process
+/// will be inherited. If link is `Some`, the newly crated process will be
+/// linked to the caller.
 ///
-/// The function `entry` will be used as entry point into the process. It will be called with the
-/// argument `arg`.
+/// The function `entry` will be used as entry point into the process. It will
+/// be called with the argument `arg`.
 pub(crate) fn spawn(
     node: Option<u64>,
     config: Option<&ProcessConfig>,
@@ -65,8 +65,8 @@ pub(crate) fn spawn(
     }
 }
 
-/// We attach the version to the exported function to avoid duplicate exports if multiple
-/// dependencies use different versions of this crate. See:
+/// We attach the version to the exported function to avoid duplicate exports if
+/// multiple dependencies use different versions of this crate. See:
 /// https://github.com/lunatic-solutions/lunatic-rs/issues/71
 #[export_name = concat!("_lunatic_spawn_by_index_", env!("CARGO_PKG_VERSION"))]
 extern "C" fn _lunatic_spawn_by_index(function: i32, arg: i32) {

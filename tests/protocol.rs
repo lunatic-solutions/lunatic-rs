@@ -1,7 +1,5 @@
-use lunatic::{
-    protocol::{End, Protocol, Send},
-    Process,
-};
+use lunatic::protocol::{End, Protocol, Send};
+use lunatic::Process;
 use lunatic_test::test;
 
 #[test]

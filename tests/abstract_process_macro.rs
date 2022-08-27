@@ -1,9 +1,7 @@
-use lunatic::{
-    abstract_process, host,
-    process::{ProcessRef, StartProcess},
-    sleep, spawn_link, test, Tag,
-};
 use std::time::Duration;
+
+use lunatic::process::{ProcessRef, StartProcess};
+use lunatic::{abstract_process, host, sleep, spawn_link, test, Tag};
 
 #[test]
 fn init() {
@@ -436,8 +434,10 @@ fn wrapper_rename() {
 
 #[test]
 fn generics() {
-    use serde::{de::Deserialize, ser::Serialize};
     use std::ops::{Add, AddAssign};
+
+    use serde::de::Deserialize;
+    use serde::ser::Serialize;
 
     struct GenAdder<T> {
         count: T,

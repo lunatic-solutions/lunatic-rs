@@ -1,9 +1,8 @@
 use std::time::Duration;
 
-use lunatic::{
-    host::api::{message::receive, process::die_when_link_dies},
-    spawn_link, Mailbox, Process, ProcessConfig,
-};
+use lunatic::host::api::message::receive;
+use lunatic::host::api::process::die_when_link_dies;
+use lunatic::{spawn_link, Mailbox, Process, ProcessConfig};
 use lunatic_test::test;
 
 #[test]

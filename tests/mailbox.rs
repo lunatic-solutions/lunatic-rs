@@ -1,6 +1,7 @@
 #[cfg(feature = "msgpack_serializer")]
 mod msgpack {
-    use lunatic::{serializer::MessagePack, test, Mailbox, Process, Tag};
+    use lunatic::serializer::MessagePack;
+    use lunatic::{test, Mailbox, Process, Tag};
     use serde::{Deserialize, Serialize};
 
     #[derive(Serialize, Deserialize)]

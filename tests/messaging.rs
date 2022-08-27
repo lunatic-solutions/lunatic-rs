@@ -1,9 +1,7 @@
 use std::time::Duration;
 
-use lunatic::{
-    process::{AbstractProcess, ProcessRef, Request, RequestHandler, StartProcess},
-    spawn_link, Mailbox, Process,
-};
+use lunatic::process::{AbstractProcess, ProcessRef, Request, RequestHandler, StartProcess};
+use lunatic::{spawn_link, Mailbox, Process};
 use lunatic_test::test;
 
 #[test]
@@ -94,7 +92,8 @@ fn request_reply(mailbox: Mailbox<u64>) {
     // Spawn another process that can reply to us with an i32 message.
     let add_server = Adder::start((), None);
 
-    // Ignore all messages in the mailbox and make specific requests to the `add_server`.
+    // Ignore all messages in the mailbox and make specific requests to the
+    // `add_server`.
     for _ in 0..1_000 {
         assert_eq!(add_server.request((1, 1)), 2);
         assert_eq!(add_server.request((1, 2)), 3);

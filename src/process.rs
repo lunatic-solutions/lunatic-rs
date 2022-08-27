@@ -1,26 +1,27 @@
-use std::{marker::PhantomData, time::Duration};
+use std::marker::PhantomData;
+use std::time::Duration;
 
-use crate::{
-    distributed::node_id,
-    host::{self, api},
-    mailbox::Catching,
-    serializer::{Bincode, Serializer},
-    supervisor::{Supervisable, Supervisor, SupervisorConfig},
-    timer::TimerRef,
-    Mailbox, MailboxResult, Process, ProcessConfig, Tag,
-};
+use crate::distributed::node_id;
+use crate::host::{self, api};
+use crate::mailbox::Catching;
+use crate::serializer::{Bincode, Serializer};
+use crate::supervisor::{Supervisable, Supervisor, SupervisorConfig};
+use crate::timer::TimerRef;
+use crate::{Mailbox, MailboxResult, Process, ProcessConfig, Tag};
 
 pub fn process_id() -> u64 {
     unsafe { api::process::process_id() }
 }
 
-/// Types that implement the `AbstractProcess` trait can be started as processes.
+/// Types that implement the `AbstractProcess` trait can be started as
+/// processes.
 ///
-/// Their state can be mutated through messages and requests. To define a handler for them,
-/// use [`MessageHandler`] or [`RequestHandler`].
+/// Their state can be mutated through messages and requests. To define a
+/// handler for them, use [`MessageHandler`] or [`RequestHandler`].
 ///
-/// [`Message`] provides a `send` method to send messages to the process, without waiting on a
-/// response. [`Request`] provides a `request` method that will block until a response is received.
+/// [`Message`] provides a `send` method to send messages to the process,
+/// without waiting on a response. [`Request`] provides a `request` method that
+/// will block until a response is received.
 ///
 /// # Example
 ///
@@ -67,7 +68,8 @@ pub fn process_id() -> u64 {
 pub trait AbstractProcess {
     /// The argument received by the `init` function.
     ///
-    /// This argument is sent from the parent to the child and needs to be serializable.
+    /// This argument is sent from the parent to the child and needs to be
+    /// serializable.
     type Arg: serde::Serialize + serde::de::DeserializeOwned;
 
     /// The state of the process.
@@ -77,19 +79,21 @@ pub trait AbstractProcess {
 
     /// Entry function of the new process.
     ///
-    /// This function is executed inside the new process. It will receive the arguments passed
-    /// to the [`start`](StartProcess::start) or [`start_link`](StartProcess::start_link) function
-    /// by the parent. And will return the starting state of the newly spawned process.
+    /// This function is executed inside the new process. It will receive the
+    /// arguments passed to the [`start`](StartProcess::start) or
+    /// [`start_link`](StartProcess::start_link) function by the parent. And
+    /// will return the starting state of the newly spawned process.
     ///
-    /// The parent will block on the call of `start` or `start_link` until this function finishes.
-    /// This allows startups to be synchronized.
+    /// The parent will block on the call of `start` or `start_link` until this
+    /// function finishes. This allows startups to be synchronized.
     fn init(this: ProcessRef<Self>, arg: Self::Arg) -> Self::State;
 
     /// Called when a `shutdown` command is received.
     fn terminate(_state: Self::State) {}
 
-    /// This function will be called if the process is set to catch link deaths with
-    /// `host::api::process::die_when_link_dies(1)` and a linked process traps.
+    /// This function will be called if the process is set to catch link deaths
+    /// with `host::api::process::die_when_link_dies(1)` and a linked
+    /// process traps.
     fn handle_link_trapped(_state: &mut Self::State, _tag: Tag) {}
 }
 
@@ -190,11 +194,12 @@ where
     }
 }
 
-/// An internal interface that catches failures inside the `init` function of a `AbstractProcess`.
+/// An internal interface that catches failures inside the `init` function of a
+/// `AbstractProcess`.
 ///
-/// Only "link" functions are provided, because a panic can't be propagated to the parent without a
-/// link. Currently, only the `Supervisor` uses this functionality to check for failures inside of
-/// children.
+/// Only "link" functions are provided, because a panic can't be propagated to
+/// the parent without a link. Currently, only the `Supervisor` uses this
+/// functionality to check for failures inside of children.
 pub(crate) trait StartFailableProcess<T>
 where
     T: AbstractProcess,
@@ -404,8 +409,9 @@ where
 
 /// A reference to a running process.
 ///
-/// `ProcessRef<T>` is different from a `Process` in the ability to handle messages of different
-/// types, as long as the traits `MessageHandler<M>` or `RequestHandler<R>` are implemented for T.
+/// `ProcessRef<T>` is different from a `Process` in the ability to handle
+/// messages of different types, as long as the traits `MessageHandler<M>` or
+/// `RequestHandler<R>` are implemented for T.
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ProcessRef<T>
 where
@@ -445,8 +451,9 @@ impl<T> ProcessRef<T> {
 
     /// Link process to the one currently running.
     pub fn link(&self) {
-        // Don't use tags because a process' [`Mailbox`] can't differentiate between regular
-        // messages and signals. Both processes should almost always die when a link is broken.
+        // Don't use tags because a process' [`Mailbox`] can't differentiate between
+        // regular messages and signals. Both processes should almost always die
+        // when a link is broken.
         unsafe { host::api::process::link(0, self.process.id()) };
     }
 
@@ -513,8 +520,8 @@ where
 #[derive(serde::Serialize, serde::Deserialize)]
 enum Sendable {
     Message(i32),
-    // The process type can't be carried over as a generic and is set here to `()`, but overwritten
-    // at the time of returning with the correct type.
+    // The process type can't be carried over as a generic and is set here to `()`, but
+    // overwritten at the time of returning with the correct type.
     Request(i32, Process<()>),
     Shutdown(Process<()>),
 }
@@ -628,8 +635,8 @@ where
     }
 }
 
-/// Subscriber represents a process that can be notified by a tagged message with the same tag that
-/// is used when registering the subscription.
+/// Subscriber represents a process that can be notified by a tagged message
+/// with the same tag that is used when registering the subscription.
 #[derive(Debug)]
 pub(crate) struct Subscriber {
     process: Process<(), Bincode>,
@@ -654,9 +661,10 @@ where
     /// Block until the Supervisor shuts down.
     ///
     /// A tagged message will be sent to the supervisor process as a request
-    /// and the subscription will be registered. When the supervisor process shuts down, the
-    /// subscribers will be each notified by a response message and therefore be unblocked
-    /// after having received the awaited message.
+    /// and the subscription will be registered. When the supervisor process
+    /// shuts down, the subscribers will be each notified by a response
+    /// message and therefore be unblocked after having received the awaited
+    /// message.
     pub fn block_until_shutdown(&self) {
         fn unpacker<TU>(this: &mut TU::State, sender: Process<(), Bincode>)
         where
@@ -736,8 +744,9 @@ impl<T> std::fmt::Debug for ProcessRef<T> {
 
 #[cfg(test)]
 mod tests {
-    use lunatic_test::test;
     use std::time::Duration;
+
+    use lunatic_test::test;
 
     use super::*;
     use crate::sleep;

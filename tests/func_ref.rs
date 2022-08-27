@@ -1,6 +1,7 @@
 use std::time::Duration;
 
-use lunatic::{function::FuncRef, MailboxResult};
+use lunatic::function::FuncRef;
+use lunatic::MailboxResult;
 use lunatic_test::test;
 
 #[test]

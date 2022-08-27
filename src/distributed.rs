@@ -1,11 +1,7 @@
-use crate::host::api::{
-    self,
-    distributed::{get_nodes, module_id, nodes_count},
-};
-use crate::{
-    module::{params_to_vec, Param},
-    LunaticError,
-};
+use crate::host::api::distributed::{get_nodes, module_id, nodes_count};
+use crate::host::api::{self};
+use crate::module::{params_to_vec, Param};
+use crate::LunaticError;
 
 pub fn node_id() -> u64 {
     unsafe { api::distributed::node_id() }

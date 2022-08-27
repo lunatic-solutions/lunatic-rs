@@ -1,12 +1,10 @@
 use convert_case::{Case, Casing};
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{
-    parse::{Parse, ParseStream},
-    spanned::Spanned,
-    ImplItem::Method,
-    Token,
-};
+use syn::parse::{Parse, ParseStream};
+use syn::spanned::Spanned;
+use syn::ImplItem::Method;
+use syn::Token;
 
 /// Transform and expand the `abstract_process` macro
 #[derive(Default)]

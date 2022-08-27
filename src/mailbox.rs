@@ -1,41 +1,47 @@
-use std::{marker::PhantomData, time::Duration};
+use std::marker::PhantomData;
+use std::time::Duration;
 
-use crate::{
-    function::process::{IntoProcess, NoLink},
-    host::{self, api::message},
-    serializer::{Bincode, DecodeError, Serializer},
-    Process, ProcessConfig, Tag,
-};
+use crate::function::process::{IntoProcess, NoLink};
+use crate::host::api::message;
+use crate::host::{self};
+use crate::serializer::{Bincode, DecodeError, Serializer};
+use crate::{Process, ProcessConfig, Tag};
 
 const LINK_DIED: u32 = 1;
 const TIMEOUT: u32 = 9027;
 
-/// Marker type indicating that the [`Mailbox`] **IS** catching deaths of linked processes.
+/// Marker type indicating that the [`Mailbox`] **IS** catching deaths of linked
+/// processes.
 pub struct Catching;
 
 /// The mailbox of a [`Process`].
 ///
-/// Each process in lunatic gets one dedicated mailbox. Messages sent to the process will end up in
-/// this mailbox. Each [`Process`] and [`Mailbox`] pair have matching message and serializer types,
-/// because of this de/serialization should never fail.
+/// Each process in lunatic gets one dedicated mailbox. Messages sent to the
+/// process will end up in this mailbox. Each [`Process`] and [`Mailbox`] pair
+/// have matching message and serializer types, because of this de/serialization
+/// should never fail.
 ///
-/// One case where deserialization might fail is when the `Mailbox` type is used on a function inside
-/// an external WebAssembly module that is loaded by [`WasmModule`](crate::WasmModule). In this case
-/// we don't have any compile-time information about what messages are going to be received by this
-/// mailbox. For such cases the function [`try_receive`] can be used. It will not panic in case it
-/// can't deserialize the message buffer.
+/// One case where deserialization might fail is when the `Mailbox` type is used
+/// on a function inside an external WebAssembly module that is loaded by
+/// [`WasmModule`](crate::WasmModule). In this case we don't have any
+/// compile-time information about what messages are going to be received by
+/// this mailbox. For such cases the function
+/// [`try_receive`](./struct.Mailbox.html#method.try_receive) can be used. It
+/// will not panic in case it can't deserialize the message buffer.
 ///
 /// ## Message ordering
 ///
-/// Lunatic guarantees that messages sent between two processes will arrive in the same order they
-/// were sent. Ordering is not gueranteed if more than two processes are involved.
+/// Lunatic guarantees that messages sent between two processes will arrive in
+/// the same order they were sent. Ordering is not guaranteed if more than two
+/// processes are involved.
 ///
 /// ## Link deaths
 ///
-/// By default, if a linked process fails all the links will die too. This behaviour can be changed
-/// by using the [`catch_link_failure`] function. The returned [`Mailbox<_, _, Catching>`] will
-/// receive a special [`Message::LinkDied`] in its mailbox containing the [`Tag`] used when the
-/// process was spawned ([`spawn_link_tag`](Process::spawn_link_tag)).
+/// By default, if a linked process fails all the links will die too. This
+/// behavior can be changed by using the [`catch_link_failure`]() function. The
+/// returned [`Mailbox<_, _, Catching>`] will receive a special
+/// [`MailboxResult::LinkDied`] in its mailbox containing the [`Tag`] used when
+/// the process was spawned ([`spawn_link_tag`](Process::spawn_link_tag)).
 #[derive(Debug, Clone, Copy)]
 pub struct Mailbox<M, S = Bincode, L = ()>
 where
@@ -50,26 +56,29 @@ where
 {
     /// Gets next message from process' mailbox.
     ///
-    /// If the mailbox is empty, this function will block until a new message arrives.
+    /// If the mailbox is empty, this function will block until a new message
+    /// arrives.
     ///
     /// # Panics
     ///
-    /// This function will panic if the received message can't be deserialized into `M`
-    /// with serializer `S`.
+    /// This function will panic if the received message can't be deserialized
+    /// into `M` with serializer `S`.
     #[track_caller]
     pub fn receive(&self) -> M {
         self.receive_(&[], None).unwrap()
     }
 
-    /// Gets next message from process' mailbox that is tagged with one of the `tags`.
+    /// Gets next message from process' mailbox that is tagged with one of the
+    /// `tags`.
     ///
-    /// If no such message exists, this function will block until a new message arrives.
-    /// If `tags` is an empty array, it will behave the same as `receive`.
+    /// If no such message exists, this function will block until a new message
+    /// arrives. If `tags` is an empty array, it will behave the same as
+    /// `receive`.
     ///
     /// # Panics
     ///
-    /// This function will panic if the received message can't be deserialized into `M`
-    /// with serializer `S`.
+    /// This function will panic if the received message can't be deserialized
+    /// into `M` with serializer `S`.
     #[track_caller]
     pub fn tag_receive(&self, tags: &[Tag]) -> M {
         self.receive_(tags, None).unwrap()
@@ -77,8 +86,8 @@ where
 
     /// Allow this mailbox to catch link failures.
     ///
-    /// This function returns a [`CatchMailbox`] that will get [`MailboxError::LinkDied`] messages
-    /// every time a linked process dies.
+    /// This function returns a [`Mailbox`] that will get
+    /// [`MailboxResult::LinkDied`]  messages every time a linked process dies.
     pub fn catch_link_failure(self) -> Mailbox<M, S, Catching> {
         unsafe {
             host::api::process::die_when_link_dies(0);
@@ -94,21 +103,26 @@ where
 {
     /// Gets next message from process' mailbox.
     ///
-    /// If the mailbox is empty, this function will block until a new message arrives.
+    /// If the mailbox is empty, this function will block until a new message
+    /// arrives.
     ///
-    /// A message indicating that a linked process died is returned as [`Message::LinkDied`]
-    /// with the [`Tag`] used to spawn the linked process.
+    /// A message indicating that a linked process died is returned as
+    /// [`MailboxResult::LinkDied`] with the [`Tag`] used to spawn the linked
+    /// process.
     pub fn receive(&self) -> MailboxResult<M> {
         self.receive_(&[], None)
     }
 
-    /// Gets next message from process' mailbox that is tagged with one of the `tags`.
+    /// Gets next message from process' mailbox that is tagged with one of the
+    /// `tags`.
     ///
-    /// If no such message exists, this function will block until a new message arrives.
-    /// If `tags` is an empty array, it will behave the same as `receive`.
+    /// If no such message exists, this function will block until a new message
+    /// arrives. If `tags` is an empty array, it will behave the same as
+    /// `receive`.
     ///
-    /// This function can also be used to await the death of specific linked processes. In this case
-    /// the `tags` array should contain tags coresponding to the processes we are awaiting to die.
+    /// This function can also be used to await the death of specific linked
+    /// processes. In this case the `tags` array should contain tags
+    /// corresponding to the processes we are awaiting to die.
     pub fn tag_receive(&self, tags: &[Tag]) -> MailboxResult<M> {
         self.receive_(tags, None)
     }
@@ -123,20 +137,22 @@ where
         Process::new(host::node_id(), host::process_id())
     }
 
-    /// Same as `receive`, but doesn't panic in case the deserialization fails. Instead it will
-    /// return [`Message::DeserializationFailed`].
+    /// Same as `receive`, but doesn't panic in case the deserialization fails.
+    /// Instead, it will return [`MailboxResult::DeserializationFailed`].
     pub fn try_receive(&self, timeout: Duration) -> MailboxResult<M> {
         self.receive_(&[], Some(timeout))
     }
 
-    /// Same as `receive`, but only waits for the duration of timeout for the message. If the
-    /// timeout expires it will return [`Message::TimedOut`].
+    /// Same as `receive`, but only waits for the duration of timeout for the
+    /// message. If the timeout expires it will return
+    /// [`MailboxResult::TimedOut`].
     pub fn receive_timeout(&self, timeout: Duration) -> MailboxResult<M> {
         self.receive_(&[], Some(timeout))
     }
 
-    /// Same as `tag_receive`, but only waits for the duration of timeout for the message. If the
-    /// timeout expires it will return [`Message::TimedOut`].
+    /// Same as `tag_receive`, but only waits for the duration of timeout for
+    /// the message. If the timeout expires it will return
+    /// [`MailboxResult::TimedOut`].
     pub fn tag_receive_timeout(&self, tags: &[Tag], timeout: Duration) -> MailboxResult<M> {
         self.receive_(tags, Some(timeout))
     }
@@ -162,9 +178,10 @@ where
     ///
     /// ### Safety
     ///
-    /// It's not safe to mix different types of mailboxes inside one process. This function should
-    /// never be used directly. The only reason it's public is that it's used inside the `main`
-    /// macro and needs to be available outside this crate.
+    /// It's not safe to mix different types of mailboxes inside one process.
+    /// This function should never be used directly. The only reason it's public
+    /// is that it's used inside the `main` macro and needs to be available
+    /// outside this crate.
     pub unsafe fn new() -> Self {
         Self {
             phantom: PhantomData {},
@@ -229,19 +246,22 @@ where
         let entry = entry as usize as i32;
         let node_id = node.unwrap_or_else(host::node_id);
 
-        // The `type_helper_wrapper` function is used here to create a pointer to a function with
-        // generic types C, M & S. We can only send pointer data across processes and this is the
-        // only way the Rust compiler will let us transfer this information into the new process.
+        // The `type_helper_wrapper` function is used here to create a pointer to a
+        // function with generic types C, M & S. We can only send pointer data across
+        // processes and this is the only way the Rust compiler will let us transfer
+        // this information into the new process.
         match host::spawn(node, config, link, type_helper_wrapper::<C, M, S>, entry) {
             Ok(id) => {
-                // If the captured variable is of size 0, we don't need to send it to another process.
+                // If the captured variable is of size 0, we don't need to send it to another
+                // process.
                 if std::mem::size_of::<C>() == 0 {
                     Process::new(node_id, id)
                 } else {
                     let child = Process::<C, S>::new(node_id, id);
                     child.send(capture);
-                    // Processes can only receive one type of message, but to pass in the captured variable
-                    // we pretend for the first message that our process is receiving messages of type `C`.
+                    // Processes can only receive one type of message, but to pass in the captured
+                    // variable we pretend for the first message that our process is receiving
+                    // messages of type `C`.
                     unsafe { std::mem::transmute(child) }
                 }
             }
@@ -250,7 +270,8 @@ where
     }
 }
 
-/// Wrapper function to help transfer the generic types C, M & S into the new process.
+/// Wrapper function to help transfer the generic types C, M & S into the new
+/// process.
 fn type_helper_wrapper<C, M, S>(function: i32)
 where
     S: Serializer<C> + Serializer<M>,
@@ -268,8 +289,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use lunatic_test::test;
     use std::time::Duration;
+
+    use lunatic_test::test;
 
     use super::*;
     use crate::{sleep, Mailbox};

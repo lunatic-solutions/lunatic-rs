@@ -1,13 +1,10 @@
 use std::time::Duration;
 
-use lunatic::{
-    host,
-    process::{
-        AbstractProcess, Message, MessageHandler, ProcessRef, Request, RequestHandler,
-        SelfReference, StartProcess,
-    },
-    sleep, spawn_link, test, Tag,
+use lunatic::process::{
+    AbstractProcess, Message, MessageHandler, ProcessRef, Request, RequestHandler, SelfReference,
+    StartProcess,
 };
+use lunatic::{host, sleep, spawn_link, test, Tag};
 
 #[test]
 fn shutdown() {

@@ -1,11 +1,12 @@
 /// A `i64` value used as a message tag.
 ///
-/// Processes can selectively receive messages based on the message's tag. This mechanism can be
-/// used to handle messages in a different order from their arrival.
+/// Processes can selectively receive messages based on the message's tag. This
+/// mechanism can be used to handle messages in a different order from their
+/// arrival.
 ///
-/// Creating a new tag will return a process-unique value. Some tag values are reserved for
-/// internal use only, but the range from 64 to 128 can be used by the developer to assign
-/// application specific meaning.
+/// Creating a new tag will return a process-unique value. Some tag values are
+/// reserved for internal use only, but the range from 64 to 128 can be used by
+/// the developer to assign application specific meaning.
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct Tag(i64);
 
@@ -17,8 +18,8 @@ impl Tag {
 
     /// Returns a unique tag inside this process.
     ///
-    /// Two calls to `Tag::new()` are guaranteed to return a unique tag only if they occurred
-    /// inside the same process.
+    /// Two calls to `Tag::new()` are guaranteed to return a unique tag only if
+    /// they occurred inside the same process.
     pub fn new() -> Tag {
         unsafe {
             COUNTER += 1;
@@ -35,7 +36,8 @@ impl Tag {
 
     /// Create a special purpose tag.
     ///
-    /// The `id` must be in the range between 64 and 128 or the function will return `None`.
+    /// The `id` must be in the range between 64 and 128 or the function will
+    /// return `None`.
     pub fn special(id: i64) -> Option<Tag> {
         if (64..=128).contains(&id) {
             Some(Tag(id))
@@ -62,8 +64,9 @@ impl Default for Tag {
 
 #[cfg(test)]
 mod tests {
-    use super::Tag;
     use lunatic_test::test;
+
+    use super::Tag;
 
     #[test]
     fn tag_increments() {

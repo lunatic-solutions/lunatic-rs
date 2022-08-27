@@ -4,8 +4,8 @@ extern crate proc_macro;
 use proc_macro::TokenStream;
 use quote::quote;
 
-/// Marks function to be executed by the lunatic runtime as a unit test. This is a
-/// drop-in replacement for the standard `#[test]` attribute macro.
+/// Marks function to be executed by the lunatic runtime as a unit test. This is
+/// a drop-in replacement for the standard `#[test]` attribute macro.
 #[proc_macro_attribute]
 pub fn test(_args: TokenStream, item: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(item as syn::ItemFn);
