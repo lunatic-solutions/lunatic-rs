@@ -1,26 +1,25 @@
-use std::{
-    cell::UnsafeCell,
-    io::{Error, ErrorKind, IoSlice, Read, Result, Write},
-    net::SocketAddr,
-    time::Duration,
-};
+use std::cell::UnsafeCell;
+use std::io::{Error, ErrorKind, IoSlice, Read, Result, Write};
+use std::net::SocketAddr;
+use std::time::Duration;
 
-use serde::{
-    de::{self, Visitor},
-    Deserialize, Deserializer, Serialize, Serializer,
-};
+use serde::de::{self, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::{error::LunaticError, host};
+use crate::error::LunaticError;
+use crate::host;
 
 /// A TCP connection.
 ///
-/// A [`TcpStream`] can be created by [`connect`][`TcpStream::connect()`]ing to an endpoint or by
-/// [`accept`][`super::TcpListener::accept()`]ing an incoming connection.
+/// A [`TcpStream`] can be created by [`connect`][`TcpStream::connect()`]ing to
+/// an endpoint or by [`accept`][`super::TcpListener::accept()`]ing an incoming
+/// connection.
 ///
-/// [`TcpStream`] is a bidirectional stream that implements traits [`Read`] and [`Write`].
+/// [`TcpStream`] is a bidirectional stream that implements traits [`Read`] and
+/// [`Write`].
 ///
-/// Cloning a [`TcpStream`] creates another handle to the same socket. The socket will be closed
-/// when all handles to it are dropped.
+/// Cloning a [`TcpStream`] creates another handle to the same socket. The
+/// socket will be closed when all handles to it are dropped.
 ///
 /// The Transmission Control Protocol is specified in [IETF RFC 793].
 ///
@@ -100,11 +99,13 @@ impl TcpStream {
 
     /// Creates a TCP connection to the specified address.
     ///
-    /// This method will create a new TCP socket and attempt to connect it to the provided `addr`,
+    /// This method will create a new TCP socket and attempt to connect it to
+    /// the provided `addr`,
     ///
-    /// If `addr` yields multiple addresses, connecting will be attempted with each of the
-    /// addresses until connecting to one succeeds. If none of the addresses result in a successful
-    /// connection, the error from the last connect attempt is returned.
+    /// If `addr` yields multiple addresses, connecting will be attempted with
+    /// each of the addresses until connecting to one succeeds. If none of
+    /// the addresses result in a successful connection, the error from the
+    /// last connect attempt is returned.
     pub fn connect<A>(addr: A) -> Result<Self>
     where
         A: super::ToSocketAddrs,
@@ -112,7 +113,8 @@ impl TcpStream {
         TcpStream::connect_timeout_(addr, None)
     }
 
-    /// Same as [`TcpStream::connect`], but only waits for the duration of timeout to connect.
+    /// Same as [`TcpStream::connect`], but only waits for the duration of
+    /// timeout to connect.
     pub fn connect_timeout<A>(addr: A, timeout: Duration) -> Result<Self>
     where
         A: super::ToSocketAddrs,

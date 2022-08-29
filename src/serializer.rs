@@ -2,9 +2,9 @@
 
 use std::io::Write;
 
-use crate::host::api::message;
-
 use thiserror::Error;
+
+use crate::host::api::message;
 
 #[derive(Error, Debug)]
 pub enum EncodeError {
@@ -50,17 +50,20 @@ pub enum DecodeError {
     Custom(String),
 }
 
-/// The `Serializer` defines the format that messages are encoded to or decoded from when they
-/// cross process boundaries.
+/// The `Serializer` defines the format that messages are encoded to or decoded
+/// from when they cross process boundaries.
 ///
-/// Lunatic already ships with support for a few well known serialization formats like json,
-/// message pack, protocol buffers and bincode, that can be enabled with feature flags. You can
-/// add others by implementing this trait.
+/// Lunatic already ships with support for a few well known serialization
+/// formats like json, message pack, protocol buffers and bincode, that can be
+/// enabled with feature flags. You can add others by implementing this trait.
 ///
-/// The generic parameter `M` can be used to express trait dependencies on messages for each
-/// concrete serializer type. Let's say we want to use `Bincode` to serialize messages, we still
-/// need to limit the message types to a specific subset that implement the `serde::Serialize`
-/// and `serde::Deserialize` traits. We can express this dependency in the following way:
+/// The generic parameter `M` can be used to express trait dependencies on
+/// messages for each concrete serializer type. Let's say we want to use
+/// `Bincode` to serialize messages, we still need to limit the message types to
+/// a specific subset that implement the `serde::Serialize` and
+/// `serde::Deserialize` traits. We can express this dependency in the following
+/// way:
+///
 /// ```no_run
 /// impl<M: serde::Serialize + serde::Deserialize> Serializer<M> for Bincode {
 ///     fn encode(message: M) -> Error {
@@ -71,9 +74,10 @@ pub enum DecodeError {
 /// }
 /// ```
 ///
-/// Serializers that can work with the [`Read`](std::io::Read) & [`Write`](std::io::Write) traits
-/// are generally better suited for lunatic's ffi, that works on a streaming basis and can avoid
-/// unnecessary copies. Serializer that require raw access to chunks of mutable memories (e.g.
+/// Serializers that can work with the [`Read`](std::io::Read) &
+/// [`Write`](std::io::Write) traits are generally better suited for lunatic's
+/// ffi, that works on a streaming basis and can avoid unnecessary copies.
+/// Serializer that require raw access to chunks of mutable memories (e.g.
 /// Prost) require additional copies between guest and host memories.
 pub trait Serializer<M> {
     fn encode(message: &M) -> Result<(), EncodeError>;
@@ -86,9 +90,10 @@ pub trait Serializer<M> {
 /// - `serde::Serialize`
 /// - `serde::de::DeserializeOwned`
 ///
-/// `serde::de::DeserializeOwned` is used here instead of `serde::Deserialize<'de>` because the
-/// messages are extracted from a stream that lives inside of the VM, has an unknown lifetime and
-/// can't be referenced from the guest. `serde::de::DeserializeOwned` is automatically implemented
+/// `serde::de::DeserializeOwned` is used here instead of
+/// `serde::Deserialize<'de>` because the messages are extracted from a stream
+/// that lives inside the VM, has an unknown lifetime and can't be referenced
+/// from the guest. `serde::de::DeserializeOwned` is automatically implemented
 /// for each type that also implements `serde::Deserialize<'de>`.
 #[derive(Hash, Debug)]
 pub struct Bincode {}
@@ -113,8 +118,8 @@ where
 /// - `serde::Serialize`
 /// - `serde::de::DeserializeOwned`
 ///
-/// Refer to the [`Bincode`] docs for the difference between `serde::de::DeserializeOwned` and
-/// `serde::Deserialize<'de>`.
+/// Refer to the [`Bincode`] docs for the difference between
+/// `serde::de::DeserializeOwned` and `serde::Deserialize<'de>`.
 #[cfg(feature = "msgpack_serializer")]
 #[cfg_attr(docsrs, doc(cfg(feature = "msgpack_serializer")))]
 #[derive(Debug, Hash)]
@@ -142,8 +147,8 @@ where
 /// - `serde::Serialize`
 /// - `serde::de::DeserializeOwned`
 ///
-/// Refer to the [`Bincode`] docs for the difference between `serde::de::DeserializeOwned` and
-/// `serde::Deserialize<'de>`.
+/// Refer to the [`Bincode`] docs for the difference between
+/// `serde::de::DeserializeOwned` and `serde::Deserialize<'de>`.
 #[cfg(feature = "json_serializer")]
 #[cfg_attr(docsrs, doc(cfg(feature = "json_serializer")))]
 #[derive(Debug, Hash)]
@@ -165,8 +170,8 @@ where
     }
 }
 
-/// The `ProtocolBuffers` serializer can serialize any message that satisfies the trait
-/// `protobuf::Message`.
+/// The `ProtocolBuffers` serializer can serialize any message that satisfies
+/// the trait `protobuf::Message`.
 #[cfg(feature = "protobuf_serializer")]
 #[cfg_attr(docsrs, doc(cfg(feature = "protobuf_serializer")))]
 #[derive(Debug, Hash)]
@@ -191,8 +196,9 @@ where
 
 /// A helper struct to read from and write to the message scratch buffer.
 ///
-/// It simplifies streaming serialization/deserialization directly from the host and avoids copies.
-/// Most serde based serializers can work directly with streaming serialization.
+/// It simplifies streaming serialization/deserialization directly from the host
+/// and avoids copies. Most serde based serializers can work directly with
+/// streaming serialization.
 #[derive(Debug, Hash)]
 pub struct MessageRw {}
 

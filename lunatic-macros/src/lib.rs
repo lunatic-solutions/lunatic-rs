@@ -6,7 +6,8 @@ use quote::quote;
 mod abstract_process;
 use abstract_process::AbstractProcessTransformer;
 
-/// Marks the main function to be executed by the lunatic runtime as the root process.
+/// Marks the main function to be executed by the lunatic runtime as the root
+/// process.
 ///
 /// Note: The macro can only be used on `main` function with 1 argument of type
 /// `Mailbox<T>`.
@@ -47,23 +48,23 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
     .into()
 }
 
-/// Add [`AbstractProcess`] behavior to the given struct implementation with minimum
-/// boilerplate code.
+/// Add [`AbstractProcess`] behavior to the given struct implementation with
+/// minimum boilerplate code.
 ///
 /// - Use `#[init]`, `#[terminate]`, and `#[handle_link_trapped]` attributes to
 /// specify methods for implementing [`AbstractProcess`].
 /// - Use `#[handle_message]` and `#[handle_request]` attributes to specify
 /// message and request handlers.
 ///
-/// Specifying message types is unnecessary because the macro will create wrapper
-/// types for messages on all handlers. Handlers can take arbitrary number of
-/// parameters and invocating them works the same as directly calling the method
-/// on the struct without spawning it as a process.
+/// Specifying message types is unnecessary because the macro will create
+/// wrapper types for messages on all handlers. Handlers can take an arbitrary
+/// number of parameters and invoking them works the same as directly calling
+/// the method on the struct without spawning it as a process.
 ///
-/// A trait is generated and defaults to private and follows the name of your type with
-/// `Handler` added as a suffix. To rename or change the visibility of the generated
-/// trait, you can use the `trait_name` and `visbility` arguments with
-/// `#[abstract_process(trait_name = "MyHandler", visibility = pub)]`.
+/// A trait is generated and defaults to private and follows the name of your
+/// type with `Handler` added as a suffix. To rename or change the visibility of
+/// the generated trait, you can use the `trait_name` and `visbility` arguments
+/// with `#[abstract_process(trait_name = "MyHandler", visibility = pub)]`.
 ///
 /// # Examples
 ///

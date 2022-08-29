@@ -1,13 +1,15 @@
-use crate::host::api::error;
 use std::fmt::{Debug, Display, Formatter};
+
 use thiserror::Error;
+
+use crate::host::api::error;
 
 /// An opaque error returned from host calls.
 ///
-/// Host calls can have a big number of failure reasons, and it's impossible to enumerate all of
-/// them. This is especially true for calls that involve compiling raw binary data to WebAssembly
-/// modules. Because of this an opaque error ID is returned from host that can be transformed to
-/// a string.
+/// Host calls can have a big number of failure reasons, and it's impossible to
+/// enumerate all of them. This is especially true for calls that involve
+/// compiling raw binary data to WebAssembly modules. Because of this an opaque
+/// error ID is returned from host that can be transformed to a string.
 #[derive(Error)]
 pub enum LunaticError {
     Error(u64),

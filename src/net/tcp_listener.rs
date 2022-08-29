@@ -2,13 +2,15 @@ use std::io::{Error, ErrorKind, Result};
 use std::net::SocketAddr;
 
 use super::SocketAddrIterator;
-use crate::{error::LunaticError, host, net::TcpStream};
+use crate::error::LunaticError;
+use crate::host;
+use crate::net::TcpStream;
 
 /// A TCP server, listening for connections.
 ///
-/// After creating a [`TcpListener`] by [`bind`][`TcpListener::bind()`]ing it to an address, it
-/// listens for incoming TCP connections. These can be accepted by calling
-/// [`accept()`][`TcpListener::accept()`].
+/// After creating a [`TcpListener`] by [`bind`][`TcpListener::bind()`]ing it to
+/// an address, it listens for incoming TCP connections. These can be accepted
+/// by calling [`accept()`][`TcpListener::accept()`].
 ///
 /// The Transmission Control Protocol is specified in [IETF RFC 793].
 ///
@@ -54,12 +56,13 @@ impl Drop for TcpListener {
 impl TcpListener {
     /// Creates a new [`TcpListener`] bound to the given address.
     ///
-    /// Binding with a port number of 0 will request that the operating system assigns an available
-    /// port to this listener.
+    /// Binding with a port number of 0 will request that the operating system
+    /// assigns an available port to this listener.
     ///
-    /// If `addr` yields multiple addresses, binding will be attempted with each of the addresses
-    /// until one succeeds and returns the listener. If none of the addresses succeed in creating a
-    /// listener, the error from the last attempt is returned.
+    /// If `addr` yields multiple addresses, binding will be attempted with each
+    /// of the addresses until one succeeds and returns the listener. If
+    /// none of the addresses succeed in creating a listener, the error from
+    /// the last attempt is returned.
     pub fn bind<A>(addr: A) -> Result<Self>
     where
         A: super::ToSocketAddrs,
@@ -108,7 +111,8 @@ impl TcpListener {
 
     /// Accepts a new incoming connection.
     ///
-    /// This will block and typically needs its own dedicated child process loop.
+    /// This will block and typically needs its own dedicated child process
+    /// loop.
     ///
     /// Returns a TCP stream and the peer address.
     pub fn accept(&self) -> Result<(TcpStream, SocketAddr)> {
@@ -134,7 +138,8 @@ impl TcpListener {
 
     /// Returns the local address that this listener is bound to.
     ///
-    /// This can be useful, for example, to identify when binding to port 0 which port was assigned by the OS.
+    /// This can be useful, for example, to identify when binding to port 0
+    /// which port was assigned by the OS.
     pub fn local_addr(&self) -> Result<SocketAddr> {
         let mut dns_iter_or_error_id = 0;
         let result = unsafe {

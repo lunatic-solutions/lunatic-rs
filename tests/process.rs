@@ -1,9 +1,8 @@
 use std::time::Duration;
 
-use lunatic::{
-    host::api::{message::receive, process::die_when_link_dies},
-    spawn_link, Mailbox, Process, ProcessConfig,
-};
+use lunatic::host::api::message::receive;
+use lunatic::host::api::process::die_when_link_dies;
+use lunatic::{spawn_link, Mailbox, Process, ProcessConfig};
 use lunatic_test::test;
 
 #[test]
@@ -49,7 +48,7 @@ fn parent_and_child_exchange_messages(parent_mailbox: Mailbox<i32>) {
 #[test]
 fn mailbox_timeout(m: Mailbox<i32>) {
     let message = m.receive_timeout(Duration::from_millis(10));
-    assert!(message.is_err());
+    assert!(message.is_timed_out());
 }
 
 #[test]

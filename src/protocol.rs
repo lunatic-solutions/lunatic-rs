@@ -1,18 +1,19 @@
-use std::{any::TypeId, marker::PhantomData, mem::ManuallyDrop, time::Duration};
+use std::any::TypeId;
+use std::marker::PhantomData;
+use std::mem::ManuallyDrop;
+use std::time::Duration;
 
-use crate::{
-    function::process::IntoProcess,
-    host,
-    serializer::{Bincode, Serializer},
-    Mailbox, Process, ProcessConfig, ReceiveError, Tag,
-};
+use crate::function::process::IntoProcess;
+use crate::serializer::{Bincode, Serializer};
+use crate::{host, Mailbox, MailboxResult, Process, ProcessConfig, Tag};
 
 /// A value that the protocol captures from the parent process.
 ///
-/// A protocol needs to capture more information from the parent than just the value passed in by
-/// the user (`capture`). For a protocol to work it needs to have a reference to the parent, so it
-/// knows where to send messages to. And it needs a unique tag inside the parent so that protocol
-/// messages don't mix with other messages received by the parent.
+/// A protocol needs to capture more information from the parent than just the
+/// value passed in by the user (`capture`). For a protocol to work it needs to
+/// have a reference to the parent, so it knows where to send messages to. And
+/// it needs a unique tag inside the parent so that protocol messages don't mix
+/// with other messages received by the parent.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Hash)]
 pub struct ProtocolCapture<C> {
     process: Process<()>,
@@ -22,8 +23,9 @@ pub struct ProtocolCapture<C> {
 
 /// A `Protocol` is a specific type of [`Process`](crate::Process).
 ///
-/// It uses session types to check during compile time that all messages exchanged between two
-/// processes are in the correct order and of the correct type.
+/// It uses session types to check during compile time that all messages
+/// exchanged between two processes are in the correct order and of the correct
+/// type.
 #[derive(Debug, Hash)]
 pub struct Protocol<P: 'static, S = Bincode> {
     id: u64,
@@ -74,7 +76,8 @@ impl<P, A, S> Protocol<Send<A, P>, S>
 where
     S: Serializer<A>,
 {
-    /// Send a value of type `A` over the session. Returns a session with protocol `P`.
+    /// Send a value of type `A` over the session. Returns a session with
+    /// protocol `P`.
     #[must_use]
     pub fn send(self, message: A) -> Protocol<P, S> {
         // Don't drop the session yet.
@@ -90,13 +93,13 @@ impl<P, A, S> Protocol<Recv<A, P>, S>
 where
     S: Serializer<A>,
 {
-    /// Receives a value of type `A` from the session. Returns a tuple containing the resulting
-    /// session and the received value.
+    /// Receives a value of type `A` from the session. Returns a tuple
+    /// containing the resulting session and the received value.
     #[must_use]
     pub fn receive(self) -> (Protocol<P, S>, A) {
         // Temporarily cast to right mailbox type.
         let mailbox: Mailbox<A, S> = unsafe { Mailbox::new() };
-        let received = mailbox.tag_receive(Some(&[self.tag]));
+        let received = mailbox.tag_receive(&[self.tag]);
         (self.cast(), received)
     }
 }
@@ -105,23 +108,23 @@ impl<A, S> Protocol<Recv<A, TaskEnd>, S>
 where
     S: Serializer<A>,
 {
-    /// A task is a special case of a protocol spawned with the `spawn!(@task ...)` macro.
-    /// It only returns one value.
+    /// A task is a special case of a protocol spawned with the `spawn!(@task
+    /// ...)` macro. It only returns one value.
     #[must_use]
     pub fn result(self) -> A {
         // Temporarily cast to right mailbox type.
         let mailbox: Mailbox<A, S> = unsafe { Mailbox::new() };
-        let result = mailbox.tag_receive(Some(&[self.tag]));
+        let result = mailbox.tag_receive(&[self.tag]);
         let _: Protocol<TaskEnd, S> = self.cast(); // Only `End` protocols can be dropped
         result
     }
 
-    /// A task is a special case of a protocol spawned with the `spawn!(@task ...)` macro.
-    /// It only returns one value.
-    pub fn result_timeout(self, duration: Duration) -> Result<A, ReceiveError> {
+    /// A task is a special case of a protocol spawned with the `spawn!(@task
+    /// ...)` macro. It only returns one value.
+    pub fn result_timeout(self, duration: Duration) -> MailboxResult<A> {
         // Temporarily cast to right mailbox type.
         let mailbox: Mailbox<A, S> = unsafe { Mailbox::new() };
-        let result = mailbox.tag_receive_timeout(Some(&[self.tag]), duration);
+        let result = mailbox.tag_receive_timeout(&[self.tag], duration);
         let _: Protocol<TaskEnd, S> = self.cast(); // Only `End` protocols can be dropped
         result
     }
@@ -262,9 +265,10 @@ where
         let entry = entry as usize as i32;
         let node_id = node.unwrap_or_else(host::node_id);
 
-        // The `type_helper_wrapper` function is used here to create a pointer to a function with
-        // generic types C, P & S. We can only send pointer data across processes and this is the
-        // only way the Rust compiler will let us transfer this information into the new process.
+        // The `type_helper_wrapper` function is used here to create a pointer to a
+        // function with generic types C, P & S. We can only send pointer data
+        // across processes and this is the only way the Rust compiler will let
+        // us transfer this information into the new process.
         match host::spawn(node, config, link, type_helper_wrapper::<C, P, S>, entry) {
             Ok(id) => {
                 // Use unique tag so that protocol messages are separated from regular messages.
@@ -286,7 +290,8 @@ where
     }
 }
 
-/// Wrapper function to help transfer the generic types C, P & S into the new process.
+/// Wrapper function to help transfer the generic types C, P & S into the new
+/// process.
 fn type_helper_wrapper<C, P, S>(function: i32)
 where
     S: Serializer<ProtocolCapture<C>>,
