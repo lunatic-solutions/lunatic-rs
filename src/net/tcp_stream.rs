@@ -12,6 +12,13 @@ use serde::{
 
 use crate::{error::LunaticError, host};
 
+fn timeout_or_other_err_kind(code: u64) -> ErrorKind {
+    if code == 9027 {
+        return ErrorKind::TimedOut;
+    }
+    ErrorKind::Other
+}
+
 /// A TCP connection.
 ///
 /// A [`TcpStream`] can be created by [`connect`][`TcpStream::connect()`]ing to an endpoint or by
@@ -236,10 +243,11 @@ impl TcpStream {
     /// Once a timeout is set, it can be removed by sending `None`
     pub fn set_peek_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
         unsafe {
-            if let code @ 1.. = host::api::networking::set_peek_timeout(
+            let code = host::api::networking::set_peek_timeout(
                 self.id,
                 duration.map_or(u64::MAX, |d| d.as_millis() as u64),
-            ) {
+            );
+            if code != 0 {
                 let lunatic_error = LunaticError::from(code as u64);
                 return Err(Error::new(ErrorKind::Other, lunatic_error));
             }
@@ -280,7 +288,8 @@ impl Write for TcpStream {
             Ok(nwritten_or_error_id as usize)
         } else {
             let lunatic_error = LunaticError::from(nwritten_or_error_id);
-            Err(Error::new(ErrorKind::Other, lunatic_error))
+            let error_kind = timeout_or_other_err_kind(result.into());
+            Err(Error::new(error_kind, lunatic_error))
         }
     }
 
@@ -290,7 +299,8 @@ impl Write for TcpStream {
             0 => Ok(()),
             _ => {
                 let lunatic_error = LunaticError::from(error_id);
-                Err(Error::new(ErrorKind::Other, lunatic_error))
+                let error_kind = timeout_or_other_err_kind(error_id);
+                Err(Error::new(error_kind, lunatic_error))
             }
         }
     }
@@ -311,7 +321,8 @@ impl Read for TcpStream {
             Ok(nread_or_error_id as usize)
         } else {
             let lunatic_error = LunaticError::from(nread_or_error_id);
-            Err(Error::new(ErrorKind::Other, lunatic_error))
+            let error_kind = timeout_or_other_err_kind(result.into());
+            Err(Error::new(error_kind, lunatic_error))
         }
     }
 }
