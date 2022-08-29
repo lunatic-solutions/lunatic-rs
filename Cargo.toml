@@ -1,6 +1,6 @@
 [package]
 name = "lunatic"
-version = "0.11.0"
+version = "0.11.1"
 edition = "2021"
 authors = ["Bernard Kolobara <bernard@lunatic.solutions>"]
 description = "Helper library for building Rust applications that run on lunatic."
@@ -30,7 +30,8 @@ lunatic-test = { version = "^0.10", path = "./lunatic-test" }
 [dev-dependencies]
 # WASI branch
 criterion = { git = "https://github.com/bheisler/criterion.rs", branch = "version-0.4", default-features = false }
-lunatic = { path = ".", features = ["json_serializer"] }
+serde_bytes = "^0.11"
+lunatic = { path = ".", features = ["json_serializer", "msgpack_serializer"] }
 
 [[bench]]
 name = "serializer"

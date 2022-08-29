@@ -125,7 +125,7 @@ pub struct Process<M, S = Bincode> {
 }
 
 impl<M, S> Process<M, S> {
-    pub fn new(node_id: u64, process_id: u64) -> Self {
+    pub(crate) fn new(node_id: u64, process_id: u64) -> Self {
         Self {
             node_id,
             id: process_id,

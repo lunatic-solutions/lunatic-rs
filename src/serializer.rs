@@ -1,7 +1,4 @@
 //! Serializer implementations for messages.
-
-use std::io::Write;
-
 use thiserror::Error;
 
 use crate::host::api::message;
@@ -103,8 +100,7 @@ where
     M: serde::Serialize + serde::de::DeserializeOwned,
 {
     fn encode(message: &M) -> Result<(), EncodeError> {
-        let data = bincode::serialize(message)?;
-        Ok(MessageRw {}.write_all(&data)?)
+        Ok(bincode::serialize_into(MessageRw {}, message)?)
     }
 
     fn decode() -> Result<M, DecodeError> {
@@ -132,6 +128,7 @@ where
     M: serde::Serialize + serde::de::DeserializeOwned,
 {
     fn encode(message: &M) -> Result<(), EncodeError> {
+        use std::io::Write;
         let data = rmp_serde::to_vec(message)?;
         Ok(MessageRw {}.write_all(&data)?)
     }
@@ -161,6 +158,7 @@ where
     M: serde::Serialize + serde::de::DeserializeOwned,
 {
     fn encode(message: &M) -> Result<(), EncodeError> {
+        use std::io::Write;
         let data = serde_json::to_vec(message)?;
         Ok(MessageRw {}.write_all(&data)?)
     }
@@ -184,6 +182,7 @@ where
     M: protobuf::Message,
 {
     fn encode(message: &M) -> Result<(), EncodeError> {
+        use std::io::Write;
         let mut data = Vec::new();
         message.write_to_vec(&mut data)?;
         Ok(MessageRw {}.write_all(&data)?)
