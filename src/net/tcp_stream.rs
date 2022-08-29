@@ -12,12 +12,7 @@ use serde::{
 
 use crate::{error::LunaticError, host};
 
-fn timeout_or_other_err_kind(code: u64) -> ErrorKind {
-    if code == 9027 {
-        return ErrorKind::TimedOut;
-    }
-    ErrorKind::Other
-}
+const TIMEOUT: u32 = 9027;
 
 /// A TCP connection.
 ///
@@ -185,10 +180,11 @@ impl TcpStream {
     /// Once a timeout is set, it can be removed by sending `None`
     pub fn set_write_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
         unsafe {
-            if let code @ 1.. = host::api::networking::set_write_timeout(
+            let code = host::api::networking::set_write_timeout(
                 self.id,
                 duration.map_or(u64::MAX, |d| d.as_millis() as u64),
-            ) {
+            );
+            if code != 0 {
                 let lunatic_error = LunaticError::from(code as u64);
                 return Err(Error::new(ErrorKind::Other, lunatic_error));
             }
@@ -214,10 +210,11 @@ impl TcpStream {
     /// Once a timeout is set, it can be removed by sending `None`
     pub fn set_read_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
         unsafe {
-            if let code @ 1.. = host::api::networking::set_read_timeout(
+            let code = host::api::networking::set_read_timeout(
                 self.id,
                 duration.map_or(u64::MAX, |d| d.as_millis() as u64),
-            ) {
+            );
+            if code != 0 {
                 let lunatic_error = LunaticError::from(code as u64);
                 return Err(Error::new(ErrorKind::Other, lunatic_error));
             }
@@ -266,6 +263,29 @@ impl TcpStream {
             }
         }
     }
+
+    /// Peek value on the tcp stream without removing it from internal buffer.
+    /// Any subsequent calls to `peek` will read from the internal buffer
+    /// and only calls to `read` will consume the buffered data
+    pub fn peek(&mut self, buf: &mut [u8]) -> Result<usize> {
+        let mut nread_or_error_id: u64 = 0;
+        let result = unsafe {
+            host::api::networking::tcp_peek(
+                self.id,
+                buf.as_mut_ptr(),
+                buf.len(),
+                &mut nread_or_error_id as *mut u64,
+            )
+        };
+        if result == 0 {
+            Ok(nread_or_error_id as usize)
+        } else if result == TIMEOUT {
+            Err(Error::new(ErrorKind::TimedOut, "TcpStream peek timed out"))
+        } else {
+            let lunatic_error = LunaticError::from(nread_or_error_id);
+            Err(Error::new(ErrorKind::Other, lunatic_error))
+        }
+    }
 }
 
 impl Write for TcpStream {
@@ -286,10 +306,11 @@ impl Write for TcpStream {
         };
         if result == 0 {
             Ok(nwritten_or_error_id as usize)
+        } else if result == TIMEOUT {
+            Err(Error::new(ErrorKind::TimedOut, "TcpStream write timed out"))
         } else {
             let lunatic_error = LunaticError::from(nwritten_or_error_id);
-            let error_kind = timeout_or_other_err_kind(result.into());
-            Err(Error::new(error_kind, lunatic_error))
+            Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
 
@@ -297,10 +318,10 @@ impl Write for TcpStream {
         let mut error_id = 0;
         match unsafe { host::api::networking::tcp_flush(self.id, &mut error_id as *mut u64) } {
             0 => Ok(()),
+            TIMEOUT => Err(Error::new(ErrorKind::TimedOut, "TcpStream flush timed out")),
             _ => {
                 let lunatic_error = LunaticError::from(error_id);
-                let error_kind = timeout_or_other_err_kind(error_id);
-                Err(Error::new(error_kind, lunatic_error))
+                Err(Error::new(ErrorKind::Other, lunatic_error))
             }
         }
     }
@@ -319,10 +340,11 @@ impl Read for TcpStream {
         };
         if result == 0 {
             Ok(nread_or_error_id as usize)
+        } else if result == TIMEOUT {
+            Err(Error::new(ErrorKind::TimedOut, "TcpStream read timed out"))
         } else {
             let lunatic_error = LunaticError::from(nread_or_error_id);
-            let error_kind = timeout_or_other_err_kind(result.into());
-            Err(Error::new(error_kind, lunatic_error))
+            Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
 }

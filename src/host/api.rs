@@ -105,6 +105,13 @@ pub mod networking {
 
             opaque: *mut u64,
         ) -> u32;
+        pub fn tcp_peek(
+            tcp_stream_id: u64,
+            buffer: *mut u8,
+            buffer_len: usize,
+
+            opaque: *mut u64,
+        ) -> u32;
         pub fn udp_send(
             udp_socket_id: u64,
             buffer: *const u8,
