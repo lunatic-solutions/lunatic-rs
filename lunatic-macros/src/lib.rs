@@ -4,7 +4,6 @@ use proc_macro::TokenStream;
 use quote::quote;
 
 mod abstract_process;
-use abstract_process::AbstractProcessTransformer;
 
 /// Marks the main function to be executed by the lunatic runtime as the root
 /// process.
@@ -170,13 +169,9 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 /// [`AbstractProcess`]: process/trait.AbstractProcess.html
 #[proc_macro_attribute]
 pub fn abstract_process(args: TokenStream, item: TokenStream) -> TokenStream {
-    let args: abstract_process::Args = match syn::parse(args) {
-        Ok(args) => args,
-        Err(e) => return token_stream_with_error(item, e),
-    };
-    match syn::parse(item.clone()) {
-        Ok(it) => AbstractProcessTransformer::new().transform(args, it).into(),
-        Err(e) => token_stream_with_error(item, e),
+    match abstract_process::AbstractProcess::new(args, item) {
+        Ok(abstract_process) => abstract_process.expand().into(),
+        Err(err) => err.into_compile_error().into(),
     }
 }
 
