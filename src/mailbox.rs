@@ -1,3 +1,4 @@
+use std::fmt;
 use std::marker::PhantomData;
 use std::time::Duration;
 
@@ -188,7 +189,7 @@ where
     }
 }
 
-impl<S, M, L> Clone for Mailbox<M, S, L>
+impl<M, S, L> Clone for Mailbox<M, S, L>
 where
     S: Serializer<M>,
 {
@@ -199,7 +200,20 @@ where
     }
 }
 
-impl<S, M, L> Copy for Mailbox<M, S, L> where S: Serializer<M> {}
+impl<M, S, L> Copy for Mailbox<M, S, L> where S: Serializer<M> {}
+
+impl<M, S, L> fmt::Debug for Mailbox<M, S, L>
+where
+    S: Serializer<M>,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Mailbox")
+            .field("message", &std::any::type_name::<M>())
+            .field("serializer", &std::any::type_name::<S>())
+            .field("link", &std::any::type_name::<L>())
+            .finish()
+    }
+}
 
 /// Result of a `recieve*` call on a [`Mailbox`].
 #[derive(Debug)]
