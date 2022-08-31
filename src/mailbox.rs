@@ -42,7 +42,6 @@ pub struct Catching;
 /// returned [`Mailbox<_, _, Catching>`] will receive a special
 /// [`MailboxResult::LinkDied`] in its mailbox containing the [`Tag`] used when
 /// the process was spawned ([`spawn_link_tag`](Process::spawn_link_tag)).
-#[derive(Debug, Clone, Copy)]
 pub struct Mailbox<M, S = Bincode, L = ()>
 where
     S: Serializer<M>,
@@ -188,6 +187,19 @@ where
         }
     }
 }
+
+impl<S, M, L> Clone for Mailbox<M, S, L>
+where
+    S: Serializer<M>,
+{
+    fn clone(&self) -> Self {
+        Self {
+            phantom: self.phantom,
+        }
+    }
+}
+
+impl<S, M, L> Copy for Mailbox<M, S, L> where S: Serializer<M> {}
 
 /// Result of a `recieve*` call on a [`Mailbox`].
 #[derive(Debug)]
