@@ -105,6 +105,13 @@ pub mod networking {
 
             opaque: *mut u64,
         ) -> u32;
+        pub fn tcp_peek(
+            tcp_stream_id: u64,
+            buffer: *mut u8,
+            buffer_len: usize,
+
+            opaque: *mut u64,
+        ) -> u32;
         pub fn udp_send(
             udp_socket_id: u64,
             buffer: *const u8,
@@ -142,6 +149,12 @@ pub mod networking {
         pub fn get_udp_socket_broadcast(udp_socket_id: u64) -> i32;
         pub fn clone_udp_socket(udp_socket_id: u64) -> u64;
         pub fn tcp_flush(tcp_stream_id: u64, error_id: *mut u64) -> u32;
+        pub fn set_read_timeout(tcp_stream_id: u64, duration: u64) -> u32;
+        pub fn get_read_timeout(tcp_stream_id: u64) -> u64;
+        pub fn set_write_timeout(tcp_stream_id: u64, duration: u64) -> u32;
+        pub fn get_write_timeout(tcp_stream_id: u64) -> u64;
+        pub fn set_peek_timeout(tcp_stream_id: u64, duration: u64) -> u32;
+        pub fn get_peek_timeout(tcp_stream_id: u64) -> u64;
     }
 }
 
