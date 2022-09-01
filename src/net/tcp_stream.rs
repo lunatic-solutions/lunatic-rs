@@ -318,7 +318,6 @@ impl Write for TcpStream {
         let mut error_id = 0;
         match unsafe { host::api::networking::tcp_flush(self.id, &mut error_id as *mut u64) } {
             0 => Ok(()),
-            TIMEOUT => Err(Error::new(ErrorKind::TimedOut, "TcpStream flush timed out")),
             _ => {
                 let lunatic_error = LunaticError::from(error_id);
                 Err(Error::new(ErrorKind::Other, lunatic_error))
