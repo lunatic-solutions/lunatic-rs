@@ -1,4 +1,6 @@
-use crate::host::api::distributed::{get_nodes, module_id, nodes_count};
+use crate::host::api::distributed::{
+    copy_lookup_nodes_results, exec_lookup_nodes, get_nodes, module_id, nodes_count,
+};
 use crate::host::api::{self};
 use crate::module::{params_to_vec, Param};
 use crate::LunaticError;
@@ -12,6 +14,30 @@ pub fn nodes() -> Vec<u64> {
     let mut nodes = vec![0; cnt];
     let copied_cnt = unsafe { get_nodes(nodes.as_mut_ptr(), cnt as u32) as usize };
     nodes.truncate(copied_cnt);
+    nodes
+}
+
+pub fn lookup_nodes(query: &'static str) -> Vec<u64> {
+    let mut query_id = 0;
+    let mut nodes_len = 0;
+    let result = unsafe {
+        exec_lookup_nodes(
+            query.as_ptr(),
+            query.len() as u32,
+            &mut query_id,
+            &mut nodes_len,
+        )
+    };
+    if result == 1 {
+        return Vec::new();
+    }
+    let mut nodes = vec![0; nodes_len as usize];
+    let copied_cnt =
+        unsafe { copy_lookup_nodes_results(query_id, nodes.as_mut_ptr(), nodes_len as u32) };
+    if copied_cnt < 0 {
+        return Vec::new();
+    }
+    nodes.truncate(copied_cnt as usize);
     nodes
 }
 
