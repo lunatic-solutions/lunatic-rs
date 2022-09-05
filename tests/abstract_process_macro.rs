@@ -281,7 +281,7 @@ fn handle_comments() {
 
         /// Some comments on the handle_link_trapped method.
         #[handle_link_trapped]
-        fn handle_link_trapped(&mut self, tag: Tag) {}
+        fn handle_link_trapped(&mut self, _tag: Tag) {}
 
         /// Some comments on the increment method.
         #[handle_message]
@@ -322,7 +322,7 @@ fn handle_differing_names() {
 
         /// Some comments on the handle_link_trapped method.
         #[handle_link_trapped]
-        fn link_trapped(&mut self, tag: Tag) {}
+        fn link_trapped(&mut self, _tag: Tag) {}
 
         /// Some comments on the increment method.
         #[handle_message]
