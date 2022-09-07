@@ -17,6 +17,9 @@ pub fn nodes() -> Vec<u64> {
     nodes
 }
 
+/// Executes a lookup query request to the control node and returns `u64` node ids.
+///
+/// Query is defined like an URL Query string, e.g. `name=node01&group=workers`.
 pub fn lookup_nodes(query: &'static str) -> Vec<u64> {
     let mut query_id = 0;
     let mut nodes_len = 0;
