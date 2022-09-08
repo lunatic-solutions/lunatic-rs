@@ -36,7 +36,7 @@ macro_rules! spawn_link_config {
 /// // Give variable during invocation
 /// spawn!(|local_var = {"Hello".to_owned()}| assert_eq!(local_var, "Hello"));
 /// // Background process with config
-/// let config = ProcessConfig::new();
+/// let config = ProcessConfig::new().unwrap();
 /// spawn!(&config, || {});
 /// ```
 #[macro_export]
@@ -110,7 +110,7 @@ macro_rules! spawn {
 /// let local_var = "Hello".to_owned();
 /// spawn_link!(|local_var, _proto: Protocol<End>| assert_eq!(local_var, "Hello"));
 /// // Background process with config
-/// let config = ProcessConfig::new();
+/// let config = ProcessConfig::new().unwrap();
 /// spawn_link!(&config, || {});
 /// ```
 #[macro_export]

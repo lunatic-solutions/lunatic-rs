@@ -27,7 +27,7 @@ fn main() {
 
     println!("Nodes {nodes:?}");
 
-    let mut config = ProcessConfig::new();
+    let mut config = ProcessConfig::new().unwrap();
     config.set_max_memory(1_500_000);
     config.set_max_fuel(1);
 
