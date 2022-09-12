@@ -39,7 +39,7 @@ impl<P: 'static, S> Drop for Protocol<P, S> {
         if TypeId::of::<P>() != TypeId::of::<End>() && TypeId::of::<P>() != TypeId::of::<TaskEnd>()
         {
             panic!(
-                "Protocol prematurely dropped, before reaching the `End` or `TaskEnd` state (currently: {}).",
+                "Protocol prematurely dropped, before reaching the `End`, `TaskEnd`, or `Rec<>` state (currently: {}).",
                 std::any::type_name::<P>()
             );
         }
@@ -177,6 +177,33 @@ where
     }
 }
 
+impl<P, S> Protocol<Rec<P>, S>
+{
+    /// Repeat Protocol
+    #[must_use]
+    pub fn repeat(&self) -> Protocol<P, S> {
+        let copy = Self {
+            id: self.id,
+            node_id: self.node_id,
+            tag: self.tag,
+            phantom: self.phantom,
+        };
+        copy.cast()
+    }
+
+    /// End Repeat
+    #[must_use]
+    pub fn end(self) -> Protocol<End, S> {
+        self.cast()
+    }
+}
+
+impl<P, S> From<Protocol<Rec<P>, S>> for Protocol<P, S> {
+    fn from(p: Protocol<Rec<P>, S>) -> Self {
+        p.cast()
+    }
+}
+
 /// A special case of the protocol with a `result()` function.
 pub struct TaskEnd;
 
@@ -194,6 +221,9 @@ pub struct Choose<P, Q>(PhantomData<(P, Q)>);
 
 /// Passive choice (offer) between `P` and `Q`
 pub struct Offer<P, Q>(PhantomData<(P, Q)>);
+
+/// Allows recursively calling a protocol
+pub struct Rec<P>(PhantomData<P>);
 
 /// The HasDual trait defines the dual relationship between protocols.
 ///
@@ -228,6 +258,10 @@ impl<P: HasDual, Q: HasDual> HasDual for Offer<P, Q> {
     type Dual = Choose<P::Dual, Q::Dual>;
 }
 
+impl<P: HasDual> HasDual for Rec<P> {
+    type Dual = Rec<P::Dual>;
+}
+
 pub enum Branch<L, R> {
     Left(L),
     Right(R),
@@ -244,6 +278,7 @@ mod private {
     impl<A, P> Sealed for Recv<A, P> {}
     impl<P, Q> Sealed for Choose<P, Q> {}
     impl<P, Q> Sealed for Offer<P, Q> {}
+    impl<P> Sealed for Rec<P> {}
 }
 
 impl<P, S> IntoProcess<P, S> for Protocol<P, S>
