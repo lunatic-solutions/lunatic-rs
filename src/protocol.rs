@@ -27,14 +27,14 @@ pub struct ProtocolCapture<C> {
 /// exchanged between two processes are in the correct order and of the correct
 /// type.
 #[derive(Debug, Hash)]
-pub struct Protocol<P: 'static, S = Bincode> {
+pub struct Protocol<P: 'static, S = Bincode, Z: 'static = ()> {
     id: u64,
     node_id: u64,
     tag: Tag,
-    phantom: PhantomData<(P, S)>,
+    phantom: PhantomData<(P, S, Z)>,
 }
 
-impl<P: 'static, S> Drop for Protocol<P, S> {
+impl<P: 'static, S, Z: 'static> Drop for Protocol<P, S, Z> {
     fn drop(&mut self) {
         if TypeId::of::<P>() != TypeId::of::<End>() && TypeId::of::<P>() != TypeId::of::<TaskEnd>()
         {
@@ -46,7 +46,7 @@ impl<P: 'static, S> Drop for Protocol<P, S> {
     }
 }
 
-impl<P, S> Protocol<P, S> {
+impl<P, S, Z> Protocol<P, S, Z> {
     /// Turn a process into a protocol
     fn from_process<M, S2>(process: Process<M, S2>, tag: Tag) -> Self {
         // The transformation shouldn't drop the process resource.
@@ -60,7 +60,7 @@ impl<P, S> Protocol<P, S> {
     }
 
     /// Cast the protocol to another type.
-    fn cast<P2>(self) -> Protocol<P2, S> {
+    fn cast<P2, Z2>(self) -> Protocol<P2, S, Z2> {
         // Don't drop the session yet.
         let self_ = ManuallyDrop::new(self);
         Protocol {
@@ -72,14 +72,14 @@ impl<P, S> Protocol<P, S> {
     }
 }
 
-impl<P, A, S> Protocol<Send<A, P>, S>
+impl<P, A, S, Z> Protocol<Send<A, P>, S, Z>
 where
     S: Serializer<A>,
 {
     /// Send a value of type `A` over the session. Returns a session with
     /// protocol `P`.
     #[must_use]
-    pub fn send(self, message: A) -> Protocol<P, S> {
+    pub fn send(self, message: A) -> Protocol<P, S, Z> {
         // Don't drop the session yet.
         let self_ = ManuallyDrop::new(self);
         // Temporarily cast to right process type.
@@ -89,14 +89,14 @@ where
     }
 }
 
-impl<P, A, S> Protocol<Recv<A, P>, S>
+impl<P, A, S, Z> Protocol<Recv<A, P>, S, Z>
 where
     S: Serializer<A>,
 {
     /// Receives a value of type `A` from the session. Returns a tuple
     /// containing the resulting session and the received value.
     #[must_use]
-    pub fn receive(self) -> (Protocol<P, S>, A) {
+    pub fn receive(self) -> (Protocol<P, S, Z>, A) {
         // Temporarily cast to right mailbox type.
         let mailbox: Mailbox<A, S> = unsafe { Mailbox::new() };
         let received = mailbox.tag_receive(&[self.tag]);
@@ -104,7 +104,7 @@ where
     }
 }
 
-impl<A, S> Protocol<Recv<A, TaskEnd>, S>
+impl<A, S, Z> Protocol<Recv<A, TaskEnd>, S, Z>
 where
     S: Serializer<A>,
 {
@@ -115,7 +115,7 @@ where
         // Temporarily cast to right mailbox type.
         let mailbox: Mailbox<A, S> = unsafe { Mailbox::new() };
         let result = mailbox.tag_receive(&[self.tag]);
-        let _: Protocol<TaskEnd, S> = self.cast(); // Only `End` protocols can be dropped
+        let _: Protocol<TaskEnd, S, Z> = self.cast(); // Only `End` protocols can be dropped
         result
     }
 
@@ -125,18 +125,18 @@ where
         // Temporarily cast to right mailbox type.
         let mailbox: Mailbox<A, S> = unsafe { Mailbox::new() };
         let result = mailbox.tag_receive_timeout(&[self.tag], duration);
-        let _: Protocol<TaskEnd, S> = self.cast(); // Only `End` protocols can be dropped
+        let _: Protocol<TaskEnd, S, Z> = self.cast(); // Only `End` protocols can be dropped
         result
     }
 }
 
-impl<P, Q, S> Protocol<Choose<P, Q>, S>
+impl<P, Q, S, Z> Protocol<Choose<P, Q>, S, Z>
 where
     S: Serializer<bool>,
 {
     /// Perform an active choice, selecting protocol `P`.
     #[must_use]
-    pub fn select_left(self) -> Protocol<P, S> {
+    pub fn select_left(self) -> Protocol<P, S, Z> {
         // Don't drop the session yet.
         let self_ = ManuallyDrop::new(self);
         // Temporarily cast to right process type.
@@ -147,7 +147,7 @@ where
 
     /// Perform an active choice, selecting protocol `Q`.
     #[must_use]
-    pub fn select_right(self) -> Protocol<Q, S> {
+    pub fn select_right(self) -> Protocol<Q, S, Z> {
         // Don't drop the session yet.
         let self_ = ManuallyDrop::new(self);
         // Temporarily cast to right process type.
@@ -157,14 +157,14 @@ where
     }
 }
 
-impl<P, Q, S> Protocol<Offer<P, Q>, S>
+impl<P, Q, S, Z> Protocol<Offer<P, Q>, S, Z>
 where
     S: Serializer<bool>,
 {
     /// Passive choice. This allows the other end of the session to select one
     /// of two options for continuing the protocol: either `P` or `Q`.
     #[must_use]
-    pub fn offer(self) -> Branch<Protocol<P, S>, Protocol<Q, S>> {
+    pub fn offer(self) -> Branch<Protocol<P, S, Z>, Protocol<Q, S, Z>> {
         unsafe {
             // Temporarily cast to right mailbox type.
             let mailbox: Mailbox<bool, S> = Mailbox::new();
@@ -177,29 +177,33 @@ where
     }
 }
 
-impl<P, S> Protocol<Rec<P>, S>
+impl<P, S, Z> Protocol<Rec<P>, S, Z>
 {
     /// Repeat Protocol
     #[must_use]
-    pub fn repeat(&self) -> Protocol<P, S> {
-        let copy = Self {
+    pub fn repeat(self) -> Protocol<P, S, Protocol<Rec<P>, S, Z>> {
+        /*let copy = Self {
             id: self.id,
             node_id: self.node_id,
             tag: self.tag,
             phantom: self.phantom,
-        };
-        copy.cast()
-    }
-
-    /// End Repeat
-    #[must_use]
-    pub fn end(self) -> Protocol<End, S> {
+        };*/
         self.cast()
     }
 }
 
-impl<P, S> From<Protocol<Rec<P>, S>> for Protocol<P, S> {
-    fn from(p: Protocol<Rec<P>, S>) -> Self {
+impl<P2, S, Z> Protocol<Pop, S, Protocol<P2, S, Z>>
+{
+    /// Pop
+    #[must_use]
+    pub fn pop(self) -> Protocol<P2, S, Z>
+    {
+        self.cast()
+    }
+}
+
+impl<P, S, Z> From<Protocol<Rec<P>, S, Z>> for Protocol<P, S, Z> {
+    fn from(p: Protocol<Rec<P>, S, Z>) -> Self {
         p.cast()
     }
 }
@@ -224,6 +228,9 @@ pub struct Offer<P, Q>(PhantomData<(P, Q)>);
 
 /// Allows recursively calling a protocol
 pub struct Rec<P>(PhantomData<P>);
+
+/// Allows recursing
+pub struct Pop;
 
 /// The HasDual trait defines the dual relationship between protocols.
 ///
@@ -262,6 +269,10 @@ impl<P: HasDual> HasDual for Rec<P> {
     type Dual = Rec<P::Dual>;
 }
 
+impl HasDual for Pop {
+    type Dual = Pop;
+}
+
 pub enum Branch<L, R> {
     Left(L),
     Right(R),
@@ -279,17 +290,18 @@ mod private {
     impl<P, Q> Sealed for Choose<P, Q> {}
     impl<P, Q> Sealed for Offer<P, Q> {}
     impl<P> Sealed for Rec<P> {}
+    impl Sealed for Pop {}
 }
 
-impl<P, S> IntoProcess<P, S> for Protocol<P, S>
+impl<P, S, Z> IntoProcess<P, S> for Protocol<P, S, Z>
 where
     P: HasDual,
 {
-    type Process = Protocol<<P as HasDual>::Dual, S>;
+    type Process = Protocol<<P as HasDual>::Dual, S, Z>;
 
     fn spawn<C>(
         capture: C,
-        entry: fn(C, Protocol<P, S>),
+        entry: fn(C, Protocol<P, S, Z>),
         link: Option<Tag>,
         config: Option<&ProcessConfig>,
         node: Option<u64>,
@@ -304,7 +316,7 @@ where
         // function with generic types C, P & S. We can only send pointer data
         // across processes and this is the only way the Rust compiler will let
         // us transfer this information into the new process.
-        match host::spawn(node, config, link, type_helper_wrapper::<C, P, S>, entry) {
+        match host::spawn(node, config, link, type_helper_wrapper::<C, P, S, Z>, entry) {
             Ok(id) => {
                 // Use unique tag so that protocol messages are separated from regular messages.
                 let tag = Tag::new();
@@ -325,17 +337,18 @@ where
     }
 }
 
-/// Wrapper function to help transfer the generic types C, P & S into the new
+/// Wrapper function to help transfer the generic types C, P, S & Z into the new
 /// process.
-fn type_helper_wrapper<C, P, S>(function: i32)
+fn type_helper_wrapper<C, P, S, Z>(function: i32)
 where
     S: Serializer<ProtocolCapture<C>>,
     P: HasDual + 'static,
+    Z: 'static
 {
     let p_capture = unsafe { Mailbox::<ProtocolCapture<C>, S>::new() }.receive();
     let capture = p_capture.capture;
     let protocol = Protocol::from_process(p_capture.process, p_capture.tag);
-    let function: fn(C, Protocol<P, S>) = unsafe { std::mem::transmute(function) };
+    let function: fn(C, Protocol<P, S, Z>) = unsafe { std::mem::transmute(function) };
     function(capture, protocol);
 }
 

@@ -1,4 +1,4 @@
-use lunatic::Process;
+use lunatic::{Process};
 use lunatic_test::test;
 
 #[test]
@@ -42,27 +42,38 @@ fn recursive_protocols() {
     use lunatic::protocol::Recv;
     use lunatic::protocol::Send;
     use lunatic::protocol::End;
+    use lunatic::protocol::Pop;
+    use lunatic::protocol::Offer;
+    use lunatic::protocol::Branch;
     use lunatic::protocol::Protocol;
-    type P = Recv<u64, Send<u64, End>>;
+    type P = Offer<Recv<u64, Send<u64, Pop>>, End>;
 
     let protocol = Process::spawn_link(
         (),
         |(), proto: Protocol<Rec<P>>| {
 
+            let mut loop_protocol = proto.repeat();
             loop {
-                let loop_protocol = proto.repeat();
-                let (protocol, v) = loop_protocol.receive();
-                let _end = protocol.send(v * 2);
+                match loop_protocol.offer() {
+                    Branch::Left(protocol) => {
+                        let (protocol, v) = protocol.receive();
+                        let protocol = protocol.send(v * 2);
+                        loop_protocol = protocol.pop().repeat();
+                    },
+                    Branch::Right(_end) => break,
+                };
             }
         }
     );
 
+    let mut loop_protocol = protocol.repeat();
     for i in 0..5 {
-        let loop_protocol = protocol.repeat();
-        let p = loop_protocol.send(i);
-        let (_end, value) = p.receive();
+        let protocol = loop_protocol.select_left();
+        let protocol = protocol.send(i);
+        let (end, value) = protocol.receive();
         assert_eq!(i * 2, value);
+        loop_protocol = end.pop().repeat();
     }
 
-    let _end = protocol.end();
+    let _end = loop_protocol.select_right();
 }
