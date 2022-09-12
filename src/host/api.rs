@@ -232,9 +232,14 @@ pub mod distributed {
             query_len: u32,
             query_id_ptr: *mut u64,
             node_len_ptr: *mut u32,
+            error_ptr: *mut u64,
         ) -> u32;
-        pub fn copy_lookup_nodes_results(query_id: u64, nodes_ptr: *mut u64, nodes_len: u32)
-            -> i32;
+        pub fn copy_lookup_nodes_results(
+            query_id: u64,
+            nodes_ptr: *mut u64,
+            nodes_len: u32,
+            error_ptr: *mut u64,
+        ) -> i32;
         pub fn nodes_count() -> u32;
         pub fn node_id() -> u64;
         pub fn module_id() -> u64;
