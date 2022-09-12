@@ -39,7 +39,7 @@ impl<P: 'static, S> Drop for Protocol<P, S> {
         if TypeId::of::<P>() != TypeId::of::<End>() && TypeId::of::<P>() != TypeId::of::<TaskEnd>()
         {
             panic!(
-                "Protocol prematurely dropped, before reaching the `End`, `TaskEnd`, or `Rec<>` state (currently: {}).",
+                "Protocol prematurely dropped, before reaching the `End` or `TaskEnd` state (currently: {}).",
                 std::any::type_name::<P>()
             );
         }
