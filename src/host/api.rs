@@ -213,7 +213,7 @@ pub mod process {
     extern "C" {
         pub fn compile_module(data: *const u8, data_len: usize, id: *mut u64) -> i32;
         pub fn drop_module(config_id: u64);
-        pub fn create_config() -> u64;
+        pub fn create_config() -> i64;
         pub fn drop_config(config_id: u64);
         pub fn config_set_max_memory(config_id: u64, max_memory: u64);
         pub fn config_get_max_memory(config_id: u64) -> u64;

@@ -1,7 +1,5 @@
-use lunatic::{
-    process::{AbstractProcess, ProcessRef, Request, RequestHandler, StartProcess},
-    Mailbox,
-};
+use lunatic::process::{AbstractProcess, ProcessRef, Request, RequestHandler, StartProcess};
+use lunatic::Mailbox;
 
 struct Adder;
 impl AbstractProcess for Adder {

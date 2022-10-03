@@ -1,9 +1,8 @@
-use lunatic::{
-    abstract_process, host,
-    process::{ProcessRef, StartProcess},
-    sleep, spawn_link, test, Tag,
-};
+use std::f32::consts::PI;
 use std::time::Duration;
+
+use lunatic::process::{ProcessRef, StartProcess};
+use lunatic::{abstract_process, host, sleep, spawn_link, test, Tag};
 
 #[test]
 fn init() {
@@ -262,6 +261,88 @@ fn handle_destructuring() {
 }
 
 #[test]
+fn handle_comments() {
+    struct Counter {
+        count: u32,
+    }
+
+    /// Some comments on the counter.
+    #[abstract_process]
+    impl Counter {
+        /// Some comments on the init method.
+        #[init]
+        fn init(_process: ProcessRef<Self>, count: u32) -> Self {
+            Self { count }
+        }
+
+        /// Some comments on the terminate method.
+        #[terminate]
+        fn terminate(self) {}
+
+        /// Some comments on the handle_link_trapped method.
+        #[handle_link_trapped]
+        fn handle_link_trapped(&mut self, _tag: Tag) {}
+
+        /// Some comments on the increment method.
+        #[handle_message]
+        fn increment(&mut self) {
+            self.count += 1;
+        }
+
+        /// Some comments on the init method.
+        #[handle_request]
+        fn count(&self) -> u32 {
+            self.count
+        }
+    }
+
+    let counter = Counter::start_link(2, None);
+    counter.increment();
+    assert_eq!(3, counter.count());
+}
+
+#[test]
+fn handle_differing_names() {
+    struct Counter {
+        count: u32,
+    }
+
+    /// Some comments on the counter.
+    #[abstract_process]
+    impl Counter {
+        /// Some comments on the init method.
+        #[init]
+        fn initialize(_process: ProcessRef<Self>, count: u32) -> Self {
+            Self { count }
+        }
+
+        /// Some comments on the terminate method.
+        #[terminate]
+        fn terminator(self) {}
+
+        /// Some comments on the handle_link_trapped method.
+        #[handle_link_trapped]
+        fn link_trapped(&mut self, _tag: Tag) {}
+
+        /// Some comments on the increment method.
+        #[handle_message]
+        fn increment(&mut self) {
+            self.count += 1;
+        }
+
+        /// Some comments on the init method.
+        #[handle_request]
+        fn count(&self) -> u32 {
+            self.count
+        }
+    }
+
+    let counter = Counter::start_link(2, None);
+    counter.increment();
+    assert_eq!(3, counter.count());
+}
+
+#[test]
 fn reply_types() {
     struct A;
 
@@ -360,11 +441,11 @@ fn request_timeout() {
     assert!(counter
         .with_timeout(Duration::from_millis(10))
         .respond_fast()
-        .is_ok());
+        .is_message());
     assert!(counter
         .with_timeout(Duration::from_millis(10))
         .respond_slow()
-        .is_err());
+        .is_timed_out());
 }
 
 #[test]
@@ -436,8 +517,10 @@ fn wrapper_rename() {
 
 #[test]
 fn generics() {
-    use serde::{de::Deserialize, ser::Serialize};
     use std::ops::{Add, AddAssign};
+
+    use serde::de::Deserialize;
+    use serde::ser::Serialize;
 
     struct GenAdder<T> {
         count: T,
@@ -468,13 +551,13 @@ fn generics() {
 
     let counter = GenAdder::<f32>::start_link((), None);
     assert_eq!(0f32, counter.sum());
-    counter.add(3.1415926);
-    assert_eq!(3.1415926, counter.sum());
-    counter.after(Duration::from_millis(10)).add(3.1415926);
+    counter.add(PI);
+    assert_eq!(PI, counter.sum());
+    counter.after(Duration::from_millis(10)).add(PI);
     sleep(Duration::from_millis(15));
     let s = counter
         .with_timeout(Duration::from_millis(10))
         .sum()
         .unwrap();
-    assert_eq!(3.1415926 * 2f32, s);
+    assert_eq!(PI * 2f32, s);
 }

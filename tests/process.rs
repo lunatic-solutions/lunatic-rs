@@ -1,9 +1,8 @@
 use std::time::Duration;
 
-use lunatic::{
-    host::api::{message::receive, process::die_when_link_dies},
-    spawn_link, Mailbox, Process, ProcessConfig,
-};
+use lunatic::host::api::message::receive;
+use lunatic::host::api::process::die_when_link_dies;
+use lunatic::{spawn_link, Mailbox, Process, ProcessConfig};
 use lunatic_test::test;
 
 #[test]
@@ -49,12 +48,12 @@ fn parent_and_child_exchange_messages(parent_mailbox: Mailbox<i32>) {
 #[test]
 fn mailbox_timeout(m: Mailbox<i32>) {
     let message = m.receive_timeout(Duration::from_millis(10));
-    assert!(message.is_err());
+    assert!(message.is_timed_out());
 }
 
 #[test]
 fn recursive_count(mailbox: Mailbox<i32>) {
-    let mut config = ProcessConfig::new();
+    let mut config = ProcessConfig::new().unwrap();
     config.set_can_spawn_processes(true);
     Process::spawn_link_config(&config, (mailbox.this(), 1000), recursive_count_sub);
     assert_eq!(500500, mailbox.receive());
@@ -85,7 +84,7 @@ fn lookup(mailbox: Mailbox<i32>) {
 
 #[test]
 fn spawn_config_doesnt_link() {
-    let mut config = ProcessConfig::new();
+    let mut config = ProcessConfig::new().unwrap();
     config.set_max_memory(5_000_000);
     config.set_can_spawn_processes(true);
 
@@ -98,7 +97,7 @@ fn spawn_config_doesnt_link() {
 #[test]
 #[should_panic]
 fn spawn_link_config_does_link() {
-    let mut config = ProcessConfig::new();
+    let mut config = ProcessConfig::new().unwrap();
     config.set_max_memory(5_000_000);
     config.set_can_spawn_processes(true);
 

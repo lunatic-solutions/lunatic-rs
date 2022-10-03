@@ -10,7 +10,7 @@ fn main() {
     let cert = std::fs::read("./examples/CA/localhost.crt").expect("Should have read cert file");
     let listener = net::TlsListener::bind("127.0.0.1:3000", cert, key).unwrap();
     println!("Listening on addr: {}", listener.local_addr().unwrap());
-    while let Ok((mut tls_stream, _peer)) = listener.accept() {
+    while let Ok((tls_stream, _peer)) = listener.accept() {
         // let clone = tls_stream.clone();
         println!("GOING TO SPAWN");
         Process::spawn(tls_stream, handle);

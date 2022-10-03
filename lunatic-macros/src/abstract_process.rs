@@ -1,541 +1,675 @@
 use convert_case::{Case, Casing};
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{
-    parse::{Parse, ParseStream},
-    spanned::Spanned,
-    ImplItem::Method,
-    Token,
-};
+use syn::parse::{Parse, ParseStream};
+use syn::spanned::Spanned;
+use syn::Token;
 
-/// Transform and expand the `abstract_process` macro
-#[derive(Default)]
-pub struct AbstractProcessTransformer {
-    /// impl type
-    impl_type: Option<syn::Path>,
-    impl_type_name: Option<syn::Ident>,
-    impl_type_generics: syn::Generics,
-    /// impl type macros
-    impl_type_attrs: Vec<syn::Attribute>,
-    /// implmentation of trait `AbstractProcess`
-    ap_impls: AbstractProcessImpls,
-    /// Type impl block that is received by the macro
-    type_impls: TypeImpls,
-    /// Wrapper methods for send and request
-    handler_wrappers: HandlerWrappers,
-    /// Delayed message builder for invoking `send_after`
-    msg_builder_methods: Vec<TokenStream>,
-    /// Timeout request builder for invoking `request_timeout`
-    req_builder_methods: Vec<TokenStream>,
-    /// message (message, request, and response) struct definitions
-    message_structs: Vec<TokenStream>,
-    /// impl blocks for MessageHandler and RequestHandler
-    handler_impls: Vec<TokenStream>,
-    /// compiler errors
-    errors: Vec<TokenStream>,
+/// AbstractProcess macro.
+pub struct AbstractProcess {
+    /// Arguments passed to the `#[abstract_process(...)]` macro.
+    args: Args,
+    /// Original impl item.
+    item_impl: syn::ItemImpl,
+    /// Arg type in abstract process implementation.
+    arg_ty: syn::Type,
+    /// Init method.
+    init: syn::ImplItemMethod,
+    /// Terminate method.
+    terminate: Option<syn::ImplItemMethod>,
+    /// Handle link trapped method.
+    handle_link_trapped: Option<syn::ImplItemMethod>,
+    /// Message handler methods.
+    message_handlers: Vec<syn::ImplItemMethod>,
+    /// Request handler methods.
+    request_handlers: Vec<syn::ImplItemMethod>,
+    /// Ident of the message builder struct.
+    message_builder_ident: syn::Ident,
+    /// Ident of the request builder struct.
+    request_builder_ident: syn::Ident,
+    /// Ident of the handler trait.
+    handler_trait_ident: syn::Ident,
 }
 
-impl AbstractProcessTransformer {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn transform(&mut self, args: Args, impl_block: syn::ItemImpl) -> TokenStream {
-        self.extract(args, impl_block);
-        self.render()
-    }
-
-    fn extract(&mut self, args: Args, impl_block: syn::ItemImpl) {
-        let impl_block_span = impl_block.span();
-
-        self.impl_type_attrs = impl_block.attrs;
-        self.impl_type = match *impl_block.self_ty {
-            syn::Type::Path(p) => Some(p.path),
-            _ => unreachable!("The given impl type is not supported"),
-        };
-        self.impl_type_name = self
-            .impl_type
-            .as_ref()
-            .and_then(|t| t.segments.last())
-            .map(|s| s.ident.clone())
-            .or_else(|| {
-                let err = syn::Error::new(
-                    impl_block_span,
-                    "`impl` type is not supported by `#[abstract_process]`",
-                )
-                .to_compile_error();
-                self.errors.push(err);
-                // create temporary to silence error from invalid syntax
-                Some(syn::Ident::new("__Placeholder", Span::call_site()))
-            });
-        self.impl_type_generics = impl_block.generics;
-
-        self.handler_wrappers.trait_visibility = args.visibility;
-        self.handler_wrappers.trait_name = args
-            .trait_name
-            .map(|trait_name| format_ident!("{}", trait_name.value()))
-            .or_else(|| {
-                self.impl_type_name
-                    .as_ref()
-                    .map(|n| format_ident!("{}Handler", n))
-            });
-
-        for item in &impl_block.items {
-            match item {
-                Method(method) if method.has_tag("init") => self.extract_init(method),
-                Method(method) if method.has_tag("terminate") => self.extract_terminate(method),
-                Method(method) if method.has_tag("handle_link_trapped") => {
-                    self.extract_handle_link_trapped(method)
+impl AbstractProcess {
+    /// Parses and validates an impl statement and attributes.
+    pub fn new(args: proc_macro::TokenStream, item: proc_macro::TokenStream) -> syn::Result<Self> {
+        let args: Args = syn::parse(args)?;
+        let mut item_impl: syn::ItemImpl = syn::parse(item)?;
+        let self_ident = match *item_impl.self_ty {
+            syn::Type::Path(ref ty_path) => match ty_path.path.segments.last() {
+                Some(segment) => segment.ident.clone(),
+                None => {
+                    return Err(syn::Error::new(
+                        item_impl.self_ty.span(),
+                        "type is not supported",
+                    ))
                 }
-                Method(method) if method.has_tag("handle_message") => {
-                    self.extract_handle_message(method);
-                }
-                Method(method) if method.has_tag("handle_request") => {
-                    self.extract_handle_request(method);
-                }
-                _ => {
-                    self.type_impls.skipped_items.push(quote! { #item });
-                }
+            },
+            _ => {
+                return Err(syn::Error::new(
+                    item_impl.self_ty.span(),
+                    "type is not supported",
+                ))
             }
-        }
+        };
+        let (init, terminate, handle_link_trapped, message_handlers, request_handlers) = item_impl
+            .items
+            .clone()
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, item)| match item {
+                syn::ImplItem::Method(impl_item_method) => Some((i, impl_item_method)),
+                _ => None,
+            })
+            .filter_map(|(i, mut impl_item_method)| {
+                let (j, item_attr) =
+                    impl_item_method
+                        .attrs
+                        .iter()
+                        .enumerate()
+                        .find_map(|(i, attr)| {
+                            attr.path
+                                .get_ident()
+                                .map(|ident| ident.to_string())
+                                .and_then(|ident_string| ItemAttr::from_str(&ident_string))
+                                .map(|item_attr| (i, item_attr))
+                        })?;
+                // We found an attribute, we should remove it from the original item_impl
+                impl_item_method.attrs.remove(j);
+                if let syn::ImplItem::Method(impl_item_method) = item_impl.items.get_mut(i).unwrap()
+                {
+                    impl_item_method.attrs.remove(j);
+                }
 
-        // ensure init exists
-        if self.ap_impls.init.is_none() {
-            let err = syn::Error::new(
-                impl_block_span,
-                "Must implement the `init` method marked with `#[init]`",
-            )
-            .to_compile_error();
-            self.errors.push(err);
-        }
-    }
+                Some((item_attr, impl_item_method))
+            })
+            .fold(
+                Ok((None, None, None, Vec::new(), Vec::new())),
+                |acc, (item_attr, impl_item_method)| {
+                    let (
+                        mut init,
+                        mut terminate,
+                        mut handle_link_trapped,
+                        mut message_handlers,
+                        mut request_handlers,
+                    ) = acc?;
 
-    fn render(&self) -> TokenStream {
-        let errors = &self.errors;
-        let impl_type = &self.impl_type;
-        let (impl_generics, ty_generics, where_clause) = &self.impl_type_generics.split_for_impl();
-        let AbstractProcessImpls {
-            init: init_impl,
-            terminate: terminate_impl,
-            handle_link_trapped: handle_link_trapped_impl,
-        } = &self.ap_impls;
-        let TypeImpls {
+                    match item_attr {
+                        ItemAttr::Init => {
+                            if init.is_some() {
+                                return Err(syn::Error::new(
+                                    impl_item_method.sig.ident.span(),
+                                    "init method already defined",
+                                ));
+                            }
+
+                            init = Some(impl_item_method);
+                        }
+                        ItemAttr::Terminate => {
+                            if terminate.is_some() {
+                                return Err(syn::Error::new(
+                                    impl_item_method.sig.ident.span(),
+                                    "terminate method already defined",
+                                ));
+                            }
+
+                            terminate = Some(impl_item_method);
+                        }
+                        ItemAttr::HandleLinkTrapped => {
+                            if handle_link_trapped.is_some() {
+                                return Err(syn::Error::new(
+                                    impl_item_method.sig.ident.span(),
+                                    "handle_link_trapped method already defined",
+                                ));
+                            }
+
+                            handle_link_trapped = Some(impl_item_method);
+                        }
+                        ItemAttr::HandleMessage => {
+                            message_handlers.push(impl_item_method);
+                        }
+                        ItemAttr::HandleRequest => {
+                            request_handlers.push(impl_item_method);
+                        }
+                    }
+
+                    Ok((
+                        init,
+                        terminate,
+                        handle_link_trapped,
+                        message_handlers,
+                        request_handlers,
+                    ))
+                },
+            )?;
+
+        let init =
+            init.ok_or_else(|| syn::Error::new(item_impl.self_ty.span(), "missing init method"))?;
+        let arg_ty = match init
+            .sig
+            .inputs
+            .last()
+            .ok_or_else(|| syn::Error::new(init.sig.span(), "init must take 2 arguments"))?
+        {
+            syn::FnArg::Receiver(_) => {
+                return Err(syn::Error::new(init.sig.span(), "init cannot take `&self`"))
+            }
+            syn::FnArg::Typed(typed_arg) => *typed_arg.ty.clone(),
+        };
+
+        let message_builder_ident = format_ident!("{}MsgBuilder", self_ident);
+        let request_builder_ident = format_ident!("{}ReqBuilder", self_ident);
+        let handler_trait_ident = args
+            .trait_name
+            .as_ref()
+            .map(|trait_name| format_ident!("{}", trait_name.value()))
+            .unwrap_or_else(|| format_ident!("{}Handler", self_ident));
+
+        Ok(AbstractProcess {
+            args,
+            item_impl,
+            arg_ty,
+            init,
             terminate,
             handle_link_trapped,
-            skipped_items,
-        } = &self.type_impls;
-        let message_structs = &self.message_structs;
-        let impl_attrs = &self.impl_type_attrs;
-        let handler_impls = &self.handler_impls;
-        let HandlerWrappers {
-            trait_visibility: handler_visibility,
-            trait_name: handler_trait,
-            trait_defs: handler_wrapper_defs,
-            trait_impls: handler_wrapper_impls,
-        } = &self.handler_wrappers;
-        let msg_builder_methods = &self.msg_builder_methods;
-        let req_builder_methods = &self.req_builder_methods;
+            message_handlers,
+            request_handlers,
+            message_builder_ident,
+            request_builder_ident,
+            handler_trait_ident,
+        })
+    }
 
-        let msg_builder_struct = self
-            .impl_type_name
-            .as_ref()
-            .map(|i| format_ident!("{}MsgBuilder", i));
-        let req_builder_struct = self
-            .impl_type_name
-            .as_ref()
-            .map(|i| format_ident!("{}ReqBuilder", i));
+    /// Expands macro.
+    pub fn expand(&self) -> TokenStream {
+        let handler_wrappers = self.expand_handler_wrappers();
+        let original_impl = self.expand_original_impl();
+        let impl_abstract_process = self.expand_impl_abstract_process();
+        let message_handler_impls = self.expand_message_handler_impls();
+        let request_handler_impls = self.expand_request_handler_impls();
+        let handler_trait = self.expand_handler_trait();
+        let impl_handler_trait = self.expand_impl_handler_trait();
+        let message_builders = self.expand_builders();
 
         quote! {
-            #(#errors)*
+            #handler_wrappers
+            #original_impl
+            #impl_abstract_process
+            #message_handler_impls
+            #request_handler_impls
+            #handler_trait
+            #impl_handler_trait
+            #message_builders
+        }
+    }
 
-            #(#message_structs)*
+    /// Expands handler wrapper structs.
+    ///
+    /// ```ignore
+    /// __MsgWrapFoo(Param1, Param2);
+    /// __MsgWrapBar(Param1, Param2);
+    /// ```
+    fn expand_handler_wrappers(&self) -> TokenStream {
+        let wrappers = self
+            .message_handlers
+            .iter()
+            .chain(self.request_handlers.iter())
+            .map(|impl_item_method| self.expand_handler_wrapper(impl_item_method));
 
-            #(#impl_attrs)*
-            impl #impl_generics #impl_type #where_clause {
-                #terminate
-                #handle_link_trapped
-                #(#skipped_items)*
+        quote! {
+            #( #wrappers )*
+        }
+    }
+
+    /// Expands a single handler wrapper struct.
+    ///
+    /// ```ignore
+    /// __MsgWrap(Param1, Param2);
+    /// ```
+    fn expand_handler_wrapper(&self, impl_item_method: &syn::ImplItemMethod) -> TokenStream {
+        let ident = Self::handler_wrapper_ident(&impl_item_method.sig.ident);
+        let (_, ty_generics, _) = self.item_impl.generics.split_for_impl();
+        let fields = filter_typed_args(impl_item_method.sig.inputs.iter()).map(|field| &*field.ty);
+        let phantom_field = if !self.item_impl.generics.params.is_empty() {
+            Some(quote! { std::marker::PhantomData #ty_generics, })
+        } else {
+            None
+        };
+
+        quote! {
+            #[derive(serde::Serialize, serde::Deserialize)]
+            struct #ident #ty_generics (
+                #phantom_field
+                #( #fields ),*
+            );
+        }
+    }
+
+    /// Expands the original implementation written.
+    fn expand_original_impl(&self) -> TokenStream {
+        let syn::ItemImpl {
+            attrs,
+            defaultness,
+            unsafety,
+            impl_token,
+            generics,
+            self_ty,
+            items,
+            ..
+        } = &self.item_impl;
+        let (impl_generics, _ty_generics, where_clause) = generics.split_for_impl();
+
+        quote! {
+            #( #attrs )*
+            #defaultness #unsafety #impl_token #impl_generics #self_ty #where_clause {
+                #( #items )*
             }
+        }
+    }
 
-            impl #impl_generics lunatic::process::AbstractProcess for #impl_type #where_clause {
-                type State = #impl_type;
+    /// Expands the implementation for abstract process.
+    fn expand_impl_abstract_process(&self) -> TokenStream {
+        let syn::ItemImpl {
+            generics, self_ty, ..
+        } = &self.item_impl;
+
+        let (impl_generics, _ty_generics, where_clause) = generics.split_for_impl();
+        let arg_ty = &self.arg_ty;
+
+        let init_impl = self.expand_init_impl();
+        let terminate_impl = self.expand_terminate_impl();
+        let handle_link_trapped_impl = self.expand_handle_link_trapped_impl();
+
+        quote! {
+            impl #impl_generics lunatic::process::AbstractProcess for #self_ty #where_clause {
+                type State = #self_ty;
+                type Arg = #arg_ty;
+
                 #init_impl
                 #terminate_impl
                 #handle_link_trapped_impl
             }
+        }
+    }
 
-            #(#handler_impls)*
+    /// Expands the `init` method in the abstract process implementation.
+    fn expand_init_impl(&self) -> TokenStream {
+        let ident = &self.init.sig.ident;
+        let arg_ty = &self.arg_ty;
 
-            #handler_visibility trait #handler_trait #ty_generics #where_clause {
-                #(#handler_wrapper_defs)*
-
-                /// set a delay before sending the message
-                fn after(&self, duration: std::time::Duration) -> #msg_builder_struct #ty_generics;
-
-                /// set a timeout for the request
-                fn with_timeout(&self, duration: std::time::Duration) -> #req_builder_struct #ty_generics;
-            }
-
-            impl #impl_generics #handler_trait #ty_generics for lunatic::process::ProcessRef<#impl_type>
-            #where_clause {
-                #(#handler_wrapper_impls)*
-
-                fn after(&self, duration: std::time::Duration) -> #msg_builder_struct #ty_generics {
-                    #msg_builder_struct::new(duration, self.clone())
-                }
-
-                fn with_timeout(&self, duration: std::time::Duration) -> #req_builder_struct #ty_generics {
-                    #req_builder_struct::new(duration, self.clone())
-                }
-            }
-
-            #handler_visibility struct #msg_builder_struct #ty_generics #where_clause {
-                duration: std::time::Duration,
-                process_ref: lunatic::process::ProcessRef<#impl_type>,
-            }
-
-            impl #impl_generics #msg_builder_struct #ty_generics #where_clause {
-                fn new(duration: std::time::Duration, process_ref: ProcessRef<#impl_type>) -> Self {
-                    Self { duration, process_ref }
-                }
-
-                #(#handler_visibility #msg_builder_methods)*
-            }
-
-            #handler_visibility struct #req_builder_struct #ty_generics #where_clause {
-                duration: std::time::Duration,
-                process_ref: lunatic::process::ProcessRef<#impl_type>,
-            }
-
-            impl #impl_generics #req_builder_struct #ty_generics #where_clause {
-                fn new(duration: std::time::Duration, process_ref: ProcessRef<#impl_type>) -> Self {
-                    Self { duration, process_ref }
-                }
-
-                #(#handler_visibility #req_builder_methods)*
+        quote! {
+            fn init(this: ProcessRef<Self>, arg: #arg_ty) -> Self::State {
+                Self::#ident(this, arg)
             }
         }
     }
 
-    fn extract_init(&mut self, method: &syn::ImplItemMethod) {
-        if self.ap_impls.init.is_some() {
-            let err = syn::Error::new(
-                method.sig.ident.span(),
-                "Only one method can be marked with `#[init]` macro",
-            )
-            .into_compile_error();
-            self.errors.push(err);
-            return;
-        }
-        let attrs = method
-            .attrs
-            .iter()
-            .filter(|attr| !attr.path.is_ident("init"));
+    /// Expands the `terminate` method in the abstract process implementation.
+    fn expand_terminate_impl(&self) -> TokenStream {
+        self.terminate
+            .as_ref()
+            .map(|terminate| {
+                let ident = &terminate.sig.ident;
 
-        let sig = &method.sig;
-        // ensure function name is init
-        let ident = &sig.ident;
-        let error = if sig.ident != "init" {
-            Some(
-                syn::Error::new(
-                    sig.ident.span(),
-                    "Invalid method signature. Method name must be `init`.",
-                )
-                .into_compile_error(),
-            )
-        } else {
-            None
-        };
-
-        let arg_type = if let Some(syn::FnArg::Typed(arg)) = sig.inputs.last() {
-            &arg.ty
-        } else {
-            unreachable!("Other cases will be caught prior to this at syn::parse")
-        };
-        let func_args = &sig.inputs;
-        let block = &method.block;
-
-        self.ap_impls.init = Some(quote! {
-            #error
-
-            type Arg = #arg_type;
-
-            #(#attrs)*
-            fn #ident(#func_args) -> Self::State #block
-        });
-    }
-
-    fn extract_terminate(&mut self, method: &syn::ImplItemMethod) {
-        if self.type_impls.terminate.is_some() {
-            let err = syn::Error::new(
-                method.sig.ident.span(),
-                "Only one method can be marked with `#[terminate]` macro",
-            )
-            .into_compile_error();
-            self.errors.push(err);
-        }
-        let sig = &method.sig;
-        // ensure function name is terminate
-        let ident = &sig.ident;
-        let error = if sig.ident != "terminate" {
-            Some(
-                syn::Error::new(
-                    sig.ident.span(),
-                    "Invalid method signature. Method name must be `terminate`.",
-                )
-                .into_compile_error(),
-            )
-        } else {
-            None
-        };
-
-        let self_arg = &sig.inputs;
-        let block = &method.block;
-
-        self.type_impls.terminate = Some(quote! {
-            #error
-
-            fn #ident(#self_arg) #block
-        });
-        self.ap_impls.terminate = Some(quote! {
-            fn terminate(state: Self::State) {
-                state.terminate()
-            }
-        });
-    }
-
-    fn extract_handle_link_trapped(&mut self, method: &syn::ImplItemMethod) {
-        if self.type_impls.handle_link_trapped.is_some() {
-            let err = syn::Error::new(
-                method.sig.ident.span(),
-                "Only one method can be marked with `#[handle_link_trapped]` macro",
-            )
-            .into_compile_error();
-            self.errors.push(err);
-        }
-        let sig = &method.sig;
-        // ensure function name is handle_link_trapped
-        let ident = &sig.ident;
-        let error = if sig.ident != "handle_link_trapped" {
-            Some(
-                syn::Error::new(
-                    sig.ident.span(),
-                    "Invalid method signature. Method name must be `handle_link_trapped`.",
-                )
-                .into_compile_error(),
-            )
-        } else {
-            None
-        };
-
-        let self_arg = &sig.inputs;
-        let block = &method.block;
-
-        self.type_impls.handle_link_trapped = Some(quote! {
-            #error
-
-            fn #ident(#self_arg) #block
-        });
-        self.ap_impls.handle_link_trapped = Some(quote! {
-            fn handle_link_trapped(state: &mut Self::State, tag: Tag) {
-                state.handle_link_trapped(tag);
-            }
-        });
-    }
-
-    fn extract_handle_message(&mut self, method: &syn::ImplItemMethod) {
-        let mut method = method.clone();
-        method
-            .attrs
-            .retain(|attr| !attr.path.is_ident("handle_message"));
-        let attrs = &method.attrs;
-
-        let HandlerComponents {
-            fn_ident,
-            message_type,
-            handler_args,
-            handler_arg_names,
-            handler_arg_types,
-            message_destructuring,
-        } = self.parse_handler_input(&method);
-
-        let ident = &self.impl_type.clone().unwrap();
-
-        let (impl_generics, ty_generics, where_clause) = &self.impl_type_generics.split_for_impl();
-
-        let (msg_phantom, arg_phantom) = if self.impl_type_generics.params.is_empty() {
-            (None, None)
-        } else {
-            (
-                Some(quote! { std::marker::PhantomData #ty_generics, }),
-                Some(quote! { std::marker::PhantomData, }),
-            )
-        };
-
-        self.message_structs.push(quote! {
-            #[derive(serde::Serialize, serde::Deserialize)]
-            struct #message_type #ty_generics (
-                #msg_phantom
-                #(#handler_arg_types),*
-            );
-        });
-        self.handler_impls.push(quote! {
-            #(#attrs)*
-            impl #impl_generics lunatic::process::MessageHandler<#message_type #ty_generics>
-            for #ident #where_clause {
-                fn handle(state: &mut Self::State, message: #message_type #ty_generics) {
-                    state.#fn_ident(#(#message_destructuring),*)
+                quote! {
+                    fn terminate(state: Self::State) {
+                        state.#ident()
+                    }
                 }
-            }
-        });
-        self.handler_wrappers.trait_defs.push(quote! {
-            #(#attrs)*
-            fn #fn_ident(&self, #(#handler_args),*);
-        });
-        self.handler_wrappers.trait_impls.push(quote! {
-            #(#attrs)*
-            fn #fn_ident(&self, #(#handler_args),*) {
-                use lunatic::process::Message;
-                let msg = #message_type(#arg_phantom #(#handler_arg_names),*);
-                self.send(msg);
-            }
-        });
-        self.msg_builder_methods.push(quote! {
-            #(#attrs)*
-            fn #fn_ident(&self, #(#handler_args),*) {
-                use lunatic::process::Message;
-                let msg = #message_type(#arg_phantom #(#handler_arg_names),*);
-                self.process_ref.send_after(msg, self.duration);
-            }
-        });
-        self.type_impls.skipped_items.push(quote! { #method });
-    }
-
-    fn extract_handle_request(&mut self, method: &syn::ImplItemMethod) {
-        let mut method = method.clone();
-        method
-            .attrs
-            .retain(|attr| !attr.path.is_ident("handle_request"));
-        let attrs = &method.attrs;
-
-        let HandlerComponents {
-            fn_ident,
-            message_type,
-            handler_args,
-            handler_arg_names,
-            handler_arg_types,
-            message_destructuring,
-        } = self.parse_handler_input(&method);
-
-        let ident = &self.impl_type.clone().unwrap();
-
-        let (impl_generics, ty_generics, where_clause) = &self.impl_type_generics.split_for_impl();
-
-        let (msg_phantom, arg_phantom) = if self.impl_type_generics.params.is_empty() {
-            (None, None)
-        } else {
-            (
-                Some(quote! { std::marker::PhantomData #ty_generics, }),
-                Some(quote! { std::marker::PhantomData, }),
-            )
-        };
-
-        let response_type = match &method.sig.output {
-            syn::ReturnType::Type(_, ty) => quote! { #ty },
-            syn::ReturnType::Default => {
-                quote! { () }
-            }
-        };
-
-        self.message_structs.push(quote! {
-            #[derive(serde::Serialize, serde::Deserialize)]
-            struct #message_type #ty_generics (
-                #msg_phantom
-                #(#handler_arg_types),*
-            );
-        });
-        self.handler_impls.push(quote! {
-            #(#attrs)*
-            impl #impl_generics lunatic::process::RequestHandler<#message_type #ty_generics>
-            for #ident #where_clause {
-                type Response = #response_type;
-                fn handle(state: &mut Self::State, message: #message_type #ty_generics) -> #response_type {
-                    state.#fn_ident(#(#message_destructuring),*)
-                }
-            }
-        });
-        self.handler_wrappers.trait_defs.push(quote! {
-            #(#attrs)*
-            fn #fn_ident(&self, #(#handler_args),*) -> #response_type;
-        });
-        self.handler_wrappers.trait_impls.push(quote! {
-            #(#attrs)*
-            fn #fn_ident(&self, #(#handler_args),*) -> #response_type {
-                use lunatic::process::Request;
-                let req = #message_type(#arg_phantom #(#handler_arg_names),*);
-                self.request(req)
-            }
-        });
-        self.req_builder_methods.push(quote! {
-            #(#attrs)*
-            fn #fn_ident(&self, #(#handler_args),*) -> Result<#response_type, lunatic::ReceiveError> {
-                use lunatic::process::Request;
-                let req = #message_type(#arg_phantom #(#handler_arg_names),*);
-                self.process_ref.request_timeout(req, self.duration)
-            }
-        });
-        self.type_impls.skipped_items.push(quote! { #method });
-    }
-
-    fn parse_handler_input(&self, item: &syn::ImplItemMethod) -> HandlerComponents {
-        let sig = &item.sig;
-        let fn_ident = &sig.ident;
-        let message_type = proc_macro2::Ident::new(
-            &format!("__MsgWrap{}", fn_ident.to_string().to_case(Case::Pascal)),
-            Span::call_site(),
-        );
-
-        // wrap message types
-        let mut handler_args: Vec<TokenStream> = vec![];
-        let mut handler_arg_names: Vec<syn::Ident> = vec![];
-        let mut handler_arg_types: Vec<syn::Type> = vec![];
-
-        for (i, arg) in sig.inputs.iter().skip(1).enumerate() {
-            // take apart the argument identifiers and their types
-            let (ident, ty) = match arg {
-                syn::FnArg::Typed(arg) => {
-                    let ident = match *arg.pat.clone() {
-                        // replace patterns with generated identifiers to prevent syntax error
-                        syn::Pat::Ident(pat_ident) => pat_ident.ident,
-                        _ => proc_macro2::Ident::new(&format!("__arg_{}", i), Span::call_site()),
-                    };
-                    (ident, *arg.ty.clone())
-                }
-                _ => unreachable!("Second arguement, if exist, will always be typed"),
-            };
-            // rebuild args list
-            handler_args.push(quote! { #ident: #ty });
-            handler_arg_names.push(ident);
-            handler_arg_types.push(ty);
-        }
-        let has_generics = !self.impl_type_generics.params.is_empty();
-        let message_destructuring = (0..handler_arg_types.len())
-            .map(|i| {
-                // offset for PhantomData
-                let offset = if has_generics { 1 } else { 0 };
-                let i = proc_macro2::Literal::usize_unsuffixed(i + offset);
-                quote! { message.#i }
             })
-            .collect();
+            .unwrap_or_default()
+    }
 
-        HandlerComponents {
-            fn_ident: fn_ident.clone(),
-            message_type,
-            handler_args,
-            handler_arg_names,
-            handler_arg_types,
-            message_destructuring,
+    /// Expands the `handle_link_trapped` method in the abstract process
+    /// implementation.
+    fn expand_handle_link_trapped_impl(&self) -> TokenStream {
+        self.handle_link_trapped
+            .as_ref()
+            .map(|handle_link_trapped| {
+                let ident = &handle_link_trapped.sig.ident;
+
+                quote! {
+                    fn handle_link_trapped(state: &mut Self::State, tag: lunatic::Tag) {
+                        state.#ident(tag);
+                    }
+                }
+            })
+            .unwrap_or_default()
+    }
+
+    /// Expands the `MessageHandler` implementations for the message hander
+    /// wrapper types.
+    fn expand_message_handler_impls(&self) -> TokenStream {
+        let message_handler_impls = self.message_handlers.iter().map(|message_handler| {
+            let syn::ImplItemMethod {
+                attrs,
+                sig,
+                ..
+            } = message_handler;
+            let self_ty = &self.item_impl.self_ty;
+            let message_type = Self::handler_wrapper_ident(&sig.ident);
+            let fn_ident = &sig.ident;
+            let (impl_generics, ty_generics, where_clause) = self.item_impl.generics.split_for_impl();
+            let args = filter_typed_args(sig.inputs.iter());
+            let offset = self.item_impl.generics.params.is_empty().then_some(0).unwrap_or(1);
+            let message_fields = (offset..args.count() + offset).map(|i| {
+                let i = proc_macro2::Literal::usize_unsuffixed(i);
+                quote! { message. #i }
+            });
+
+            quote! {
+                #( #attrs )*
+                impl #impl_generics lunatic::process::MessageHandler<#message_type #ty_generics> for #self_ty #where_clause {
+                    fn handle(state: &mut Self::State, message: #message_type #ty_generics) {
+                        state.#fn_ident(#( #message_fields ),*)
+                    }
+                }
+            }
+        });
+
+        quote! {
+            #( #message_handler_impls )*
         }
+    }
+
+    /// Expands the `RequestHandler` implementations for the request hander
+    /// wrapper types.
+    fn expand_request_handler_impls(&self) -> TokenStream {
+        let request_handler_impls = self.request_handlers.iter().map(|request_handler| {
+            let syn::ImplItemMethod {
+                attrs,
+                sig,
+                ..
+            } = request_handler;
+            let self_ty = &self.item_impl.self_ty;
+            let request_type = Self::handler_wrapper_ident(&sig.ident);
+            let response_type = match &sig.output {
+                syn::ReturnType::Type(_, ty) => quote! { #ty },
+                syn::ReturnType::Default => {
+                    quote! { () }
+                }
+            };
+            let fn_ident = &sig.ident;
+            let (impl_generics, ty_generics, where_clause) = self.item_impl.generics.split_for_impl();
+            let args = filter_typed_args(sig.inputs.iter());
+            let offset = self.item_impl.generics.params.is_empty().then_some(0).unwrap_or(1);
+            let request_fields = (offset..args.count() + offset).map(|i| {
+                let i = proc_macro2::Literal::usize_unsuffixed(i);
+                quote! { request. #i }
+            });
+
+            quote! {
+                #( #attrs )*
+                impl #impl_generics lunatic::process::RequestHandler<#request_type #ty_generics> for #self_ty #where_clause {
+                    type Response = #response_type;
+
+                    fn handle(state: &mut Self::State, request: #request_type #ty_generics) -> Self::Response {
+                        state.#fn_ident(#( #request_fields ),*)
+                    }
+                }
+            }
+        });
+
+        quote! {
+            #( #request_handler_impls )*
+        }
+    }
+
+    /// Expands the new `Handler` trait.
+    fn expand_handler_trait(&self) -> TokenStream {
+        let Self {
+            args,
+            item_impl,
+            message_handlers,
+            request_handlers,
+            message_builder_ident,
+            request_builder_ident,
+            handler_trait_ident,
+            ..
+        } = self;
+        let vis = &args.visibility;
+        let (_impl_generics, ty_generics, where_clause) = item_impl.generics.split_for_impl();
+
+        let message_handler_defs = message_handlers
+            .iter()
+            .map(HandlerStructure::from_handler)
+            .map(|handler| {
+                let HandlerStructure {
+                    attrs,
+                    ident,
+                    generics,
+                    args,
+                    ..
+                } = handler;
+
+                quote! {
+                    #( #attrs )*
+                    fn #ident #generics (&self #(, #args )*);
+                }
+            });
+
+        let request_handler_defs = request_handlers
+            .iter()
+            .map(HandlerStructure::from_handler)
+            .map(|handler| {
+                let HandlerStructure {
+                    attrs,
+                    ident,
+                    generics,
+                    args,
+                    return_ty,
+                    ..
+                } = handler;
+
+                quote! {
+                    #( #attrs )*
+                    fn #ident #generics (&self #(, #args )*) -> #return_ty;
+                }
+            });
+
+        quote! {
+            #vis trait #handler_trait_ident #ty_generics #where_clause {
+                #( #message_handler_defs )*
+                #( #request_handler_defs )*
+
+                /// Set a delay before sending the message.
+                fn after(&self, duration: std::time::Duration) -> #message_builder_ident #ty_generics;
+
+                /// Set a timeout for the request.
+                fn with_timeout(&self, duration: std::time::Duration) -> #request_builder_ident #ty_generics;
+            }
+        }
+    }
+
+    /// Expands the implementation of the `Handler` trait.
+    fn expand_impl_handler_trait(&self) -> TokenStream {
+        let Self {
+            item_impl,
+            message_handlers,
+            request_handlers,
+            message_builder_ident,
+            request_builder_ident,
+            handler_trait_ident,
+            ..
+        } = self;
+        let self_ty = &item_impl.self_ty;
+        let (impl_generics, ty_generics, where_clause) = item_impl.generics.split_for_impl();
+        let arg_phantom = if !item_impl.generics.params.is_empty() {
+            Some(quote! { std::marker::PhantomData, })
+        } else {
+            None
+        };
+
+        let message_handler_impls = message_handlers
+            .iter()
+            .map(HandlerStructure::from_handler)
+            .map(|handler| {
+                let HandlerStructure {
+                    attrs,
+                    ident,
+                    generics,
+                    args,
+                    message_type,
+                    handler_args,
+                    ..
+                } = handler;
+
+                quote! {
+                    #( #attrs )*
+                    fn #ident #generics (&self #(, #args )*) {
+                        use lunatic::process::Message;
+                        let msg = #message_type(#arg_phantom #( #handler_args ),*);
+                        self.send(msg);
+                    }
+                }
+            });
+
+        let request_handler_impls = request_handlers
+            .iter()
+            .map(HandlerStructure::from_handler)
+            .map(|handler| {
+                let HandlerStructure {
+                    attrs,
+                    ident,
+                    generics,
+                    args,
+                    return_ty,
+                    message_type,
+                    handler_args,
+                } = handler;
+
+                quote! {
+                    #( #attrs )*
+                    fn #ident #generics (&self #(, #args )*) -> #return_ty {
+                        use lunatic::process::Request;
+                        let req = #message_type(#arg_phantom #( #handler_args ),*);
+                        self.request(req)
+                    }
+                }
+            });
+
+        quote! {
+            impl #impl_generics #handler_trait_ident #ty_generics for lunatic::process::ProcessRef<#self_ty> #where_clause {
+                #( #message_handler_impls )*
+                #( #request_handler_impls )*
+
+                fn after(&self, duration: std::time::Duration) -> #message_builder_ident #ty_generics {
+                    #message_builder_ident::new(duration, self.clone())
+                }
+
+                fn with_timeout(&self, duration: std::time::Duration) -> #request_builder_ident #ty_generics {
+                    #request_builder_ident::new(duration, self.clone())
+                }
+            }
+        }
+    }
+
+    /// Expands the builder types.
+    fn expand_builders(&self) -> TokenStream {
+        let Self {
+            args,
+            item_impl,
+            message_handlers,
+            request_handlers,
+            message_builder_ident,
+            request_builder_ident,
+            ..
+        } = self;
+        let vis = &args.visibility;
+        let (impl_generics, ty_generics, where_clause) = item_impl.generics.split_for_impl();
+        let self_ty = &item_impl.self_ty;
+        let arg_phantom = if !item_impl.generics.params.is_empty() {
+            Some(quote! { std::marker::PhantomData, })
+        } else {
+            None
+        };
+
+        let message_builder_methods = message_handlers
+            .iter()
+            .map(HandlerStructure::from_handler)
+            .map(|handler| {
+                let HandlerStructure {
+                    attrs,
+                    ident,
+                    args,
+                    message_type,
+                    handler_args,
+                    ..
+                } = handler;
+
+                quote! {
+                    #( #attrs )*
+                    #vis fn #ident(&self #(, #args )*) {
+                        use lunatic::process::Message;
+                        let msg = #message_type(#arg_phantom #( #handler_args ),*);
+                        self.process_ref.send_after(msg, self.duration);
+                    }
+                }
+            });
+
+        let request_builder_methods = request_handlers
+            .iter()
+            .map(HandlerStructure::from_handler)
+            .map(|handler| {
+                let HandlerStructure {
+                    attrs,
+                    ident,
+                    args,
+                    return_ty,
+                    message_type,
+                    handler_args,
+                    ..
+                } = handler;
+
+                quote! {
+                    #( #attrs )*
+                    #vis fn #ident(&self #(, #args )*) -> lunatic::MailboxResult<#return_ty> {
+                        use lunatic::process::Request;
+                        let req = #message_type(#arg_phantom #( #handler_args ),*);
+                        self.process_ref.request_timeout(req, self.duration)
+                    }
+                }
+            });
+
+        quote! {
+            #vis struct #message_builder_ident #ty_generics #where_clause {
+                duration: std::time::Duration,
+                process_ref: lunatic::process::ProcessRef<#self_ty>,
+            }
+
+            impl #impl_generics #message_builder_ident #ty_generics #where_clause {
+                fn new(duration: std::time::Duration, process_ref: ProcessRef<#self_ty>) -> Self {
+                    Self {
+                        duration,
+                        process_ref,
+                    }
+                }
+
+                #( #message_builder_methods )*
+            }
+
+            #vis struct #request_builder_ident #ty_generics #where_clause {
+                duration: std::time::Duration,
+                process_ref: lunatic::process::ProcessRef<#self_ty>,
+            }
+
+            impl #impl_generics #request_builder_ident #ty_generics #where_clause {
+                fn new(duration: std::time::Duration, process_ref: ProcessRef<#self_ty>) -> Self {
+                    Self {
+                        duration,
+                        process_ref,
+                    }
+                }
+
+                #( #request_builder_methods )*
+            }
+        }
+    }
+
+    /// Creates an ident for a handler ident.
+    fn handler_wrapper_ident(ident: impl ToString) -> syn::Ident {
+        format_ident!("__MsgWrap{}", ident.to_string().to_case(Case::Pascal))
     }
 }
 
@@ -590,43 +724,87 @@ impl Parse for Args {
     }
 }
 
-struct HandlerComponents {
-    fn_ident: syn::Ident,
+enum ItemAttr {
+    Init,
+    Terminate,
+    HandleLinkTrapped,
+    HandleMessage,
+    HandleRequest,
+}
+
+impl ItemAttr {
+    fn from_str(s: &str) -> Option<ItemAttr> {
+        match s {
+            "init" => Some(ItemAttr::Init),
+            "terminate" => Some(ItemAttr::Terminate),
+            "handle_link_trapped" => Some(ItemAttr::HandleLinkTrapped),
+            "handle_message" => Some(ItemAttr::HandleMessage),
+            "handle_request" => Some(ItemAttr::HandleRequest),
+            _ => None,
+        }
+    }
+}
+
+fn filter_typed_args<'a>(
+    args: impl Iterator<Item = &'a syn::FnArg>,
+) -> impl Iterator<Item = &'a syn::PatType> {
+    args.filter_map(|input| match input {
+        syn::FnArg::Receiver(_) => None,
+        syn::FnArg::Typed(pat_type) => Some(pat_type),
+    })
+}
+
+fn filter_typed_arg_names<'a>(
+    args: impl Iterator<Item = &'a syn::FnArg> + 'a,
+) -> impl Iterator<Item = (syn::Ident, &'a syn::Type)> + 'a {
+    filter_typed_args(args)
+        .enumerate()
+        .map(|(i, arg)| match &*arg.pat {
+            syn::Pat::Ident(pat_ident) => (pat_ident.ident.clone(), &*arg.ty),
+            _ => (format_ident!("__arg_{i}"), &*arg.ty),
+        })
+}
+
+struct HandlerStructure<'a> {
+    attrs: &'a Vec<syn::Attribute>,
+    ident: &'a syn::Ident,
+    generics: &'a syn::Generics,
+    args: Vec<TokenStream>,
+    return_ty: syn::Type,
     message_type: syn::Ident,
-    handler_args: Vec<TokenStream>,
-    handler_arg_names: Vec<syn::Ident>,
-    handler_arg_types: Vec<syn::Type>,
-    message_destructuring: Vec<TokenStream>,
+    handler_args: Vec<syn::Ident>,
 }
 
-#[derive(Default)]
-struct TypeImpls {
-    terminate: Option<TokenStream>,
-    handle_link_trapped: Option<TokenStream>,
-    skipped_items: Vec<TokenStream>,
-}
+impl<'a> HandlerStructure<'a> {
+    fn from_handler(handler: &'a syn::ImplItemMethod) -> Self {
+        let syn::ImplItemMethod { attrs, sig, .. } = handler;
+        let syn::Signature {
+            ident,
+            inputs,
+            generics,
+            output,
+            ..
+        } = &sig;
+        let args = filter_typed_arg_names(inputs.iter())
+            .map(|(ident, ty)| quote! { #ident: #ty })
+            .collect();
+        let return_ty = match output {
+            syn::ReturnType::Default => syn::parse_quote! { () },
+            syn::ReturnType::Type(_, ty) => *ty.clone(),
+        };
+        let message_type = AbstractProcess::handler_wrapper_ident(ident);
+        let handler_args = filter_typed_arg_names(inputs.iter())
+            .map(|(ident, _ty)| ident)
+            .collect();
 
-#[derive(Default)]
-struct AbstractProcessImpls {
-    init: Option<TokenStream>,
-    terminate: Option<TokenStream>,
-    handle_link_trapped: Option<TokenStream>,
-}
-
-#[derive(Default)]
-struct HandlerWrappers {
-    trait_visibility: Option<syn::Visibility>,
-    trait_name: Option<syn::Ident>,
-    trait_defs: Vec<TokenStream>,
-    trait_impls: Vec<TokenStream>,
-}
-
-trait HasTag {
-    fn has_tag(&self, tag: &str) -> bool;
-}
-
-impl HasTag for syn::ImplItemMethod {
-    fn has_tag(&self, tag: &str) -> bool {
-        self.attrs.iter().any(|attr| attr.path.is_ident(tag))
+        HandlerStructure {
+            attrs,
+            ident,
+            generics,
+            args,
+            return_ty,
+            message_type,
+            handler_args,
+        }
     }
 }

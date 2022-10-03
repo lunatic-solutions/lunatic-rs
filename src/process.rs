@@ -1,26 +1,27 @@
-use std::{marker::PhantomData, time::Duration};
+use std::marker::PhantomData;
+use std::time::Duration;
 
-use crate::{
-    distributed::node_id,
-    host::{self, api},
-    mailbox::{LinkMailbox, LinkTrapped},
-    serializer::{Bincode, Serializer},
-    supervisor::{Supervisable, Supervisor, SupervisorConfig},
-    timer::TimerRef,
-    Mailbox, Process, ProcessConfig, ReceiveError, Tag,
-};
+use crate::distributed::node_id;
+use crate::host::{self, api};
+use crate::mailbox::Catching;
+use crate::serializer::{Bincode, Serializer};
+use crate::supervisor::{Supervisable, Supervisor, SupervisorConfig};
+use crate::timer::TimerRef;
+use crate::{Mailbox, MailboxResult, Process, ProcessConfig, Tag};
 
 pub fn process_id() -> u64 {
     unsafe { api::process::process_id() }
 }
 
-/// Types that implement the `AbstractProcess` trait can be started as processes.
+/// Types that implement the `AbstractProcess` trait can be started as
+/// processes.
 ///
-/// Their state can be mutated through messages and requests. To define a handler for them,
-/// use [`MessageHandler`] or [`RequestHandler`].
+/// Their state can be mutated through messages and requests. To define a
+/// handler for them, use [`MessageHandler`] or [`RequestHandler`].
 ///
-/// [`Message`] provides a `send` method to send messages to the process, without waiting on a
-/// response. [`Request`] provides a `request` method that will block until a response is received.
+/// [`Message`] provides a `send` method to send messages to the process,
+/// without waiting on a response. [`Request`] provides a `request` method that
+/// will block until a response is received.
 ///
 /// # Example
 ///
@@ -67,7 +68,8 @@ pub fn process_id() -> u64 {
 pub trait AbstractProcess {
     /// The argument received by the `init` function.
     ///
-    /// This argument is sent from the parent to the child and needs to be serializable.
+    /// This argument is sent from the parent to the child and needs to be
+    /// serializable.
     type Arg: serde::Serialize + serde::de::DeserializeOwned;
 
     /// The state of the process.
@@ -77,19 +79,21 @@ pub trait AbstractProcess {
 
     /// Entry function of the new process.
     ///
-    /// This function is executed inside the new process. It will receive the arguments passed
-    /// to the [`start`](StartProcess::start) or [`start_link`](StartProcess::start_link) function
-    /// by the parent. And will return the starting state of the newly spawned process.
+    /// This function is executed inside the new process. It will receive the
+    /// arguments passed to the [`start`](StartProcess::start) or
+    /// [`start_link`](StartProcess::start_link) function by the parent. And
+    /// will return the starting state of the newly spawned process.
     ///
-    /// The parent will block on the call of `start` or `start_link` until this function finishes.
-    /// This allows startups to be synchronized.
+    /// The parent will block on the call of `start` or `start_link` until this
+    /// function finishes. This allows startups to be synchronized.
     fn init(this: ProcessRef<Self>, arg: Self::Arg) -> Self::State;
 
     /// Called when a `shutdown` command is received.
     fn terminate(_state: Self::State) {}
 
-    /// This function will be called if the process is set to catch link deaths with
-    /// `host::api::process::die_when_link_dies(1)` and a linked process traps.
+    /// This function will be called if the process is set to catch link deaths
+    /// with `host::api::process::die_when_link_dies(1)` and a linked
+    /// process traps.
     fn handle_link_trapped(_state: &mut Self::State, _tag: Tag) {}
 }
 
@@ -133,25 +137,30 @@ where
     T: AbstractProcess,
 {
     /// Start a process.
+    #[track_caller]
     fn start(arg: T::Arg, name: Option<&str>) -> ProcessRef<T> {
         start::<T>(arg, name, None, None, None).unwrap()
     }
 
     /// Start a process with configuration.
+    #[track_caller]
     fn start_config(arg: T::Arg, name: Option<&str>, config: &ProcessConfig) -> ProcessRef<T> {
         start::<T>(arg, name, None, Some(config), None).unwrap()
     }
 
     /// Start a linked process.
+    #[track_caller]
     fn start_link(arg: T::Arg, name: Option<&str>) -> ProcessRef<T> {
         start::<T>(arg, name, Some(Tag::new()), None, None).unwrap()
     }
 
     /// Start a linked process with configuration.
+    #[track_caller]
     fn start_link_config(arg: T::Arg, name: Option<&str>, config: &ProcessConfig) -> ProcessRef<T> {
         start::<T>(arg, name, Some(Tag::new()), Some(config), None).unwrap()
     }
 
+    #[track_caller]
     fn start_node(
         arg: <T as AbstractProcess>::Arg,
         name: Option<&str>,
@@ -160,6 +169,7 @@ where
         start::<T>(arg, name, None, None, Some(node)).unwrap()
     }
 
+    #[track_caller]
     fn start_node_config(
         arg: <T as AbstractProcess>::Arg,
         name: Option<&str>,
@@ -184,25 +194,23 @@ where
     }
 }
 
-/// An internal interface that catches failures inside the `init` function of a `AbstractProcess`.
+/// An internal interface that catches failures inside the `init` function of a
+/// `AbstractProcess`.
 ///
-/// Only "link" functions are provided, because a panic can't be propagated to the parent without a
-/// link. Currently, only the `Supervisor` uses this functionality to check for failures inside of
-/// children.
+/// Only "link" functions are provided, because a panic can't be propagated to
+/// the parent without a link. Currently, only the `Supervisor` uses this
+/// functionality to check for failures inside of children.
 pub(crate) trait StartFailableProcess<T>
 where
     T: AbstractProcess,
 {
-    fn start_link_or_fail(
-        arg: T::Arg,
-        name: Option<&str>,
-    ) -> Result<(ProcessRef<T>, Tag), LinkTrapped>;
+    fn start_link_or_fail(arg: T::Arg, name: Option<&str>) -> MailboxResult<(ProcessRef<T>, Tag)>;
 
     fn start_link_config_or_fail(
         arg: T::Arg,
         name: Option<&str>,
         config: &ProcessConfig,
-    ) -> Result<(ProcessRef<T>, Tag), LinkTrapped>;
+    ) -> MailboxResult<(ProcessRef<T>, Tag)>;
 }
 
 impl<T> StartFailableProcess<T> for T
@@ -210,13 +218,14 @@ where
     T: AbstractProcess,
 {
     /// Start a linked process.
-    fn start_link_or_fail(
-        arg: T::Arg,
-        name: Option<&str>,
-    ) -> Result<(ProcessRef<T>, Tag), LinkTrapped> {
+    fn start_link_or_fail(arg: T::Arg, name: Option<&str>) -> MailboxResult<(ProcessRef<T>, Tag)> {
         let tag = Tag::new();
-        let proc = start::<T>(arg, name, Some(tag), None, None)?;
-        Ok((proc, tag))
+        match start::<T>(arg, name, Some(tag), None, None) {
+            MailboxResult::Message(proc) => MailboxResult::Message((proc, tag)),
+            MailboxResult::DeserializationFailed(err) => MailboxResult::DeserializationFailed(err),
+            MailboxResult::TimedOut => MailboxResult::TimedOut,
+            MailboxResult::LinkDied(tag) => MailboxResult::LinkDied(tag),
+        }
     }
 
     /// Start a linked process with configuration.
@@ -224,10 +233,14 @@ where
         arg: T::Arg,
         name: Option<&str>,
         config: &ProcessConfig,
-    ) -> Result<(ProcessRef<T>, Tag), LinkTrapped> {
+    ) -> MailboxResult<(ProcessRef<T>, Tag)> {
         let tag = Tag::new();
-        let proc = start::<T>(arg, name, Some(tag), Some(config), None)?;
-        Ok((proc, tag))
+        match start::<T>(arg, name, Some(tag), Some(config), None) {
+            MailboxResult::Message(proc) => MailboxResult::Message((proc, tag)),
+            MailboxResult::DeserializationFailed(err) => MailboxResult::DeserializationFailed(err),
+            MailboxResult::TimedOut => MailboxResult::TimedOut,
+            MailboxResult::LinkDied(tag) => MailboxResult::LinkDied(tag),
+        }
     }
 }
 
@@ -237,7 +250,7 @@ fn start<T>(
     link: Option<Tag>,
     config: Option<&ProcessConfig>,
     node: Option<u64>,
-) -> Result<ProcessRef<T>, LinkTrapped>
+) -> MailboxResult<ProcessRef<T>>
 where
     T: AbstractProcess,
 {
@@ -285,13 +298,16 @@ where
     };
 
     // Don't return until `init()` finishes
-    let mailbox: LinkMailbox<(), Bincode> = unsafe { LinkMailbox::new() };
-    mailbox.tag_receive(Some(&[tag]))?;
-
-    Ok(ProcessRef {
-        process,
-        phantom: PhantomData,
-    })
+    let mailbox: Mailbox<(), Bincode, Catching> = unsafe { Mailbox::new() };
+    match mailbox.tag_receive(&[tag]) {
+        MailboxResult::Message(_) => MailboxResult::Message(ProcessRef {
+            process,
+            phantom: PhantomData,
+        }),
+        MailboxResult::DeserializationFailed(err) => MailboxResult::DeserializationFailed(err),
+        MailboxResult::TimedOut => MailboxResult::TimedOut,
+        MailboxResult::LinkDied(tag) => MailboxResult::LinkDied(tag),
+    }
 }
 
 /// Entry point of the process.
@@ -326,12 +342,12 @@ fn starter<T>(
     // Let parent know that the `init()` call finished
     parent.tag_send(tag, ());
 
-    let mailbox: LinkMailbox<Sendable, Bincode> = unsafe { LinkMailbox::new() };
+    let mailbox: Mailbox<Sendable, Bincode, Catching> = unsafe { Mailbox::new() };
     // Run process forever and respond to requests.
     loop {
-        let dispatcher = mailbox.tag_receive(None);
+        let dispatcher = mailbox.tag_receive(&[]);
         match dispatcher {
-            Ok(dispatcher) => match dispatcher {
+            MailboxResult::Message(dispatcher) => match dispatcher {
                 Sendable::Message(handler) => {
                     let handler: fn(state: &mut T::State) = unsafe { std::mem::transmute(handler) };
                     handler(&mut state);
@@ -350,7 +366,8 @@ fn starter<T>(
                     break;
                 }
             },
-            Err(link_trapped) => T::handle_link_trapped(&mut state, link_trapped.tag()),
+            MailboxResult::LinkDied(tag) => T::handle_link_trapped(&mut state, tag),
+            _ => unreachable!(),
         }
     }
 
@@ -375,11 +392,10 @@ where
     type Result;
 
     fn request(&self, request: M) -> Self::Result {
-        self.request_timeout_(request, None)
-            .expect("no timeout specified")
+        self.request_timeout_(request, None).unwrap()
     }
 
-    fn request_timeout(&self, request: M, timeout: Duration) -> Result<Self::Result, ReceiveError> {
+    fn request_timeout(&self, request: M, timeout: Duration) -> MailboxResult<Self::Result> {
         self.request_timeout_(request, Some(timeout))
     }
 
@@ -388,14 +404,16 @@ where
         &self,
         request: M,
         timeout: Option<Duration>,
-    ) -> Result<Self::Result, ReceiveError>;
+    ) -> MailboxResult<Self::Result>;
 }
 
 /// A reference to a running process.
 ///
-/// `ProcessRef<T>` is different from a `Process` in the ability to handle messages of different
-/// types, as long as the traits `MessageHandler<M>` or `RequestHandler<R>` are implemented for T.
+/// `ProcessRef<T>` is different from a `Process` in the ability to handle
+/// messages of different types, as long as the traits `MessageHandler<M>` or
+/// `RequestHandler<R>` are implemented for T.
 #[derive(serde::Serialize, serde::Deserialize)]
+#[serde(bound = "")]
 pub struct ProcessRef<T>
 where
     T: ?Sized,
@@ -434,8 +452,9 @@ impl<T> ProcessRef<T> {
 
     /// Link process to the one currently running.
     pub fn link(&self) {
-        // Don't use tags because a process' [`Mailbox`] can't differentiate between regular
-        // messages and signals. Both processes should almost always die when a link is broken.
+        // Don't use tags because a process' [`Mailbox`] can't differentiate between
+        // regular messages and signals. Both processes should almost always die
+        // when a link is broken.
         unsafe { host::api::process::link(0, self.process.id()) };
     }
 
@@ -465,15 +484,15 @@ where
 {
     /// Shut down process
     pub fn shutdown(&self) {
-        self.shutdown_timeout_(None).expect("no timeout specified")
+        self.shutdown_timeout_(None).unwrap()
     }
 
     /// Shut down process with a timeout
-    pub fn shutdown_timeout(&self, timeout: Duration) -> Result<(), ReceiveError> {
+    pub fn shutdown_timeout(&self, timeout: Duration) -> MailboxResult<()> {
         self.shutdown_timeout_(Some(timeout))
     }
 
-    fn shutdown_timeout_(&self, timeout: Option<Duration>) -> Result<(), ReceiveError> {
+    fn shutdown_timeout_(&self, timeout: Option<Duration>) -> MailboxResult<()> {
         // Create new message buffer.
         let tag = Tag::new();
         unsafe { host::api::message::create_data(tag.id(), 0) };
@@ -490,9 +509,9 @@ where
         let result =
             host::send_receive_skip_search(self.process.node_id(), self.process.id(), timeout_ms);
         if result == 9027 {
-            return Err(ReceiveError::Timeout);
+            return MailboxResult::TimedOut;
         }
-        Ok(())
+        MailboxResult::Message(())
     }
 }
 
@@ -502,8 +521,8 @@ where
 #[derive(serde::Serialize, serde::Deserialize)]
 enum Sendable {
     Message(i32),
-    // The process type can't be carried over as a generic and is set here to `()`, but overwritten
-    // at the time of returning with the correct type.
+    // The process type can't be carried over as a generic and is set here to `()`, but
+    // overwritten at the time of returning with the correct type.
     Request(i32, Process<()>),
     Shutdown(Process<()>),
 }
@@ -575,7 +594,7 @@ where
         &self,
         request: M,
         timeout: Option<Duration>,
-    ) -> Result<Self::Result, ReceiveError> {
+    ) -> MailboxResult<Self::Result> {
         fn unpacker<TU, MU, SU>(
             this: &mut TU::State,
             sender: Process<<TU as RequestHandler<MU, SU>>::Response, SU>,
@@ -611,14 +630,14 @@ where
         let result =
             host::send_receive_skip_search(self.process.node_id(), self.process.id(), timeout_ms);
         if result == 9027 {
-            return Err(ReceiveError::Timeout);
+            return MailboxResult::TimedOut;
         };
-        Ok(S::decode().unwrap())
+        MailboxResult::Message(S::decode().unwrap())
     }
 }
 
-/// Subscriber represents a process that can be notified by a tagged message with the same tag that
-/// is used when registering the subscription.
+/// Subscriber represents a process that can be notified by a tagged message
+/// with the same tag that is used when registering the subscription.
 #[derive(Debug)]
 pub(crate) struct Subscriber {
     process: Process<(), Bincode>,
@@ -643,9 +662,10 @@ where
     /// Block until the Supervisor shuts down.
     ///
     /// A tagged message will be sent to the supervisor process as a request
-    /// and the subscription will be registered. When the supervisor process shuts down, the
-    /// subscribers will be each notified by a response message and therefore be unblocked
-    /// after having received the awaited message.
+    /// and the subscription will be registered. When the supervisor process
+    /// shuts down, the subscribers will be each notified by a response
+    /// message and therefore be unblocked after having received the awaited
+    /// message.
     pub fn block_until_shutdown(&self) {
         fn unpacker<TU>(this: &mut TU::State, sender: Process<(), Bincode>)
         where
@@ -725,8 +745,9 @@ impl<T> std::fmt::Debug for ProcessRef<T> {
 
 #[cfg(test)]
 mod tests {
-    use lunatic_test::test;
     use std::time::Duration;
+
+    use lunatic_test::test;
 
     use super::*;
     use crate::sleep;

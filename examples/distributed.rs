@@ -1,9 +1,8 @@
 use std::time::Duration;
 
-use lunatic::ProcessConfig;
-use lunatic::{host::node_id, sleep, Mailbox, Process};
-
+use lunatic::host::node_id;
 use lunatic::process::{AbstractProcess, ProcessRef, Request, RequestHandler, StartProcess};
+use lunatic::{sleep, Mailbox, Process, ProcessConfig};
 
 struct Adder;
 impl AbstractProcess for Adder {
@@ -28,7 +27,7 @@ fn main() {
 
     println!("Nodes {nodes:?}");
 
-    let mut config = ProcessConfig::new();
+    let mut config = ProcessConfig::new().unwrap();
     config.set_max_memory(1_500_000);
     config.set_max_fuel(1);
 

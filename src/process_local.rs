@@ -18,12 +18,13 @@ use std::fmt;
 /// # Initialization and Destruction
 ///
 /// Initialization is dynamically performed on the first call to [`with`]
-/// within a process, and values are **never** destructed. This means if a process
-/// finishes normally or panics, the [`Drop`] implementation will never ba called.
+/// within a process, and values are **never** destructed. This means if a
+/// process finishes normally or panics, the [`Drop`] implementation will never
+/// be called.
 ///
-/// A `ProcessLocal`'s initializer cannot recursively depend on itself, and using
-/// a `ProcessLocal` in this way will cause the initializer to infinitely recurse
-/// on the first call to `with`.
+/// A `ProcessLocal`'s initializer cannot recursively depend on itself, and
+/// using a `ProcessLocal` in this way will cause the initializer to infinitely
+/// recourse on the first call to `with`.
 ///
 /// [`with`]: ProcessLocal::with
 ///
@@ -57,12 +58,12 @@ use std::fmt;
 /// });
 /// ```
 pub struct ProcessLocal<T: 'static> {
-    // `*mut` is used instaed of `&mut` because mutable references are not
+    // `*mut` is used instead of `&mut` because mutable references are not
     // allowed in const functions: https://github.com/rust-lang/rust/issues/57349
     //
     // Although this is an extra layer of indirection, it should in theory be
     // trivially devirtualizable by LLVM because the value of `inner` never
-    // changes and the constant should be readonly within a crate. This mainly
+    // changes and the constant should be read-only within a crate. This mainly
     // only runs into problems when PLS statics are exported across crates.
     inner: unsafe fn(Option<*mut Option<T>>) -> Option<&'static T>,
 }
@@ -77,8 +78,8 @@ impl<T: 'static> fmt::Debug for ProcessLocal<T> {
 ///
 /// # Syntax
 ///
-/// The macro wraps any number of static declarations and makes them process local.
-/// Publicity and attributes for each static are allowed. Example:
+/// The macro wraps any number of static declarations and makes them process
+/// local. Publicity and attributes for each static are allowed. Example:
 ///
 /// ```
 /// use std::cell::RefCell;
@@ -483,8 +484,7 @@ impl<T: 'static> ProcessLocal<RefCell<T>> {
 #[allow(unused_unsafe)]
 mod lazy {
     use std::cell::UnsafeCell;
-    use std::hint;
-    use std::mem;
+    use std::{hint, mem};
 
     pub struct LazyKeyInner<T> {
         inner: UnsafeCell<Option<T>>,
@@ -564,8 +564,9 @@ mod lazy {
 #[doc(hidden)]
 #[allow(unused_unsafe)]
 pub mod statik {
-    use super::lazy::LazyKeyInner;
     use std::fmt;
+
+    use super::lazy::LazyKeyInner;
 
     pub struct Key<T> {
         inner: LazyKeyInner<T>,

@@ -1,25 +1,24 @@
-use std::{
-    cell::UnsafeCell,
-    io::{Error, ErrorKind, Result},
-    net::SocketAddr,
-};
+use std::cell::UnsafeCell;
+use std::io::{Error, ErrorKind, Result};
+use std::net::SocketAddr;
 
 use super::SocketAddrIterator;
-use crate::{error::LunaticError, host};
+use crate::error::LunaticError;
+use crate::host;
 
 /// A UDP socket.
 ///
-/// After creating a `UdpSocket` by [`bind`]ing it to a socket address, data can be
-/// [sent to] and [received from] any other socket address.
+/// After creating a `UdpSocket` by [`bind`]ing it to a socket address, data can
+/// be [sent to] and [received from] any other socket address.
 ///
-/// Although UDP is a connectionless protocol, this implementation provides an interface
-/// to set an address where data should be sent and received from. After setting a remote
-/// address with [`connect`], data can be sent to and received from that address with
-/// [`send`] and [`recv`].
+/// Although UDP is a connectionless protocol, this implementation provides an
+/// interface to set an address where data should be sent and received from.
+/// After setting a remote address with [`connect`], data can be sent to and
+/// received from that address with [`send`] and [`recv`].
 ///
-/// As stated in the User Datagram Protocol's specification in [IETF RFC 768], UDP is
-/// an unordered, unreliable protocol; refer to [`TcpListener`] and [`TcpStream`] for TCP
-/// primitives.
+/// As stated in the User Datagram Protocol's specification in [IETF RFC 768],
+/// UDP is an unordered, unreliable protocol; refer to [`TcpListener`] and
+/// [`TcpStream`] for TCP primitives.
 ///
 /// [`bind`]: UdpSocket::bind
 /// [`connect`]: UdpSocket::connect
@@ -74,12 +73,13 @@ impl Drop for UdpSocket {
 impl UdpSocket {
     /// Creates a new [`UdpSocket`] bound to the given address.
     ///
-    /// Binding with a port number of 0 will request that the operating system assigns an available
-    /// port to this listener.
+    /// Binding with a port number of 0 will request that the operating system
+    /// assigns an available port to this listener.
     ///
-    /// If `addr` yields multiple addresses, binding will be attempted with each of the addresses
-    /// until one succeeds and returns the listener. If none of the addresses succeed in creating a
-    /// listener, the error from the last attempt is returned.
+    /// If `addr` yields multiple addresses, binding will be attempted with each
+    /// of the addresses until one succeeds and returns the listener. If
+    /// none of the addresses succeed in creating a listener, the error from
+    /// the last attempt is returned.
     pub fn bind<A>(addr: A) -> Result<Self>
     where
         A: super::ToSocketAddrs,
@@ -130,7 +130,8 @@ impl UdpSocket {
     }
     /// Returns the local address that this UdpSocket is bound to.
     ///
-    /// This can be useful, for example, to identify when binding to port 0 which port was assigned by the OS.
+    /// This can be useful, for example, to identify when binding to port 0
+    /// which port was assigned by the OS.
     pub fn local_addr(&self) -> Result<SocketAddr> {
         let mut dns_iter_or_error_id = 0;
         let result = unsafe {
@@ -225,8 +226,8 @@ impl UdpSocket {
     }
     /// Sends data on the socket to the remote address to which it is connected.
     ///
-    /// [`UdpSocket::connect`] will connect this socket to a remote address. This
-    /// method will fail if the socket is not connected.
+    /// [`UdpSocket::connect`] will connect this socket to a remote address.
+    /// This method will fail if the socket is not connected.
     ///
     /// # Examples
     ///
@@ -257,8 +258,8 @@ impl UdpSocket {
     /// Sends data on the socket to the given address. On success, returns the
     /// number of bytes written.
     ///
-    /// Address type can be any implementor of [`super::ToSocketAddrs`] trait. See its
-    /// documentation for concrete examples.
+    /// Address type can be any implementor of [`super::ToSocketAddrs`] trait.
+    /// See its documentation for concrete examples.
     ///
     /// It is possible for `addr` to yield multiple addresses, but `send_to`
     /// will only send data to the first address yielded by `addr`.
@@ -325,15 +326,16 @@ impl UdpSocket {
         let lunatic_error = LunaticError::from(nsend_or_error_id);
         Err(Error::new(ErrorKind::Other, lunatic_error))
     }
-    /// Receives a single datagram message on the socket from the remote address to
-    /// which it is connected. On success, returns the number of bytes read.
+    /// Receives a single datagram message on the socket from the remote address
+    /// to which it is connected. On success, returns the number of bytes
+    /// read.
     ///
-    /// The function must be called with valid byte array `buf` of sufficient size to
-    /// hold the message bytes. If a message is too long to fit in the supplied buffer,
-    /// excess bytes may be discarded.
+    /// The function must be called with valid byte array `buf` of sufficient
+    /// size to hold the message bytes. If a message is too long to fit in
+    /// the supplied buffer, excess bytes may be discarded.
     ///
-    /// [`UdpSocket::connect`] will connect this socket to a remote address. This
-    /// method will fail if the socket is not connected.
+    /// [`UdpSocket::connect`] will connect this socket to a remote address.
+    /// This method will fail if the socket is not connected.
     ///
     /// # Examples
     ///
@@ -365,12 +367,12 @@ impl UdpSocket {
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
-    /// Receives a single datagram message on the socket. On success, returns the number
-    /// of bytes read and the origin.
+    /// Receives a single datagram message on the socket. On success, returns
+    /// the number of bytes read and the origin.
     ///
-    /// The function must be called with valid byte array `buf` of sufficient size to
-    /// hold the message bytes. If a message is too long to fit in the supplied buffer,
-    /// excess bytes may be discarded.
+    /// The function must be called with valid byte array `buf` of sufficient
+    /// size to hold the message bytes. If a message is too long to fit in
+    /// the supplied buffer, excess bytes may be discarded.
     ///
     /// # Examples
     ///
@@ -466,7 +468,8 @@ impl UdpSocket {
     }
     /// Gets the value of the `SO_BROADCAST` option for this socket.
     ///
-    /// For more information about this option, see [`UdpSocket::set_broadcast`].
+    /// For more information about this option, see
+    /// [`UdpSocket::set_broadcast`].
     ///
     /// # Examples
     ///

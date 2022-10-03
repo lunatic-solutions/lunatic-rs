@@ -1,4 +1,5 @@
-use lunatic::{protocol::End, spawn, spawn_link, test, ProcessConfig};
+use lunatic::protocol::End;
+use lunatic::{spawn, spawn_link, test, ProcessConfig};
 
 #[test]
 fn spawn() {
@@ -18,7 +19,7 @@ fn spawn() {
 
 #[test]
 fn spawn_config() {
-    let config = ProcessConfig::new();
+    let config = ProcessConfig::new().unwrap();
     // Background process
     spawn!(&config, || {});
     // Mailbox process
@@ -58,7 +59,7 @@ fn spawn_link() {
 
 #[test]
 fn spawn_link_config() {
-    let config = ProcessConfig::new();
+    let config = ProcessConfig::new().unwrap();
     // Background process
     spawn_link!(&config, || {});
     // Mailbox process
@@ -107,7 +108,7 @@ fn task() {
 
 #[test]
 fn task_config() {
-    let config = ProcessConfig::new();
+    let config = ProcessConfig::new().unwrap();
 
     let task = spawn_link!(@task &config, || 33);
     assert_eq!(task.result(), 33);

@@ -1,13 +1,10 @@
 use std::time::Duration;
 
-use lunatic::{
-    process::{
-        AbstractProcess, Message, MessageHandler, ProcessRef, Request, RequestHandler, StartProcess,
-    },
-    sleep, spawn,
-    supervisor::{Supervisor, SupervisorConfig, SupervisorStrategy},
-    test,
+use lunatic::process::{
+    AbstractProcess, Message, MessageHandler, ProcessRef, Request, RequestHandler, StartProcess,
 };
+use lunatic::supervisor::{Supervisor, SupervisorConfig, SupervisorStrategy};
+use lunatic::{sleep, spawn, test};
 
 const LOGGER_NAME: &'static str = "logger/assert_order";
 
@@ -130,7 +127,8 @@ fn one_failing_process() {
 
     // Panicking is going to restart the count
     child.send(Panic);
-    // We need to re-acquire reference to child and give a bit of time to the supervisor to re-spawn it.
+    // We need to re-acquire reference to child and give a bit of time to the
+    // supervisor to re-spawn it.
     sleep(Duration::from_millis(10));
     let child = sup.children();
 
@@ -175,7 +173,8 @@ fn two_failing_process_one_for_one() {
     // Panicking b is going to restart the count
     b.send(Panic);
 
-    // We need to re-acquire reference to child and give a bit of time to the supervisor to re-spawn it.
+    // We need to re-acquire reference to child and give a bit of time to the
+    // supervisor to re-spawn it.
     sleep(Duration::from_millis(10));
 
     let log = logger.request(TakeLogs);
@@ -208,7 +207,8 @@ fn two_failing_process_one_for_one() {
     // Panicking a is going to restart the count
     a.send(Panic);
 
-    // We need to re-acquire reference to child and give a bit of time to the supervisor to re-spawn it.
+    // We need to re-acquire reference to child and give a bit of time to the
+    // supervisor to re-spawn it.
     sleep(Duration::from_millis(10));
 
     let log = logger.request(TakeLogs);
@@ -269,7 +269,8 @@ fn two_failing_process_one_for_all() {
 
     // Panicking b is going to restart the count
     b.send(Panic);
-    // We need to re-acquire reference to child and give a bit of time to the supervisor to re-spawn it.
+    // We need to re-acquire reference to child and give a bit of time to the
+    // supervisor to re-spawn it.
     sleep(Duration::from_millis(10));
 
     let log = logger.request(TakeLogs);
@@ -304,7 +305,8 @@ fn two_failing_process_one_for_all() {
 
     // Panicking a is going to restart the count
     a.send(Panic);
-    // We need to re-acquire reference to child and give a bit of time to the supervisor to re-spawn it.
+    // We need to re-acquire reference to child and give a bit of time to the
+    // supervisor to re-spawn it.
     sleep(Duration::from_millis(10));
 
     let log = logger.request(TakeLogs);
@@ -363,7 +365,8 @@ fn four_failing_process_rest_for_all() {
 
     // Panicking b is going to restart the count
     b.send(Panic);
-    // We need to re-acquire reference to child and give a bit of time to the supervisor to re-spawn it.
+    // We need to re-acquire reference to child and give a bit of time to the
+    // supervisor to re-spawn it.
     sleep(Duration::from_millis(10));
 
     let logs = logger.request(TakeLogs);
@@ -390,7 +393,8 @@ fn four_failing_process_rest_for_all() {
     // Panicking the first child should restart all children
     let (a, _, _, _) = sup.children();
     a.send(Panic);
-    // We need to re-acquire reference to child and give a bit of time to the supervisor to re-spawn it.
+    // We need to re-acquire reference to child and give a bit of time to the
+    // supervisor to re-spawn it.
     sleep(Duration::from_millis(10));
 
     let logs = logger.request(TakeLogs);
@@ -414,7 +418,8 @@ fn four_failing_process_rest_for_all() {
     // Panicking the last child
     let (_, _, _, d) = sup.children();
     d.send(Panic);
-    // We need to re-acquire reference to child and give a bit of time to the supervisor to re-spawn it.
+    // We need to re-acquire reference to child and give a bit of time to the
+    // supervisor to re-spawn it.
     sleep(Duration::from_millis(10));
 
     let logs = logger.request(TakeLogs);
@@ -538,7 +543,8 @@ fn lookup_children() {
 
     // Kill third and inc count to 4
     third.send(Panic);
-    // We need to re-acquire reference to child and give a bit of time to the supervisor to re-spawn it.
+    // We need to re-acquire reference to child and give a bit of time to the
+    // supervisor to re-spawn it.
     sleep(Duration::from_millis(10));
     let third = ProcessRef::<A>::lookup("third").unwrap();
     third.send(Inc);

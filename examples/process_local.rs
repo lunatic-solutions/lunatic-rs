@@ -1,5 +1,6 @@
-use lunatic::{process_local, spawn_link, Mailbox};
 use std::cell::RefCell;
+
+use lunatic::{process_local, spawn_link, Mailbox};
 
 #[lunatic::main]
 fn main(_: Mailbox<()>) {

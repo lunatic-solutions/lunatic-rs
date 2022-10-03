@@ -25,7 +25,7 @@ pub use udp::UdpSocket;
 ///
 /// Currently, this trait is only used as an argument to lunatic functions
 /// that need to reference a target socket address. To perform a `SocketAddr`
-/// conversion directly, use [`resolve`]. By default it is implemented
+/// conversion directly, use [`resolve`]. By default, it is implemented
 /// for the following types:
 ///
 ///  * [`SocketAddr`]: [`to_socket_addrs`] is the identity function.
@@ -35,16 +35,17 @@ pub use udp::UdpSocket;
 ///    [`to_socket_addrs`] constructs a [`SocketAddr`] trivially.
 ///
 ///  * [`&str`]: the string should be either a string representation of a
-///    [`SocketAddr`] as expected by its [`FromStr`] implementation or a string like
-///    `<host_name>:<port>` pair where `<port>` is a [`u16`] value.
+///    [`SocketAddr`] as expected by its [`FromStr`] implementation or a string
+///    like `<host_name>:<port>` pair where `<port>` is a [`u16`] value.
 ///
-/// This trait allows constructing network objects like [`TcpStream`] easily with
-/// values of various types for the bind/connection address. It is needed because
-/// sometimes one type is more appropriate than the other: for simple uses a string
-/// like `"localhost:12345"` is much nicer than manual construction of the corresponding
-/// [`SocketAddr`], but sometimes [`SocketAddr`] value is *the* main source of the
-/// address, and converting it to  some other type (e.g., a string) just for it to
-/// be converted back to [`SocketAddr`] in constructor methods is pointless.
+/// This trait allows constructing network objects like [`TcpStream`] easily
+/// with values of various types for the bind/connection address. It is needed
+/// because sometimes one type is more appropriate than the other: for simple
+/// uses a string like `"localhost:12345"` is much nicer than manual
+/// construction of the corresponding [`SocketAddr`], but sometimes
+/// [`SocketAddr`] value is *the* main source of the address, and converting it
+/// to  some other type (e.g., a string) just for it to be converted back to
+/// [`SocketAddr`] in constructor methods is pointless.
 ///
 /// Addresses returned by the operating system that are not IP addresses are
 /// silently ignored.
