@@ -352,7 +352,7 @@ impl AbstractProcess {
             let fn_ident = &sig.ident;
             let (impl_generics, ty_generics, where_clause) = self.item_impl.generics.split_for_impl();
             let args = filter_typed_args(sig.inputs.iter());
-            let offset = self.item_impl.generics.params.is_empty().then_some(0).unwrap_or(1);
+            let offset = if self.item_impl.generics.params.is_empty() { 0 } else { 1 };
             let message_fields = (offset..args.count() + offset).map(|i| {
                 let i = proc_macro2::Literal::usize_unsuffixed(i);
                 quote! { message. #i }
