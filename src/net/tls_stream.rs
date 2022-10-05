@@ -1,7 +1,6 @@
 use std::{
     cell::UnsafeCell,
     io::{Error, ErrorKind, IoSlice, Read, Result, Write},
-    net::SocketAddr,
     time::Duration,
 };
 
@@ -59,12 +58,10 @@ impl Serialize for TlsStream {
     where
         S: Serializer,
     {
-        // println!("SERIALIZING STREAM");
         // Mark process as consumed
         unsafe { *self.consumed.get() = true };
         // TODO: Timeout info is not serialized
         let index = unsafe { host::api::message::push_tls_stream(self.id) };
-        // println!("DONE SERIALIZING {}", index);
         // panic!("Need stacktrace");
         serializer.serialize_u64(index)
     }
@@ -110,82 +107,66 @@ impl TlsStream {
     /// If `addr` yields multiple addresses, connecting will be attempted with each of the
     /// addresses until connecting to one succeeds. If none of the addresses result in a successful
     /// connection, the error from the last connect attempt is returned.
-    pub fn connect(addr: &str) -> Result<Self>
+    pub fn connect(addr: &str, port: u32) -> Result<Self>
 // where
     //     A: super::ToSocketAddrs,
     {
-        TlsStream::connect_timeout_(addr, None)
+        TlsStream::connect_timeout_(addr, None, port, vec![])
+    }
+
+    /// Creates a TLS connection to the specified address with custom certificates.
+    ///
+    /// This method will create a new TLS socket and attempt to connect it to the provided `addr`,
+    ///
+    /// If `addr` yields multiple addresses, connecting will be attempted with each of the
+    /// addresses until connecting to one succeeds. If none of the addresses result in a successful
+    /// connection, the error from the last connect attempt is returned.
+    pub fn connect_with_certs(addr: &str, port: u32, certs: Vec<Vec<u8>>) -> Result<Self>
+// where
+    //     A: super::ToSocketAddrs,
+    {
+        TlsStream::connect_timeout_(addr, None, port, certs)
     }
 
     /// Same as [`TlsStream::connect`], but only waits for the duration of timeout to connect.
-    pub fn connect_timeout(addr: &str, timeout: Duration) -> Result<Self>
-// where
-    //     A: super::ToSocketAddrs,
-    {
-        TlsStream::connect_timeout_(addr, Some(timeout))
+    pub fn connect_timeout(
+        addr: &str,
+        timeout: Duration,
+        port: u32,
+        certs: Vec<Vec<u8>>,
+    ) -> Result<Self> {
+        TlsStream::connect_timeout_(addr, Some(timeout), port, certs)
     }
 
-    fn connect_timeout_(addr: &str, timeout: Option<Duration>) -> Result<Self>
-// where
-    //     A: super::ToSocketAddrs,
-    {
+    fn connect_timeout_(
+        addr: &str,
+        timeout: Option<Duration>,
+        port: u32,
+        certs: Vec<Vec<u8>>,
+    ) -> Result<Self> {
         let mut id = 0;
-        // for addr in addr.to_socket_addrs()? {
-        println!("[rust-lib] CONNECTING TO ADDR {:?}", addr);
         let timeout_ms = match timeout {
             Some(timeout) => timeout.as_millis() as u64,
             None => u64::MAX,
         };
+        let certs_mapped: Vec<(u32, *mut u32)> = certs
+            .iter()
+            .map(|cert| (cert.len() as u32, cert.as_ptr() as *mut u32))
+            .collect();
         let result = unsafe {
             host::api::networking::tls_connect(
                 addr.as_ptr(),
                 addr.len() as u32,
-                443,
-                0,
-                0,
+                port,
                 timeout_ms,
                 &mut id as *mut u64,
+                certs_mapped.as_ptr() as *mut u8,
+                certs_mapped.len() as u32,
             )
         };
-        println!("[rust-lib] RESULT OF CONNECTING {:?}", result);
-        // let result = match addr {
-        //     SocketAddr::V4(v4_addr) => {
-        //         let ip = v4_addr.ip().octets();
-        //         let port = v4_addr.port() as u32;
-        //         unsafe {
-        //             host::api::networking::tls_connect(
-        //                 4,
-        //                 ip.as_ptr(),
-        //                 port,
-        //                 0,
-        //                 0,
-        //                 timeout_ms,
-        //                 &mut id as *mut u64,
-        //             )
-        //         }
-        //     }
-        //     SocketAddr::V6(v6_addr) => {
-        //         let ip = v6_addr.ip().octets();
-        //         let port = v6_addr.port() as u32;
-        //         let flow_info = v6_addr.flowinfo();
-        //         let scope_id = v6_addr.scope_id();
-        //         unsafe {
-        //             host::api::networking::tls_connect(
-        //                 6,
-        //                 ip.as_ptr(),
-        //                 port,
-        //                 flow_info,
-        //                 scope_id,
-        //                 timeout_ms,
-        //                 &mut id as *mut u64,
-        //             )
-        //         }
-        //     }
-        // };
         if result == 0 {
             return Ok(TlsStream::from(id));
         }
-        // }
         let lunatic_error = LunaticError::from(id);
         Err(Error::new(ErrorKind::Other, lunatic_error))
     }

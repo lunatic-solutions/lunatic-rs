@@ -179,10 +179,10 @@ pub mod networking {
             addr_str: *const u8,
             addr_str_len: u32,
             port: u32,
-            flow_info: u32,
-            scope_id: u32,
             timeout: u64,
             id: *mut u64,
+            certs_ptr: *const u8,
+            certs_len: u32,
         ) -> u32;
         pub fn drop_tls_stream(tcp_stream_id: u64);
         pub fn clone_tls_stream(tcp_stream_id: u64) -> u64;

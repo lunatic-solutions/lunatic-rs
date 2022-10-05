@@ -1,8 +1,5 @@
 use lunatic::{net, Mailbox, Process};
-use std::{
-    io::{BufRead, BufReader, Read, Write},
-    path::PathBuf,
-};
+use std::io::{BufReader, Read, Write};
 
 fn main() {
     let key = std::fs::read("./examples/CA/localhost.key")
@@ -11,22 +8,17 @@ fn main() {
     let listener = net::TlsListener::bind("127.0.0.1:3000", cert, key).unwrap();
     println!("Listening on addr: {}", listener.local_addr().unwrap());
     while let Ok((tls_stream, _peer)) = listener.accept() {
-        // let clone = tls_stream.clone();
-        println!("GOING TO SPAWN");
         Process::spawn(tls_stream, handle);
     }
 }
 
 fn handle(mut tls_stream: net::TlsStream, _: Mailbox<()>) {
-    println!("Start handler");
+    println!("Spawn new handler");
     let mut buf_reader = BufReader::new(tls_stream.clone());
     let mut buffer = [0u8; 100];
-    let read = buf_reader.read(&mut buffer).expect("Should have read line");
-    println!(
-        "GOT REQUEST len {} | {:?}",
-        read,
-        String::from_utf8(buffer.to_vec())
-    );
+    // TODO: do something with read data
+    let _read = buf_reader.read(&mut buffer).expect("Should have read line");
+
     tls_stream
         .write(
             [
@@ -41,5 +33,4 @@ fn handle(mut tls_stream: net::TlsStream, _: Mailbox<()>) {
             .as_bytes(),
         )
         .unwrap();
-    println!("WROTE TO STREAM");
 }

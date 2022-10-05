@@ -307,7 +307,6 @@ where
         // Create new message.
         unsafe { host::api::message::create_data(Tag::none().id(), 0) };
         // During serialization resources will add themselves to the message.
-        println!("START ENCODE BEFORE SEND");
         S::encode(&message).unwrap();
         // Send it!
         host::send(self.node_id, self.id);

@@ -43,8 +43,6 @@ use crate::{error::LunaticError, host, net::TlsStream};
 #[derive(Debug)]
 pub struct TlsListener {
     id: u64,
-    certs: Vec<u8>,
-    keys: Vec<u8>,
 }
 
 impl Drop for TlsListener {
@@ -109,7 +107,7 @@ impl TlsListener {
                 }
             };
             if result == 0 {
-                return Ok(Self { id, certs, keys });
+                return Ok(Self { id });
             }
         }
         let lunatic_error = LunaticError::from(id);
@@ -135,7 +133,6 @@ impl TlsListener {
             let tls_stream = TlsStream::from(tls_stream_or_error_id);
             let mut dns_iter = SocketAddrIterator::from(dns_iter_id);
             let peer = dns_iter.next().expect("must contain one element");
-            println!("RETURNING FROM ACCEPT {:?} | {:?}", tls_stream, peer);
             Ok((tls_stream, peer))
         } else {
             let lunatic_error = LunaticError::from(tls_stream_or_error_id);
