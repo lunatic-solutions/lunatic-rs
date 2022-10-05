@@ -176,8 +176,8 @@ pub mod networking {
         ) -> u32;
         pub fn tls_accept(listener_id: u64, id: *mut u64, peer_dns_iter: *mut u64) -> u32;
         pub fn tls_connect(
-            addr_type: u32,
-            addr: *const u8,
+            addr_str: *const u8,
+            addr_str_len: u32,
             port: u32,
             flow_info: u32,
             scope_id: u32,

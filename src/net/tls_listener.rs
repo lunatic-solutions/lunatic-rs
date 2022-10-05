@@ -4,10 +4,10 @@ use std::net::SocketAddr;
 use super::SocketAddrIterator;
 use crate::{error::LunaticError, host, net::TlsStream};
 
-/// A TCP server, listening for connections.
+/// A TLS server, listening for connections.
 ///
 /// After creating a [`TlsListener`] by [`bind`][`TlsListener::bind()`]ing it to an address, it
-/// listens for incoming TCP connections. These can be accepted by calling
+/// listens for incoming encrypted TCP (TLS) connections. These can be accepted by calling
 /// [`accept()`][`TlsListener::accept()`].
 ///
 /// The Transmission Control Protocol is specified in [IETF RFC 793].
@@ -120,7 +120,7 @@ impl TlsListener {
     ///
     /// This will block and typically needs its own dedicated child process loop.
     ///
-    /// Returns a TCP stream and the peer address.
+    /// Returns a TLS stream and the peer address.
     pub fn accept(&self) -> Result<(TlsStream, SocketAddr)> {
         let mut tls_stream_or_error_id = 0;
         let mut dns_iter_id = 0;
