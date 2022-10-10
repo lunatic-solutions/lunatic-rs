@@ -182,12 +182,6 @@ impl<P, S, Z> Protocol<Rec<P>, S, Z>
     /// Repeat Protocol
     #[must_use]
     pub fn repeat(self) -> Protocol<P, S, Protocol<Rec<P>, S, Z>> {
-        /*let copy = Self {
-            id: self.id,
-            node_id: self.node_id,
-            tag: self.tag,
-            phantom: self.phantom,
-        };*/
         self.cast()
     }
 }
