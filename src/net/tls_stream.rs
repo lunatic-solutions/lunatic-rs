@@ -107,10 +107,7 @@ impl TlsStream {
     /// If `addr` yields multiple addresses, connecting will be attempted with each of the
     /// addresses until connecting to one succeeds. If none of the addresses result in a successful
     /// connection, the error from the last connect attempt is returned.
-    pub fn connect(addr: &str, port: u32) -> Result<Self>
-// where
-    //     A: super::ToSocketAddrs,
-    {
+    pub fn connect(addr: &str, port: u32) -> Result<Self> {
         TlsStream::connect_timeout_(addr, None, port, vec![])
     }
 
@@ -121,10 +118,7 @@ impl TlsStream {
     /// If `addr` yields multiple addresses, connecting will be attempted with each of the
     /// addresses until connecting to one succeeds. If none of the addresses result in a successful
     /// connection, the error from the last connect attempt is returned.
-    pub fn connect_with_certs(addr: &str, port: u32, certs: Vec<Vec<u8>>) -> Result<Self>
-// where
-    //     A: super::ToSocketAddrs,
-    {
+    pub fn connect_with_certs(addr: &str, port: u32, certs: Vec<Vec<u8>>) -> Result<Self> {
         TlsStream::connect_timeout_(addr, None, port, certs)
     }
 
@@ -230,59 +224,6 @@ impl TlsStream {
             }
         }
     }
-
-    /// Sets peek timeout for TlsStream
-    ///
-    /// This method will change the timeout for everyone holding a reference to the TlsStream
-    /// Once a timeout is set, it can be removed by sending `None`
-    pub fn set_peek_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
-        unsafe {
-            let code = host::api::networking::set_peek_timeout(
-                self.id,
-                duration.map_or(u64::MAX, |d| d.as_millis() as u64),
-            );
-            if code != 0 {
-                let lunatic_error = LunaticError::from(code as u64);
-                return Err(Error::new(ErrorKind::Other, lunatic_error));
-            }
-        }
-        Ok(())
-    }
-
-    /// Gets peek timeout for TlsStream
-    ///
-    /// This method retrieves the peek timeout duration of the TlsStream if any
-    pub fn peek_timeout(&self) -> Option<Duration> {
-        unsafe {
-            match host::api::networking::get_peek_timeout(self.id) {
-                u64::MAX => None,
-                millis => Some(Duration::from_millis(millis)),
-            }
-        }
-    }
-
-    //     /// Peek value on the tls stream without removing it from internal buffer.
-    //     /// Any subsequent calls to `peek` will read from the internal buffer
-    //     /// and only calls to `read` will consume the buffered data
-    //     pub fn peek(&mut self, buf: &mut [u8]) -> Result<usize> {
-    //         let mut nread_or_error_id: u64 = 0;
-    //         let result = unsafe {
-    //             host::api::networking::tls_peek(
-    //                 self.id,
-    //                 buf.as_mut_ptr(),
-    //                 buf.len(),
-    //                 &mut nread_or_error_id as *mut u64,
-    //             )
-    //         };
-    //         if result == 0 {
-    //             Ok(nread_or_error_id as usize)
-    //         } else if result == TIMEOUT {
-    //             Err(Error::new(ErrorKind::TimedOut, "TlsStream peek timed out"))
-    //         } else {
-    //             let lunatic_error = LunaticError::from(nread_or_error_id);
-    //             Err(Error::new(ErrorKind::Other, lunatic_error))
-    //         }
-    //     }
 }
 
 impl Write for TlsStream {

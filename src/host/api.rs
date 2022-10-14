@@ -196,15 +196,12 @@ pub mod networking {
             tcp_stream_id: u64,
             buffer: *mut u8,
             buffer_len: usize,
-
             opaque: *mut u64,
         ) -> u32;
         pub fn set_tls_read_timeout(tcp_stream_id: u64, duration: u64) -> u32;
         pub fn get_tls_read_timeout(tcp_stream_id: u64) -> u64;
         pub fn set_tls_write_timeout(tcp_stream_id: u64, duration: u64) -> u32;
         pub fn get_tls_write_timeout(tcp_stream_id: u64) -> u64;
-        pub fn set_tls_peek_timeout(tcp_stream_id: u64, duration: u64) -> u32;
-        pub fn get_tls_peek_timeout(tcp_stream_id: u64) -> u64;
     }
 }
 
