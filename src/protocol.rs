@@ -177,8 +177,7 @@ where
     }
 }
 
-impl<P, S, Z> Protocol<Rec<P>, S, Z>
-{
+impl<P, S, Z> Protocol<Rec<P>, S, Z> {
     /// Repeat Protocol
     #[must_use]
     pub fn repeat(self) -> Protocol<P, S, Protocol<Rec<P>, S, Z>> {
@@ -186,12 +185,10 @@ impl<P, S, Z> Protocol<Rec<P>, S, Z>
     }
 }
 
-impl<P2, S, Z> Protocol<Pop, S, Protocol<P2, S, Z>>
-{
+impl<P2, S, Z> Protocol<Pop, S, Protocol<P2, S, Z>> {
     /// Pop
     #[must_use]
-    pub fn pop(self) -> Protocol<P2, S, Z>
-    {
+    pub fn pop(self) -> Protocol<P2, S, Z> {
         self.cast()
     }
 }
@@ -337,7 +334,7 @@ fn type_helper_wrapper<C, P, S, Z>(function: i32)
 where
     S: Serializer<ProtocolCapture<C>>,
     P: HasDual + 'static,
-    Z: 'static
+    Z: 'static,
 {
     let p_capture = unsafe { Mailbox::<ProtocolCapture<C>, S>::new() }.receive();
     let capture = p_capture.capture;

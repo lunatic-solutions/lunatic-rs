@@ -1,4 +1,4 @@
-use lunatic::{Process};
+use lunatic::Process;
 use lunatic_test::test;
 
 #[test]
@@ -16,11 +16,11 @@ fn drop_unfinished() {
 #[cfg(feature = "msgpack_serializer")]
 #[test]
 fn msg_pack_serializer() {
-    use lunatic::protocol::Recv;
-    use lunatic::serializer::MessagePack;
     use lunatic::protocol::End;
     use lunatic::protocol::Protocol;
+    use lunatic::protocol::Recv;
     use lunatic::protocol::Send;
+    use lunatic::serializer::MessagePack;
 
     let protocol = Process::spawn_link(
         (),
@@ -38,33 +38,29 @@ fn msg_pack_serializer() {
 
 #[test]
 fn recursive_protocols() {
+    use lunatic::protocol::Branch;
+    use lunatic::protocol::End;
+    use lunatic::protocol::Offer;
+    use lunatic::protocol::Pop;
+    use lunatic::protocol::Protocol;
     use lunatic::protocol::Rec;
     use lunatic::protocol::Recv;
     use lunatic::protocol::Send;
-    use lunatic::protocol::End;
-    use lunatic::protocol::Pop;
-    use lunatic::protocol::Offer;
-    use lunatic::protocol::Branch;
-    use lunatic::protocol::Protocol;
     type P = Offer<Recv<u64, Send<u64, Pop>>, End>;
 
-    let protocol = Process::spawn_link(
-        (),
-        |(), proto: Protocol<Rec<P>>| {
-
-            let mut loop_protocol = proto.repeat();
-            loop {
-                match loop_protocol.offer() {
-                    Branch::Left(protocol) => {
-                        let (protocol, v) = protocol.receive();
-                        let protocol = protocol.send(v * 2);
-                        loop_protocol = protocol.pop().repeat();
-                    },
-                    Branch::Right(_end) => break,
-                };
-            }
+    let protocol = Process::spawn_link((), |(), proto: Protocol<Rec<P>>| {
+        let mut loop_protocol = proto.repeat();
+        loop {
+            match loop_protocol.offer() {
+                Branch::Left(protocol) => {
+                    let (protocol, v) = protocol.receive();
+                    let protocol = protocol.send(v * 2);
+                    loop_protocol = protocol.pop().repeat();
+                }
+                Branch::Right(_end) => break,
+            };
         }
-    );
+    });
 
     let mut loop_protocol = protocol.repeat();
     for i in 0..5 {
