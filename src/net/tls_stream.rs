@@ -171,14 +171,10 @@ impl TlsStream {
     /// Once a timeout is set, it can be removed by sending `None`
     pub fn set_write_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
         unsafe {
-            let code = host::api::networking::set_write_timeout(
+            host::api::networking::set_tls_write_timeout(
                 self.id,
                 duration.map_or(u64::MAX, |d| d.as_millis() as u64),
             );
-            if code != 0 {
-                let lunatic_error = LunaticError::from(code as u64);
-                return Err(Error::new(ErrorKind::Other, lunatic_error));
-            }
         }
         Ok(())
     }
@@ -188,7 +184,7 @@ impl TlsStream {
     /// This method retrieves the write timeout duration of the TlsStream if any
     pub fn write_timeout(&self) -> Option<Duration> {
         unsafe {
-            match host::api::networking::get_write_timeout(self.id) {
+            match host::api::networking::get_tls_write_timeout(self.id) {
                 u64::MAX => None,
                 millis => Some(Duration::from_millis(millis)),
             }
@@ -201,14 +197,10 @@ impl TlsStream {
     /// Once a timeout is set, it can be removed by sending `None`
     pub fn set_read_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
         unsafe {
-            let code = host::api::networking::set_read_timeout(
+            host::api::networking::set_tls_read_timeout(
                 self.id,
                 duration.map_or(u64::MAX, |d| d.as_millis() as u64),
             );
-            if code != 0 {
-                let lunatic_error = LunaticError::from(code as u64);
-                return Err(Error::new(ErrorKind::Other, lunatic_error));
-            }
         }
         Ok(())
     }
@@ -218,7 +210,7 @@ impl TlsStream {
     /// This method retrieves the read timeout duration of the TlsStream if any
     pub fn read_timeout(&self) -> Option<Duration> {
         unsafe {
-            match host::api::networking::get_read_timeout(self.id) {
+            match host::api::networking::get_tls_read_timeout(self.id) {
                 u64::MAX => None,
                 millis => Some(Duration::from_millis(millis)),
             }

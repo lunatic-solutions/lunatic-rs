@@ -182,14 +182,10 @@ impl TcpStream {
     /// Once a timeout is set, it can be removed by sending `None`
     pub fn set_write_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
         unsafe {
-            let code = host::api::networking::set_write_timeout(
+            host::api::networking::set_write_timeout(
                 self.id,
                 duration.map_or(u64::MAX, |d| d.as_millis() as u64),
             );
-            if code != 0 {
-                let lunatic_error = LunaticError::from(code as u64);
-                return Err(Error::new(ErrorKind::Other, lunatic_error));
-            }
         }
         Ok(())
     }
@@ -212,14 +208,10 @@ impl TcpStream {
     /// Once a timeout is set, it can be removed by sending `None`
     pub fn set_read_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
         unsafe {
-            let code = host::api::networking::set_read_timeout(
+            host::api::networking::set_read_timeout(
                 self.id,
                 duration.map_or(u64::MAX, |d| d.as_millis() as u64),
             );
-            if code != 0 {
-                let lunatic_error = LunaticError::from(code as u64);
-                return Err(Error::new(ErrorKind::Other, lunatic_error));
-            }
         }
         Ok(())
     }
@@ -242,14 +234,10 @@ impl TcpStream {
     /// Once a timeout is set, it can be removed by sending `None`
     pub fn set_peek_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
         unsafe {
-            let code = host::api::networking::set_peek_timeout(
+            host::api::networking::set_peek_timeout(
                 self.id,
                 duration.map_or(u64::MAX, |d| d.as_millis() as u64),
             );
-            if code != 0 {
-                let lunatic_error = LunaticError::from(code as u64);
-                return Err(Error::new(ErrorKind::Other, lunatic_error));
-            }
         }
         Ok(())
     }
