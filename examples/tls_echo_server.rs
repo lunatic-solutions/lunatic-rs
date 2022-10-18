@@ -1,5 +1,8 @@
 use lunatic::{net, Mailbox, Process};
-use std::io::{BufReader, Read, Write};
+use std::{
+    io::{BufReader, Read, Write},
+    time::Duration,
+};
 
 fn main() {
     let key = std::fs::read("./examples/CA/localhost.key")
@@ -18,7 +21,12 @@ fn handle(mut tls_stream: net::TlsStream, _: Mailbox<()>) {
     let mut buffer = [0u8; 100];
     // TODO: do something with read data
     let _read = buf_reader.read(&mut buffer).expect("Should have read line");
-
+    tls_stream
+        .set_read_timeout(Some(Duration::from_secs(1)))
+        .unwrap();
+    tls_stream
+        .set_write_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
     tls_stream
         .write(
             [

@@ -22,7 +22,7 @@ pub mod message {
         pub fn data_size() -> u64;
         pub fn push_tcp_stream(tcp_stream_id: u64) -> u64;
         pub fn take_tcp_stream(index: u64) -> u64;
-        pub fn push_tls_stream(tcp_stream_id: u64) -> u64;
+        pub fn push_tls_stream(tls_stream_id: u64) -> u64;
         pub fn take_tls_stream(index: u64) -> u64;
         pub fn send(process_id: u64);
         pub fn send_receive_skip_search(process_id: u64, timeout: u64) -> u32;
@@ -154,11 +154,11 @@ pub mod networking {
         pub fn clone_udp_socket(udp_socket_id: u64) -> u64;
         pub fn tcp_flush(tcp_stream_id: u64, error_id: *mut u64) -> u32;
         pub fn tls_flush(tcp_stream_id: u64, error_id: *mut u64) -> u32;
-        pub fn set_read_timeout(tcp_stream_id: u64, duration: u64) -> u32;
+        pub fn set_read_timeout(tcp_stream_id: u64, duration: u64);
         pub fn get_read_timeout(tcp_stream_id: u64) -> u64;
-        pub fn set_write_timeout(tcp_stream_id: u64, duration: u64) -> u32;
+        pub fn set_write_timeout(tcp_stream_id: u64, duration: u64);
         pub fn get_write_timeout(tcp_stream_id: u64) -> u64;
-        pub fn set_peek_timeout(tcp_stream_id: u64, duration: u64) -> u32;
+        pub fn set_peek_timeout(tcp_stream_id: u64, duration: u64);
         pub fn get_peek_timeout(tcp_stream_id: u64) -> u64;
 
         // tls
@@ -198,10 +198,10 @@ pub mod networking {
             buffer_len: usize,
             opaque: *mut u64,
         ) -> u32;
-        pub fn set_tls_read_timeout(tcp_stream_id: u64, duration: u64) -> u32;
-        pub fn get_tls_read_timeout(tcp_stream_id: u64) -> u64;
-        pub fn set_tls_write_timeout(tcp_stream_id: u64, duration: u64) -> u32;
-        pub fn get_tls_write_timeout(tcp_stream_id: u64) -> u64;
+        pub fn set_tls_read_timeout(tls_stream_id: u64, duration: u64);
+        pub fn get_tls_read_timeout(tls_stream_id: u64) -> u64;
+        pub fn set_tls_write_timeout(tls_stream_id: u64, duration: u64);
+        pub fn get_tls_write_timeout(tls_stream_id: u64) -> u64;
     }
 }
 
