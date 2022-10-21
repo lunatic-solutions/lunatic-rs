@@ -4,9 +4,9 @@
 //! 2) Using Serde passed structs
 //! 3) To implement simple linebuffer echo back
 //! 4) With ability to listen on multiple local addresses
-//!
-use lunatic::{net, spawn_link, Mailbox};
 use std::io::{BufRead, BufReader, Write};
+
+use lunatic::{net, spawn_link, Mailbox};
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct TcpServer {

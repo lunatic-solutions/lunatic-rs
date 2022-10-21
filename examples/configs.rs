@@ -1,11 +1,12 @@
 use std::time::Duration;
 
-use lunatic::{process::process_id, sleep, Mailbox, Process, ProcessConfig};
+use lunatic::process::process_id;
+use lunatic::{sleep, Mailbox, Process, ProcessConfig};
 
 #[lunatic::main]
 fn main(_: Mailbox<()>) {
     // Set process maximum memory to ~1.2Mb & fuel to ~100k instructions
-    let mut config = ProcessConfig::new();
+    let mut config = ProcessConfig::new().unwrap();
     config.set_max_memory(1_500_000);
     config.set_max_fuel(1);
 

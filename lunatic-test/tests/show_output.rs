@@ -5,8 +5,9 @@ fn prints_and_returns_10(a: i32) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use lunatic_test::test;
+
+    use super::*;
 
     #[test]
     fn this_test_will_pass() {

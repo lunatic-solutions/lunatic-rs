@@ -1,4 +1,5 @@
-/// Returns either `spawn`, `spawn_link` or `spawn_link_config`, depending on the arguments.
+/// Returns either `spawn`, `spawn_link` or `spawn_link_config`, depending on
+/// the arguments.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! spawn_link_config {
@@ -18,8 +19,9 @@ macro_rules! spawn_link_config {
 
 /// Helper macro for spawning processes.
 ///
-/// The [`Process::spawn`](crate::Process::spawn) function can be too verbose for simple processes.
-/// This macro should cover most common cases of spawning a process from non-capturing closures.
+/// The [`Process::spawn`](crate::Process::spawn) function can be too verbose
+/// for simple processes. This macro should cover most common cases of spawning
+/// a process from non-capturing closures.
 ///
 /// # Example
 ///
@@ -34,7 +36,7 @@ macro_rules! spawn_link_config {
 /// // Give variable during invocation
 /// spawn!(|local_var = {"Hello".to_owned()}| assert_eq!(local_var, "Hello"));
 /// // Background process with config
-/// let config = ProcessConfig::new();
+/// let config = ProcessConfig::new().unwrap();
 /// spawn!(&config, || {});
 /// ```
 #[macro_export]
@@ -86,9 +88,9 @@ macro_rules! spawn {
 
 /// Helper macro for spawning linked processes.
 ///
-/// The [`Process::spawn_link`](crate::Process::spawn_link) function can be too verbose for simple
-/// processes. This macro should cover most common cases of spawning a process from non-capturing
-/// closures.
+/// The [`Process::spawn_link`](crate::Process::spawn_link) function can be too
+/// verbose for simple processes. This macro should cover most common cases of
+/// spawning a process from non-capturing closures.
 ///
 /// # Example
 ///
@@ -108,7 +110,7 @@ macro_rules! spawn {
 /// let local_var = "Hello".to_owned();
 /// spawn_link!(|local_var, _proto: Protocol<End>| assert_eq!(local_var, "Hello"));
 /// // Background process with config
-/// let config = ProcessConfig::new();
+/// let config = ProcessConfig::new().unwrap();
 /// spawn_link!(&config, || {});
 /// ```
 #[macro_export]

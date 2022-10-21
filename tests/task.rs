@@ -25,7 +25,7 @@ fn result_must_be_called() {
 
 #[test]
 fn recursive_count() {
-    let mut config = ProcessConfig::new();
+    let mut config = ProcessConfig::new().unwrap();
     config.set_can_spawn_processes(true);
     let task = spawn_link!(@task &config, |n = 1_000| recursive_count_sub(n));
     assert_eq!(500500, task.result());
@@ -43,5 +43,5 @@ fn recursive_count_sub(n: i32) -> i32 {
 fn timeout_task() {
     let task = spawn_link!(@task || sleep(Duration::from_millis(25)));
     let result = task.result_timeout(Duration::from_millis(10));
-    assert!(result.is_err());
+    assert!(result.is_timed_out());
 }

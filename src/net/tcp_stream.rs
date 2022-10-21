@@ -1,23 +1,26 @@
-use std::{
-    cell::UnsafeCell,
-    io::{Error, ErrorKind, IoSlice, Read, Result, Write},
-    net::SocketAddr,
-    time::Duration,
-};
+use std::cell::UnsafeCell;
+use std::io::{Error, ErrorKind, IoSlice, Read, Result, Write};
+use std::net::SocketAddr;
+use std::time::Duration;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::{error::LunaticError, host};
+use crate::error::LunaticError;
+use crate::host;
+
+const TIMEOUT: u32 = 9027;
 
 /// A TCP connection.
 ///
-/// A [`TcpStream`] can be created by [`connect`][`TcpStream::connect()`]ing to an endpoint or by
-/// [`accept`][`super::TcpListener::accept()`]ing an incoming connection.
+/// A [`TcpStream`] can be created by [`connect`][`TcpStream::connect()`]ing to
+/// an endpoint or by [`accept`][`super::TcpListener::accept()`]ing an incoming
+/// connection.
 ///
-/// [`TcpStream`] is a bidirectional stream that implements traits [`Read`] and [`Write`].
+/// [`TcpStream`] is a bidirectional stream that implements traits [`Read`] and
+/// [`Write`].
 ///
-/// Cloning a [`TcpStream`] creates another handle to the same socket. The socket will be closed
-/// when all handles to it are dropped.
+/// Cloning a [`TcpStream`] creates another handle to the same socket. The
+/// socket will be closed when all handles to it are dropped.
 ///
 /// The Transmission Control Protocol is specified in [IETF RFC 793].
 ///
@@ -83,11 +86,13 @@ impl TcpStream {
 
     /// Creates a TCP connection to the specified address.
     ///
-    /// This method will create a new TCP socket and attempt to connect it to the provided `addr`,
+    /// This method will create a new TCP socket and attempt to connect it to
+    /// the provided `addr`,
     ///
-    /// If `addr` yields multiple addresses, connecting will be attempted with each of the
-    /// addresses until connecting to one succeeds. If none of the addresses result in a successful
-    /// connection, the error from the last connect attempt is returned.
+    /// If `addr` yields multiple addresses, connecting will be attempted with
+    /// each of the addresses until connecting to one succeeds. If none of
+    /// the addresses result in a successful connection, the error from the
+    /// last connect attempt is returned.
     pub fn connect<A>(addr: A) -> Result<Self>
     where
         A: super::ToSocketAddrs,
@@ -95,7 +100,8 @@ impl TcpStream {
         TcpStream::connect_timeout_(addr, None)
     }
 
-    /// Same as [`TcpStream::connect`], but only waits for the duration of timeout to connect.
+    /// Same as [`TcpStream::connect`], but only waits for the duration of
+    /// timeout to connect.
     pub fn connect_timeout<A>(addr: A, timeout: Duration) -> Result<Self>
     where
         A: super::ToSocketAddrs,
@@ -154,6 +160,110 @@ impl TcpStream {
         let lunatic_error = LunaticError::from(id);
         Err(Error::new(ErrorKind::Other, lunatic_error))
     }
+
+    /// Sets write timeout for TcpStream
+    ///
+    /// This method will change the timeout for everyone holding a reference to
+    /// the TcpStream Once a timeout is set, it can be removed by sending
+    /// `None`
+    pub fn set_write_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
+        unsafe {
+            host::api::networking::set_write_timeout(
+                self.id,
+                duration.map_or(u64::MAX, |d| d.as_millis() as u64),
+            );
+        }
+        Ok(())
+    }
+
+    /// Gets write timeout for TcpStream
+    ///
+    /// This method retrieves the write timeout duration of the TcpStream if any
+    pub fn write_timeout(&self) -> Option<Duration> {
+        unsafe {
+            match host::api::networking::get_write_timeout(self.id) {
+                u64::MAX => None,
+                millis => Some(Duration::from_millis(millis)),
+            }
+        }
+    }
+
+    /// Sets read timeout for TcpStream
+    ///
+    /// This method will change the timeout for everyone holding a reference to
+    /// the TcpStream Once a timeout is set, it can be removed by sending
+    /// `None`
+    pub fn set_read_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
+        unsafe {
+            host::api::networking::set_read_timeout(
+                self.id,
+                duration.map_or(u64::MAX, |d| d.as_millis() as u64),
+            );
+        }
+        Ok(())
+    }
+
+    /// Gets read timeout for TcpStream
+    ///
+    /// This method retrieves the read timeout duration of the TcpStream if any
+    pub fn read_timeout(&self) -> Option<Duration> {
+        unsafe {
+            match host::api::networking::get_read_timeout(self.id) {
+                u64::MAX => None,
+                millis => Some(Duration::from_millis(millis)),
+            }
+        }
+    }
+
+    /// Sets peek timeout for TcpStream
+    ///
+    /// This method will change the timeout for everyone holding a reference to
+    /// the TcpStream Once a timeout is set, it can be removed by sending
+    /// `None`
+    pub fn set_peek_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
+        unsafe {
+            host::api::networking::set_peek_timeout(
+                self.id,
+                duration.map_or(u64::MAX, |d| d.as_millis() as u64),
+            );
+        }
+        Ok(())
+    }
+
+    /// Gets peek timeout for TcpStream
+    ///
+    /// This method retrieves the peek timeout duration of the TcpStream if any
+    pub fn peek_timeout(&self) -> Option<Duration> {
+        unsafe {
+            match host::api::networking::get_peek_timeout(self.id) {
+                u64::MAX => None,
+                millis => Some(Duration::from_millis(millis)),
+            }
+        }
+    }
+
+    /// Peek value on the tcp stream without removing it from internal buffer.
+    /// Any subsequent calls to `peek` will read from the internal buffer
+    /// and only calls to `read` will consume the buffered data
+    pub fn peek(&mut self, buf: &mut [u8]) -> Result<usize> {
+        let mut nread_or_error_id: u64 = 0;
+        let result = unsafe {
+            host::api::networking::tcp_peek(
+                self.id,
+                buf.as_mut_ptr(),
+                buf.len(),
+                &mut nread_or_error_id as *mut u64,
+            )
+        };
+        if result == 0 {
+            Ok(nread_or_error_id as usize)
+        } else if result == TIMEOUT {
+            Err(Error::new(ErrorKind::TimedOut, "TcpStream peek timed out"))
+        } else {
+            let lunatic_error = LunaticError::from(nread_or_error_id);
+            Err(Error::new(ErrorKind::Other, lunatic_error))
+        }
+    }
 }
 
 impl Write for TcpStream {
@@ -174,6 +284,8 @@ impl Write for TcpStream {
         };
         if result == 0 {
             Ok(nwritten_or_error_id as usize)
+        } else if result == TIMEOUT {
+            Err(Error::new(ErrorKind::TimedOut, "TcpStream write timed out"))
         } else {
             let lunatic_error = LunaticError::from(nwritten_or_error_id);
             Err(Error::new(ErrorKind::Other, lunatic_error))
@@ -205,6 +317,8 @@ impl Read for TcpStream {
         };
         if result == 0 {
             Ok(nread_or_error_id as usize)
+        } else if result == TIMEOUT {
+            Err(Error::new(ErrorKind::TimedOut, "TcpStream read timed out"))
         } else {
             let lunatic_error = LunaticError::from(nread_or_error_id);
             Err(Error::new(ErrorKind::Other, lunatic_error))

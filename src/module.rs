@@ -2,16 +2,16 @@ use std::u128;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    error::LunaticError,
-    host::{self, api::distributed::node_id},
-    serializer::Serializer,
-    Process,
-};
+use crate::error::LunaticError;
+use crate::host::api::distributed::node_id;
+use crate::host::{self};
+use crate::serializer::Serializer;
+use crate::{Process, ProcessConfig, Tag};
 
 /// A compiled instance of a WebAssembly module.
 ///
-/// Creating a module will also JIT compile it, this can be a compute intensive tasks.
+/// Creating a module will also JIT compile it, this can be a compute-intensive
+/// tasks.
 pub enum WasmModule {
     Module(u64),
     Inherit,
@@ -53,8 +53,8 @@ impl<'de> Deserialize<'de> for WasmModule {
 impl WasmModule {
     /// Compiles a WebAssembly module.
     ///
-    /// Once a module is compiled, functions like [`spawn`](Self::spawn) can be used to spawn new
-    /// processes from it.
+    /// Once a module is compiled, functions like [`spawn`](Self::spawn) can be
+    /// used to spawn new processes from it.
     pub fn new(data: &[u8]) -> Result<Self, LunaticError> {
         let mut module_or_error_id: u64 = 0;
 
@@ -78,7 +78,8 @@ impl WasmModule {
         Self::Inherit
     }
 
-    /// Returns the id of the module resource or -1 in case it's an inherited module.
+    /// Returns the id of the module resource or -1 in case it's an inherited
+    /// module.
     pub fn id(&self) -> i64 {
         match self {
             WasmModule::Module(id) => *id as i64,
@@ -86,8 +87,9 @@ impl WasmModule {
         }
     }
 
-    /// Spawn a new process and use `function` as the entry point. If the function takes arguments
-    /// the passed in `params` need to exactly match their types.
+    /// Spawn a new process and use `function` as the entry point. If the
+    /// function takes arguments the passed in `params` need to exactly
+    /// match their types.
     pub fn spawn<M, S>(
         &self,
         function: &str,
@@ -96,43 +98,73 @@ impl WasmModule {
     where
         S: Serializer<M>,
     {
-        let mut process_or_error_id = 0;
-        let params: Vec<u8> = params_to_vec(params);
-        let result = unsafe {
-            host::api::process::spawn(
-                0,
-                -1,
-                self.id(),
-                function.as_ptr(),
-                function.len(),
-                params.as_ptr(),
-                params.len(),
-                &mut process_or_error_id as *mut u64,
-            )
-        };
-
-        if result == 0 {
-            Ok(unsafe { Process::new(node_id(), process_or_error_id) })
-        } else {
-            Err(LunaticError::from(process_or_error_id))
-        }
+        self.spawn_(function, params, None, None)
     }
 
-    /// Spawn a new process and link it to the current one.
-    pub fn spawn_link<M, S>(
+    /// Spawn a new process with a configuration, and use `function` as the
+    /// entry point. If the function takes arguments the passed in `params`
+    /// need to exactly match their types.
+    pub fn spawn_config<M, S>(
         &self,
         function: &str,
         params: &[Param],
+        config: &ProcessConfig,
     ) -> Result<Process<M, S>, LunaticError>
     where
         S: Serializer<M>,
     {
+        self.spawn_(function, params, None, Some(config))
+    }
+
+    /// Spawn a new process and link it to the current one with the `tag`.
+    pub fn spawn_link<M, S>(
+        &self,
+        function: &str,
+        params: &[Param],
+        tag: Tag,
+    ) -> Result<Process<M, S>, LunaticError>
+    where
+        S: Serializer<M>,
+    {
+        self.spawn_(function, params, Some(tag), None)
+    }
+
+    /// Spawn a new process with a configuration, and link it to the current one
+    /// with the `tag`.
+    pub fn spawn_link_config<M, S>(
+        &self,
+        function: &str,
+        params: &[Param],
+        config: &ProcessConfig,
+        tag: Tag,
+    ) -> Result<Process<M, S>, LunaticError>
+    where
+        S: Serializer<M>,
+    {
+        self.spawn_(function, params, Some(tag), Some(config))
+    }
+
+    fn spawn_<M, S>(
+        &self,
+        function: &str,
+        params: &[Param],
+        link: Option<Tag>,
+        config: Option<&ProcessConfig>,
+    ) -> Result<Process<M, S>, LunaticError>
+    where
+        S: Serializer<M>,
+    {
+        let link = match link {
+            Some(tag) => tag.id(),
+            None => 0,
+        };
+        let config_id = config.map_or_else(|| ProcessConfig::inherit().id(), |config| config.id());
         let mut process_or_error_id = 0;
         let params: Vec<u8> = params_to_vec(params);
         let result = unsafe {
             host::api::process::spawn(
-                1,
-                -1,
+                link,
+                config_id,
                 self.id(),
                 function.as_ptr(),
                 function.len(),

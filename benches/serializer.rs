@@ -17,14 +17,13 @@ struct Login {
     remember: bool,
 }
 
-macro_rules! login_data {
-    () => {
-        Login {
-            username: "johndoe@gmail.com".to_string(),
-            password: "JohnTheGod".to_string(),
-            remember: true,
-        }
-    };
+#[inline(always)]
+fn login_data() -> Login {
+    Login {
+        username: "johndoe@gmail.com".to_string(),
+        password: "JohnTheGod".to_string(),
+        remember: true,
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -133,117 +132,135 @@ struct User {
     aazz: bool,
 }
 
-macro_rules! user_data {
-    () => {
-        User {
-            a: "a".to_string(),
-            b: 123,
-            c: true,
-            d: "d".to_string(),
-            e: 123,
-            f: true,
-            h: "h".to_string(),
-            i: 123,
-            j: true,
-            k: "k".to_string(),
-            l: 123,
-            m: true,
-            n: "n".to_string(),
-            o: 123,
-            p: true,
-            q: "q".to_string(),
-            r: 123,
-            s: true,
-            t: "t".to_string(),
-            u: 123,
-            v: true,
-            w: "w".to_string(),
-            x: 123,
-            y: true,
-            z: "z".to_string(),
-            aa: 123,
-            bb: true,
-            cc: "cc".to_string(),
-            dd: 123,
-            ee: true,
-            ff: "ff".to_string(),
-            gg: 123,
-            hh: true,
-            ii: "ii".to_string(),
-            jj: 123,
-            kk: true,
-            ll: "ll".to_string(),
-            mm: 123,
-            nn: true,
-            oo: "oo".to_string(),
-            pp: 123,
-            qq: true,
-            rr: "rr".to_string(),
-            ss: 123,
-            tt: true,
-            uu: "uu".to_string(),
-            vv: 123,
-            ww: true,
-            xx: "xx".to_string(),
-            yy: 123,
-            zz: true,
-            aaa: "aaa".to_string(),
-            aab: 123,
-            aac: true,
-            aad: "aad".to_string(),
-            aae: 123,
-            aaf: true,
-            aah: "aah".to_string(),
-            aai: 123,
-            aaj: true,
-            aak: "aak".to_string(),
-            aal: 123,
-            aam: true,
-            aan: "aan".to_string(),
-            aao: 123,
-            aap: true,
-            aaq: "aaq".to_string(),
-            aar: 123,
-            aas: true,
-            aat: "aat".to_string(),
-            aau: 123,
-            aav: true,
-            aaw: "aaw".to_string(),
-            aax: 123,
-            aay: true,
-            aaz: "aaz".to_string(),
-            aaaa: 123,
-            aabb: true,
-            aacc: "aacc".to_string(),
-            aadd: 123,
-            aaee: true,
-            aaff: "aaff".to_string(),
-            aagg: 123,
-            aahh: true,
-            aaii: "aaii".to_string(),
-            aajj: 123,
-            aakk: true,
-            aall: "aall".to_string(),
-            aamm: 123,
-            aann: true,
-            aaoo: "aaoo".to_string(),
-            aapp: 123,
-            aaqq: true,
-            aarr: "aarr".to_string(),
-            aass: 123,
-            aatt: true,
-            aauu: "aauu".to_string(),
-            aavv: 123,
-            aaww: true,
-            aaxx: "aaxx".to_string(),
-            aayy: 123,
-            aazz: true,
-        }
-    };
+#[inline(always)]
+fn user_data() -> User {
+    User {
+        a: "a".to_string(),
+        b: 123,
+        c: true,
+        d: "d".to_string(),
+        e: 123,
+        f: true,
+        h: "h".to_string(),
+        i: 123,
+        j: true,
+        k: "k".to_string(),
+        l: 123,
+        m: true,
+        n: "n".to_string(),
+        o: 123,
+        p: true,
+        q: "q".to_string(),
+        r: 123,
+        s: true,
+        t: "t".to_string(),
+        u: 123,
+        v: true,
+        w: "w".to_string(),
+        x: 123,
+        y: true,
+        z: "z".to_string(),
+        aa: 123,
+        bb: true,
+        cc: "cc".to_string(),
+        dd: 123,
+        ee: true,
+        ff: "ff".to_string(),
+        gg: 123,
+        hh: true,
+        ii: "ii".to_string(),
+        jj: 123,
+        kk: true,
+        ll: "ll".to_string(),
+        mm: 123,
+        nn: true,
+        oo: "oo".to_string(),
+        pp: 123,
+        qq: true,
+        rr: "rr".to_string(),
+        ss: 123,
+        tt: true,
+        uu: "uu".to_string(),
+        vv: 123,
+        ww: true,
+        xx: "xx".to_string(),
+        yy: 123,
+        zz: true,
+        aaa: "aaa".to_string(),
+        aab: 123,
+        aac: true,
+        aad: "aad".to_string(),
+        aae: 123,
+        aaf: true,
+        aah: "aah".to_string(),
+        aai: 123,
+        aaj: true,
+        aak: "aak".to_string(),
+        aal: 123,
+        aam: true,
+        aan: "aan".to_string(),
+        aao: 123,
+        aap: true,
+        aaq: "aaq".to_string(),
+        aar: 123,
+        aas: true,
+        aat: "aat".to_string(),
+        aau: 123,
+        aav: true,
+        aaw: "aaw".to_string(),
+        aax: 123,
+        aay: true,
+        aaz: "aaz".to_string(),
+        aaaa: 123,
+        aabb: true,
+        aacc: "aacc".to_string(),
+        aadd: 123,
+        aaee: true,
+        aaff: "aaff".to_string(),
+        aagg: 123,
+        aahh: true,
+        aaii: "aaii".to_string(),
+        aajj: 123,
+        aakk: true,
+        aall: "aall".to_string(),
+        aamm: 123,
+        aann: true,
+        aaoo: "aaoo".to_string(),
+        aapp: 123,
+        aaqq: true,
+        aarr: "aarr".to_string(),
+        aass: 123,
+        aatt: true,
+        aauu: "aauu".to_string(),
+        aavv: 123,
+        aaww: true,
+        aaxx: "aaxx".to_string(),
+        aayy: 123,
+        aazz: true,
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct BigData {
+    #[serde(with = "serde_bytes")]
+    data1: Vec<u8>,
+    #[serde(with = "serde_bytes")]
+    data2: Vec<u8>,
+    #[serde(with = "serde_bytes")]
+    data3: Vec<u8>,
+}
+
+#[inline(always)]
+fn big_data() -> BigData {
+    BigData {
+        data1: vec![0u8; 1024],
+        data2: vec![0u8; 2048],
+        data3: vec![0u8; 4098],
+    }
 }
 
 fn serialize_bincode_benchmark(c: &mut Criterion) {
-    c.bench_function("encode_small", |b| {
+    c.bench_function("encode_small_struct_small_fields", |b| {
         b.iter(|| {
             unsafe {
                 lunatic::host::api::message::create_data(0, 0);
@@ -255,24 +272,36 @@ fn serialize_bincode_benchmark(c: &mut Criterion) {
         });
     });
 
-    c.bench_function("encode_medium", |b| {
+    c.bench_function("encode_medium_struct_small_fields", |b| {
         b.iter(|| {
             unsafe {
                 lunatic::host::api::message::create_data(0, 0);
             }
-            black_box(lunatic::serializer::Bincode::encode(&login_data!()).unwrap());
+            black_box(lunatic::serializer::Bincode::encode(&login_data()).unwrap());
             unsafe {
                 lunatic::host::api::message::send(1337);
             }
         });
     });
 
-    c.bench_function("encode_large", |b| {
+    c.bench_function("encode_medium_struct_big_fields", |b| {
         b.iter(|| {
             unsafe {
                 lunatic::host::api::message::create_data(0, 0);
             }
-            black_box(lunatic::serializer::Bincode::encode(&user_data!()).unwrap());
+            black_box(lunatic::serializer::Bincode::encode(&big_data()).unwrap());
+            unsafe {
+                lunatic::host::api::message::send(1337);
+            }
+        });
+    });
+
+    c.bench_function("encode_large_small_fields", |b| {
+        b.iter(|| {
+            unsafe {
+                lunatic::host::api::message::create_data(0, 0);
+            }
+            black_box(lunatic::serializer::Bincode::encode(&user_data()).unwrap());
             unsafe {
                 lunatic::host::api::message::send(1337);
             }
@@ -281,7 +310,7 @@ fn serialize_bincode_benchmark(c: &mut Criterion) {
 }
 
 fn serialize_json_benchmark(c: &mut Criterion) {
-    c.bench_function("encode_small", |b| {
+    c.bench_function("encode_smal_struct_small_fields", |b| {
         b.iter(|| {
             unsafe {
                 lunatic::host::api::message::create_data(0, 0);
@@ -293,24 +322,36 @@ fn serialize_json_benchmark(c: &mut Criterion) {
         });
     });
 
-    c.bench_function("encode_medium", |b| {
+    c.bench_function("encode_medium_struct_small_fields", |b| {
         b.iter(|| {
             unsafe {
                 lunatic::host::api::message::create_data(0, 0);
             }
-            black_box(lunatic::serializer::Json::encode(&login_data!()).unwrap());
+            black_box(lunatic::serializer::Json::encode(&login_data()).unwrap());
             unsafe {
                 lunatic::host::api::message::send(1337);
             }
         });
     });
 
-    c.bench_function("encode_large", |b| {
+    c.bench_function("encode_medium_struct_big_fields", |b| {
         b.iter(|| {
             unsafe {
                 lunatic::host::api::message::create_data(0, 0);
             }
-            black_box(lunatic::serializer::Json::encode(&user_data!()).unwrap());
+            black_box(lunatic::serializer::Json::encode(&big_data()).unwrap());
+            unsafe {
+                lunatic::host::api::message::send(1337);
+            }
+        });
+    });
+
+    c.bench_function("encode_large_struct_small_fields", |b| {
+        b.iter(|| {
+            unsafe {
+                lunatic::host::api::message::create_data(0, 0);
+            }
+            black_box(lunatic::serializer::Json::encode(&user_data()).unwrap());
             unsafe {
                 lunatic::host::api::message::send(1337);
             }
