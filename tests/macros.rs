@@ -104,6 +104,21 @@ fn task() {
     let b = "world".to_owned();
     let task = spawn_link!(@task |a, b| format!("{} {}",a, b));
     assert_eq!(task.result(), "hello world");
+
+    let task = spawn_link!(@task || {
+        let err = Err(());
+        err?;
+        Ok(())
+    });
+    assert_eq!(task.result(), Err(()));
+
+    let task = spawn_link!(@task |a = 2, b = 3| {
+        if a == 2 {
+            return 0;
+        }
+        a + b
+    });
+    assert_eq!(task.result(), 0);
 }
 
 #[test]

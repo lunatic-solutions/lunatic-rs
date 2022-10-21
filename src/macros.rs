@@ -171,7 +171,7 @@ macro_rules! spawn_link {
             $(&$config,)?
             (),
             |_, protocol: lunatic::protocol::Protocol<lunatic::protocol::Send<_,lunatic::protocol::TaskEnd>>| {
-                let _ = protocol.send($body);
+                let _ = protocol.send((move || $body)());
             },
         )
     };
@@ -185,7 +185,7 @@ macro_rules! spawn_link {
                 ($($argument),*),
                 |($($argument),*), protocol: lunatic::protocol::Protocol<
                         lunatic::protocol::Send<_,lunatic::protocol::TaskEnd>>| {
-                    let _ = protocol.send($body);
+                    let _ = protocol.send((move || $body)());
                 },
             )
         }
@@ -199,7 +199,7 @@ macro_rules! spawn_link {
                 ($($argument),*),
                 |($($argument),*), protocol: lunatic::protocol::Protocol<
                         lunatic::protocol::Send<_,lunatic::protocol::TaskEnd>>| {
-                    let _ = protocol.send($body);
+                    let _ = protocol.send((move || $body)());
                 },
             )
         }
