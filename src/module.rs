@@ -33,7 +33,6 @@ impl Serialize for WasmModule {
     where
         S: serde::Serializer,
     {
-        // TODO: Timeout info is not serialized
         let index = unsafe { host::api::message::push_module(self.id() as u64) };
         serializer.serialize_u64(index)
     }
