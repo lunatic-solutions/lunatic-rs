@@ -229,10 +229,11 @@ impl AbstractProcess {
     /// ```
     fn expand_handler_wrapper(&self, impl_item_method: &syn::ImplItemMethod) -> TokenStream {
         let ident = Self::handler_wrapper_ident(&impl_item_method.sig.ident);
-        let (_, ty_generics, _) = self.item_impl.generics.split_for_impl();
+        let (_, ty_generics, _) = &self.item_impl.generics.split_for_impl();
+        let phantom_generics = &self.item_impl.generics.params;
         let fields = filter_typed_args(impl_item_method.sig.inputs.iter()).map(|field| &*field.ty);
         let phantom_field = if !self.item_impl.generics.params.is_empty() {
-            Some(quote! { std::marker::PhantomData #ty_generics, })
+            Some(quote! { std::marker::PhantomData <(#phantom_generics)>, })
         } else {
             None
         };
