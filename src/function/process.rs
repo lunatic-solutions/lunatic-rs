@@ -381,3 +381,5 @@ impl<M, S> Clone for Process<M, S> {
         }
     }
 }
+
+impl<M, S> Copy for Process<M, S> {}
