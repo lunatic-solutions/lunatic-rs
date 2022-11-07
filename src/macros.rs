@@ -53,7 +53,7 @@ macro_rules! spawn {
             lunatic::spawn_link_config!($($config)?) (
                 $(&$config,)?
                 ($($argument),*),
-                |($($argument),*), _: lunatic::Mailbox<()>| $body
+                |($(mut $argument),*), _: lunatic::Mailbox<()>| $body
             )
         }
     };
@@ -64,7 +64,7 @@ macro_rules! spawn {
             lunatic::spawn_link_config!($($config)?) (
                 $(&$config,)?
                 ($($argument),*),
-                |($($argument),*), _: lunatic::Mailbox<()>| $body
+                |($(mut $argument),*), _: lunatic::Mailbox<()>| $body
             )
         }
     };
@@ -81,7 +81,7 @@ macro_rules! spawn {
         lunatic::spawn_link_config!($($config)?) (
             $(&$config,)?
             $argument,
-            |$argument, $mailbox: lunatic::Mailbox<$mailbox_ty $( , $mailbox_s )?>| $body,
+            |mut $argument, $mailbox: lunatic::Mailbox<$mailbox_ty $( , $mailbox_s )?>| $body,
         )
     };
 }
@@ -133,7 +133,7 @@ macro_rules! spawn_link {
             lunatic::spawn_link_config!(@link $($config)?) (
                 $(&$config,)?
                 ($($argument),*),
-                |($($argument),*), _: lunatic::Mailbox<()>| $body
+                |($(mut $argument),*), _: lunatic::Mailbox<()>| $body
             )
         }
     };
@@ -144,7 +144,7 @@ macro_rules! spawn_link {
             lunatic::spawn_link_config!(@link $($config)?) (
                 $(&$config,)?
                 ($($argument),*),
-                |($($argument),*), _: lunatic::Mailbox<()>| $body
+                |($(mut $argument),*), _: lunatic::Mailbox<()>| $body
             )
         }
     };
@@ -161,7 +161,7 @@ macro_rules! spawn_link {
         lunatic::spawn_link_config!(@link $($config)?) (
             $(&$config,)?
             $argument,
-            |$argument, $mailbox: lunatic::Mailbox<$mailbox_ty $( , $mailbox_s )?>| $body,
+            |mut $argument, $mailbox: lunatic::Mailbox<$mailbox_ty $( , $mailbox_s )?>| $body,
         )
     };
 
@@ -183,7 +183,7 @@ macro_rules! spawn_link {
             lunatic::spawn_link_config!(@link $($config)?) (
                 $(&$config,)?
                 ($($argument),*),
-                |($($argument),*), protocol: lunatic::protocol::Protocol<
+                |($(mut $argument),*), protocol: lunatic::protocol::Protocol<
                         lunatic::protocol::Send<_,lunatic::protocol::TaskEnd>>| {
                     let _ = protocol.send((move || $body)());
                 },
@@ -197,7 +197,7 @@ macro_rules! spawn_link {
             lunatic::spawn_link_config!(@link $($config)?) (
                 $(&$config,)?
                 ($($argument),*),
-                |($($argument),*), protocol: lunatic::protocol::Protocol<
+                |($(mut $argument),*), protocol: lunatic::protocol::Protocol<
                         lunatic::protocol::Send<_,lunatic::protocol::TaskEnd>>| {
                     let _ = protocol.send((move || $body)());
                 },
@@ -218,7 +218,7 @@ macro_rules! spawn_link {
         lunatic::spawn_link_config!(@link $($config)?) (
             $(&$config,)?
             $argument,
-            |$argument, $protocol: lunatic::protocol::Protocol<$proto_ty>| $body,
+            |mut $argument, $protocol: lunatic::protocol::Protocol<$proto_ty>| $body,
         )
     };
 }
