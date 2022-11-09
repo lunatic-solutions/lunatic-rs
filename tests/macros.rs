@@ -15,6 +15,11 @@ fn spawn() {
     // Capture local var & mailbox process
     let local_var = "Hello".to_owned();
     spawn!(|local_var, _mailbox: Mailbox<()>| assert_eq!(local_var, "Hello"));
+    // Modify local var
+    let local_var = "Hello".to_owned();
+    spawn!(|local_var| {
+        local_var.push_str(", world");
+    });
 }
 
 #[test]
@@ -35,6 +40,11 @@ fn spawn_config() {
         local_var,
         "Hello"
     ));
+    // Modify local var
+    let local_var = "Hello".to_owned();
+    spawn!(&config, |local_var| {
+        local_var.push_str(", world");
+    });
 }
 
 #[test]
@@ -49,6 +59,11 @@ fn spawn_link() {
     // Capture local var & mailbox process
     let local_var = "Hello".to_owned();
     spawn_link!(|local_var, _mailbox: Mailbox<()>| assert_eq!(local_var, "Hello"));
+    // Modify local var
+    let local_var = "Hello".to_owned();
+    spawn_link!(|local_var| {
+        local_var.push_str(", world");
+    });
 
     // Protocol, no capture
     spawn_link!(|_proto: Protocol<End>| {});
@@ -73,6 +88,11 @@ fn spawn_link_config() {
         local_var,
         "Hello"
     ));
+    // Modify local var
+    let local_var = "Hello".to_owned();
+    spawn_link!(&config, |local_var| {
+        local_var.push_str(", world");
+    });
 
     // Protocol, no capture
     spawn_link!(&config, |_proto: Protocol<End>| {});
@@ -104,6 +124,28 @@ fn task() {
     let b = "world".to_owned();
     let task = spawn_link!(@task |a, b| format!("{} {}",a, b));
     assert_eq!(task.result(), "hello world");
+
+    let a = "Hello".to_owned();
+    let task = spawn_link!(@task |a| {
+        a.push_str(", world");
+        a
+    });
+    assert_eq!(task.result(), "Hello, world");
+
+    let task = spawn_link!(@task || {
+        let err = Err(());
+        err?;
+        Ok(())
+    });
+    assert_eq!(task.result(), Err(()));
+
+    let task = spawn_link!(@task |a = 2, b = 3| {
+        if a == 2 {
+            return 0;
+        }
+        a + b
+    });
+    assert_eq!(task.result(), 0);
 }
 
 #[test]
@@ -113,13 +155,20 @@ fn task_config() {
     let task = spawn_link!(@task &config, || 33);
     assert_eq!(task.result(), 33);
 
-    let task = spawn_link!(@task  &config, |a = 2, b = 3| a + b);
+    let task = spawn_link!(@task &config, |a = 2, b = 3| a + b);
     assert_eq!(task.result(), 5);
 
     let a = "hello".to_owned();
     let b = "world".to_owned();
     let task = spawn_link!(@task &config, |a, b| format!("{} {}",a, b));
     assert_eq!(task.result(), "hello world");
+
+    let a = "Hello".to_owned();
+    let task = spawn_link!(@task &config, |a| {
+        a.push_str(", world");
+        a
+    });
+    assert_eq!(task.result(), "Hello, world");
 }
 
 #[test]

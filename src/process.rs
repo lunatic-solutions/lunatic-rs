@@ -413,6 +413,7 @@ where
 /// messages of different types, as long as the traits `MessageHandler<M>` or
 /// `RequestHandler<R>` are implemented for T.
 #[derive(serde::Serialize, serde::Deserialize)]
+#[serde(bound = "")]
 pub struct ProcessRef<T>
 where
     T: ?Sized,
@@ -471,7 +472,7 @@ impl<T> ProcessRef<T> {
 impl<T> Clone for ProcessRef<T> {
     fn clone(&self) -> Self {
         ProcessRef {
-            process: self.process.clone(),
+            process: self.process,
             phantom: PhantomData,
         }
     }

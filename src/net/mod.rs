@@ -3,6 +3,8 @@
 mod resolver;
 mod tcp_listener;
 mod tcp_stream;
+mod tls_listener;
+mod tls_stream;
 mod udp;
 
 use std::io::{Error, ErrorKind, Result};
@@ -14,6 +16,8 @@ use std::slice::Iter;
 pub use resolver::{resolve, resolve_timeout, SocketAddrIterator};
 pub use tcp_listener::TcpListener;
 pub use tcp_stream::TcpStream;
+pub use tls_listener::TlsListener;
+pub use tls_stream::TlsStream;
 pub use udp::UdpSocket;
 
 /// A trait for objects which can be converted or resolved to one or more

@@ -20,8 +20,12 @@ pub mod message {
         pub fn get_tag() -> i64;
         #[allow(dead_code)]
         pub fn data_size() -> u64;
+        pub fn push_module(module_id: u64) -> u64;
+        pub fn take_module(index: u64) -> u64;
         pub fn push_tcp_stream(tcp_stream_id: u64) -> u64;
         pub fn take_tcp_stream(index: u64) -> u64;
+        pub fn push_tls_stream(tls_stream_id: u64) -> u64;
+        pub fn take_tls_stream(index: u64) -> u64;
         pub fn send(process_id: u64) -> u32;
         pub fn send_receive_skip_search(process_id: u64, timeout: u64) -> u32;
         pub fn receive(tag: *const i64, tag_len: usize, timeout: u64) -> u32;
@@ -67,8 +71,10 @@ pub mod networking {
             id: *mut u64,
         ) -> u32;
         pub fn drop_tcp_listener(tcp_listener_id: u64);
+        pub fn drop_tls_listener(tcp_listener_id: u64);
         pub fn drop_udp_socket(udp_socket_id: u64);
         pub fn tcp_local_addr(tcp_listener_id: u64, addr_dns_iter: *mut u64) -> u32;
+        pub fn tls_local_addr(tcp_listener_id: u64, addr_dns_iter: *mut u64) -> u32;
         pub fn udp_local_addr(udp_socket_id: u64, addr_dns_iter: *mut u64) -> u32;
         pub fn tcp_accept(listener_id: u64, id: *mut u64, peer_dns_iter: *mut u64) -> u32;
         pub fn tcp_connect(
@@ -149,12 +155,55 @@ pub mod networking {
         pub fn get_udp_socket_broadcast(udp_socket_id: u64) -> i32;
         pub fn clone_udp_socket(udp_socket_id: u64) -> u64;
         pub fn tcp_flush(tcp_stream_id: u64, error_id: *mut u64) -> u32;
-        pub fn set_read_timeout(tcp_stream_id: u64, duration: u64) -> u32;
+        pub fn tls_flush(tcp_stream_id: u64, error_id: *mut u64) -> u32;
+        pub fn set_read_timeout(tcp_stream_id: u64, duration: u64);
         pub fn get_read_timeout(tcp_stream_id: u64) -> u64;
-        pub fn set_write_timeout(tcp_stream_id: u64, duration: u64) -> u32;
+        pub fn set_write_timeout(tcp_stream_id: u64, duration: u64);
         pub fn get_write_timeout(tcp_stream_id: u64) -> u64;
-        pub fn set_peek_timeout(tcp_stream_id: u64, duration: u64) -> u32;
+        pub fn set_peek_timeout(tcp_stream_id: u64, duration: u64);
         pub fn get_peek_timeout(tcp_stream_id: u64) -> u64;
+
+        // tls
+        pub fn tls_bind(
+            addr_type: u32,
+            addr: *const u8,
+            port: u32,
+            flow_info: u32,
+            scope_id: u32,
+            id: *mut u64,
+            certs_array_ptr: *const u32,
+            certs_array_len: usize,
+            keys_array_ptr: *const u32,
+            keys_array_len: usize,
+        ) -> u32;
+        pub fn tls_accept(listener_id: u64, id: *mut u64, peer_dns_iter: *mut u64) -> u32;
+        pub fn tls_connect(
+            addr_str: *const u8,
+            addr_str_len: u32,
+            port: u32,
+            timeout: u64,
+            id: *mut u64,
+            certs_ptr: *const u8,
+            certs_len: u32,
+        ) -> u32;
+        pub fn drop_tls_stream(tcp_stream_id: u64);
+        pub fn clone_tls_stream(tcp_stream_id: u64) -> u64;
+        pub fn tls_write_vectored(
+            tcp_stream_id: u64,
+            ciovec_array: *const u32,
+            ciovec_array_len: usize,
+            opaque: *mut u64,
+        ) -> u32;
+        pub fn tls_read(
+            tcp_stream_id: u64,
+            buffer: *mut u8,
+            buffer_len: usize,
+            opaque: *mut u64,
+        ) -> u32;
+        pub fn set_tls_read_timeout(tls_stream_id: u64, duration: u64);
+        pub fn get_tls_read_timeout(tls_stream_id: u64) -> u64;
+        pub fn set_tls_write_timeout(tls_stream_id: u64, duration: u64);
+        pub fn get_tls_write_timeout(tls_stream_id: u64) -> u64;
     }
 }
 
