@@ -1,5 +1,7 @@
 use std::u128;
 
+use serde::{Deserialize, Serialize};
+
 use crate::error::LunaticError;
 use crate::host::api::distributed::node_id;
 use crate::host::{self};
@@ -23,6 +25,27 @@ impl Drop for WasmModule {
             }
             WasmModule::Inherit => (),
         }
+    }
+}
+
+impl Serialize for WasmModule {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let index = unsafe { host::api::message::push_module(self.id() as u64) };
+        serializer.serialize_u64(index)
+    }
+}
+
+impl<'de> Deserialize<'de> for WasmModule {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<WasmModule, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let index = Deserialize::deserialize(deserializer)?;
+        let id = unsafe { host::api::message::take_module(index) };
+        Ok(WasmModule::Module(id))
     }
 }
 

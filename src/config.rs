@@ -1,4 +1,4 @@
-use crate::host;
+use crate::{host, LunaticError};
 
 /// Process configurations determine permissions of processes.
 ///
@@ -44,9 +44,11 @@ impl ProcessConfig {
     ///
     /// There is no memory or fuel limit set on the newly created configuration,
     /// they are not inherited from parent.
-    pub fn new() -> Self {
-        let id = unsafe { host::api::process::create_config() };
-        Self(ProcessConfigType::Config(id))
+    pub fn new() -> Result<Self, LunaticError> {
+        match unsafe { host::api::process::create_config() } {
+            -1 => Err(LunaticError::PermissionDenied),
+            id => Ok(Self(ProcessConfigType::Config(id as u64))),
+        }
     }
 
     pub(crate) fn inherit() -> Self {
@@ -150,11 +152,5 @@ impl ProcessConfig {
     /// Mark a directory as pre-opened.
     pub fn preopen_dir(&self, dir: &str) {
         unsafe { host::api::wasi::config_preopen_dir(self.id() as u64, dir.as_ptr(), dir.len()) }
-    }
-}
-
-impl Default for ProcessConfig {
-    fn default() -> Self {
-        Self::new()
     }
 }

@@ -3,7 +3,6 @@ use std::io::{Error, ErrorKind, IoSlice, Read, Result, Write};
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::error::LunaticError;
@@ -65,29 +64,15 @@ impl Serialize for TcpStream {
         serializer.serialize_u64(index)
     }
 }
-struct TcpStreamVisitor;
-impl<'de> Visitor<'de> for TcpStreamVisitor {
-    type Value = TcpStream;
-
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("an u64 index")
-    }
-
-    fn visit_u64<E>(self, index: u64) -> std::result::Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        let id = unsafe { host::api::message::take_tcp_stream(index) };
-        Ok(TcpStream::from(id))
-    }
-}
 
 impl<'de> Deserialize<'de> for TcpStream {
     fn deserialize<D>(deserializer: D) -> std::result::Result<TcpStream, D::Error>
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_u64(TcpStreamVisitor)
+        let index = Deserialize::deserialize(deserializer)?;
+        let id = unsafe { host::api::message::take_tcp_stream(index) };
+        Ok(TcpStream::from(id))
     }
 }
 
@@ -178,18 +163,15 @@ impl TcpStream {
 
     /// Sets write timeout for TcpStream
     ///
-    /// This method will change the timeout for everyone holding a reference to the TcpStream
-    /// Once a timeout is set, it can be removed by sending `None`
+    /// This method will change the timeout for everyone holding a reference to
+    /// the TcpStream Once a timeout is set, it can be removed by sending
+    /// `None`
     pub fn set_write_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
         unsafe {
-            let code = host::api::networking::set_write_timeout(
+            host::api::networking::set_write_timeout(
                 self.id,
                 duration.map_or(u64::MAX, |d| d.as_millis() as u64),
             );
-            if code != 0 {
-                let lunatic_error = LunaticError::from(code as u64);
-                return Err(Error::new(ErrorKind::Other, lunatic_error));
-            }
         }
         Ok(())
     }
@@ -208,18 +190,15 @@ impl TcpStream {
 
     /// Sets read timeout for TcpStream
     ///
-    /// This method will change the timeout for everyone holding a reference to the TcpStream
-    /// Once a timeout is set, it can be removed by sending `None`
+    /// This method will change the timeout for everyone holding a reference to
+    /// the TcpStream Once a timeout is set, it can be removed by sending
+    /// `None`
     pub fn set_read_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
         unsafe {
-            let code = host::api::networking::set_read_timeout(
+            host::api::networking::set_read_timeout(
                 self.id,
                 duration.map_or(u64::MAX, |d| d.as_millis() as u64),
             );
-            if code != 0 {
-                let lunatic_error = LunaticError::from(code as u64);
-                return Err(Error::new(ErrorKind::Other, lunatic_error));
-            }
         }
         Ok(())
     }
@@ -238,18 +217,15 @@ impl TcpStream {
 
     /// Sets peek timeout for TcpStream
     ///
-    /// This method will change the timeout for everyone holding a reference to the TcpStream
-    /// Once a timeout is set, it can be removed by sending `None`
+    /// This method will change the timeout for everyone holding a reference to
+    /// the TcpStream Once a timeout is set, it can be removed by sending
+    /// `None`
     pub fn set_peek_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
         unsafe {
-            let code = host::api::networking::set_peek_timeout(
+            host::api::networking::set_peek_timeout(
                 self.id,
                 duration.map_or(u64::MAX, |d| d.as_millis() as u64),
             );
-            if code != 0 {
-                let lunatic_error = LunaticError::from(code as u64);
-                return Err(Error::new(ErrorKind::Other, lunatic_error));
-            }
         }
         Ok(())
     }

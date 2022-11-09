@@ -4,7 +4,7 @@ use lunatic_test::test;
 #[test]
 #[should_panic]
 fn default_config_cant_spawn_sub_processes() {
-    let config = ProcessConfig::new();
+    let config = ProcessConfig::new().unwrap();
     let task = spawn_link!(@task &config, || {
         let sub_task = spawn_link!(@task || {});
         let _ =sub_task.result();
@@ -14,7 +14,7 @@ fn default_config_cant_spawn_sub_processes() {
 
 #[test]
 fn config_with_spawn_permission() {
-    let mut config = ProcessConfig::new();
+    let mut config = ProcessConfig::new().unwrap();
     config.set_can_spawn_processes(true);
 
     let task = spawn_link!(@task &config,  || {
@@ -29,20 +29,20 @@ fn config_with_spawn_permission() {
 #[test]
 #[should_panic]
 fn default_config_cant_create_configs() {
-    let config = ProcessConfig::new();
+    let config = ProcessConfig::new().unwrap();
     let task = spawn_link!(@task &config, || {
-        ProcessConfig::new();
+        ProcessConfig::new().unwrap();
     });
     let _ = task.result();
 }
 
 #[test]
 fn config_with_config_creation_permissions() {
-    let mut config = ProcessConfig::new();
+    let mut config = ProcessConfig::new().unwrap();
     config.set_can_create_configs(true);
 
     let task = spawn_link!(@task &config, || {
-        ProcessConfig::new();
+        ProcessConfig::new().unwrap();
     });
     let _ = task.result();
 
@@ -50,9 +50,21 @@ fn config_with_config_creation_permissions() {
 }
 
 #[test]
+fn config_without_config_creation_permissions() {
+    let config = ProcessConfig::new().unwrap();
+
+    let task = spawn_link!(@task &config, || {
+        ProcessConfig::new().is_err()
+    });
+
+    assert_eq!(task.result(), true);
+    assert_eq!(config.can_create_configs(), false);
+}
+
+#[test]
 #[should_panic]
 fn config_with_memory_limit() {
-    let mut config = ProcessConfig::new();
+    let mut config = ProcessConfig::new().unwrap();
     config.set_max_memory(1_200_000); // ~ 1.2 Mb
 
     let task = spawn_link!(@task&config, || vec![0u64; 10_000]);
@@ -62,7 +74,7 @@ fn config_with_memory_limit() {
 #[test]
 #[should_panic]
 fn config_with_compute_limit() {
-    let mut config = ProcessConfig::new();
+    let mut config = ProcessConfig::new().unwrap();
     config.set_max_fuel(1);
 
     let task = spawn_link!(@task &config, || (0..10_000).into_iter().count());
@@ -71,7 +83,7 @@ fn config_with_compute_limit() {
 
 #[test]
 fn config_env_variable() {
-    let mut config = ProcessConfig::new();
+    let mut config = ProcessConfig::new().unwrap();
     config.add_environment_variable("hello", "world");
     config.add_environment_variable("foo", "bar");
 
@@ -90,7 +102,7 @@ fn config_env_variable() {
 
 #[test]
 fn config_cli_args() {
-    let mut config = ProcessConfig::new();
+    let mut config = ProcessConfig::new().unwrap();
     config.add_command_line_argument("test1");
     config.add_command_line_argument("test2");
 

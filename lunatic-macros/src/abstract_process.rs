@@ -229,10 +229,11 @@ impl AbstractProcess {
     /// ```
     fn expand_handler_wrapper(&self, impl_item_method: &syn::ImplItemMethod) -> TokenStream {
         let ident = Self::handler_wrapper_ident(&impl_item_method.sig.ident);
-        let (_, ty_generics, _) = self.item_impl.generics.split_for_impl();
+        let (_, ty_generics, _) = &self.item_impl.generics.split_for_impl();
+        let phantom_generics = &self.item_impl.generics.params;
         let fields = filter_typed_args(impl_item_method.sig.inputs.iter()).map(|field| &*field.ty);
         let phantom_field = if !self.item_impl.generics.params.is_empty() {
-            Some(quote! { std::marker::PhantomData #ty_generics, })
+            Some(quote! { std::marker::PhantomData <(#phantom_generics)>, })
         } else {
             None
         };
@@ -352,7 +353,7 @@ impl AbstractProcess {
             let fn_ident = &sig.ident;
             let (impl_generics, ty_generics, where_clause) = self.item_impl.generics.split_for_impl();
             let args = filter_typed_args(sig.inputs.iter());
-            let offset = self.item_impl.generics.params.is_empty().then_some(0).unwrap_or(1);
+            let offset = if self.item_impl.generics.params.is_empty() { 0 } else { 1 };
             let message_fields = (offset..args.count() + offset).map(|i| {
                 let i = proc_macro2::Literal::usize_unsuffixed(i);
                 quote! { message. #i }
@@ -393,7 +394,7 @@ impl AbstractProcess {
             let fn_ident = &sig.ident;
             let (impl_generics, ty_generics, where_clause) = self.item_impl.generics.split_for_impl();
             let args = filter_typed_args(sig.inputs.iter());
-            let offset = self.item_impl.generics.params.is_empty().then_some(0).unwrap_or(1);
+            let offset = if self.item_impl.generics.params.is_empty() { 0 } else { 1 };
             let request_fields = (offset..args.count() + offset).map(|i| {
                 let i = proc_macro2::Literal::usize_unsuffixed(i);
                 quote! { request. #i }
