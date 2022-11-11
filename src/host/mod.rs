@@ -87,7 +87,7 @@ pub fn send(node: u64, process_id: u64) {
         unsafe { api::message::send(process_id) }
     } else {
         unsafe { api::distributed::send(node, process_id) }
-    }
+    };
 }
 
 pub fn send_receive_skip_search(node: u64, process_id: u64, timeout: u64) -> u32 {
