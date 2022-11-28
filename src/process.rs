@@ -383,6 +383,7 @@ where
 {
     fn send(&self, message: M);
     fn send_after(&self, message: M, duration: Duration) -> TimerRef;
+    fn recipient(&self) -> MessageRecipient<M, S>;
 }
 
 pub trait Request<M, S>
@@ -398,6 +399,8 @@ where
     fn request_timeout(&self, request: M, timeout: Duration) -> MailboxResult<Self::Result> {
         self.request_timeout_(request, Some(timeout))
     }
+
+    fn recipient(&self) -> RequestRecipient<M, Self::Result, S>;
 
     #[doc(hidden)]
     fn request_timeout_(
@@ -515,6 +518,139 @@ where
     }
 }
 
+/// A reference to an arbitrary running process that is able to receive a typed
+/// message.
+///
+/// A `ProcessRef<T>` can be converted into a `MessageRecipient<M,S>` if `T`
+/// implements `MessageHandler<M>`.
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct MessageRecipient<M, S = Bincode> {
+    phantom_message: PhantomData<M>,
+    phantom_serializer: PhantomData<S>,
+    process: Process<()>,
+    unpacker: usize,
+}
+
+impl<M, S> Message<M, S> for MessageRecipient<M, S>
+where
+    S: Serializer<M>,
+{
+    /// Send message to the process.
+    fn send(&self, message: M) {
+        // Create new message buffer.
+        unsafe { host::api::message::create_data(Tag::none().id(), 0) };
+        // First encode the handler inside the message buffer.
+        let handler = self.unpacker as i32;
+        let handler_message = Sendable::Message(handler);
+        Bincode::encode(&handler_message).unwrap();
+        // Then the message itself.
+        S::encode(&message).unwrap();
+        // Send the message
+        host::send(self.process.node_id(), self.process.id());
+    }
+
+    /// Send message to the process after the specified duration has passed.
+    fn send_after(&self, message: M, duration: Duration) -> TimerRef {
+        // Create new message buffer.
+        unsafe { host::api::message::create_data(Tag::none().id(), 0) };
+        // First encode the handler inside the message buffer.
+        let handler = self.unpacker as i32;
+        let handler_message = Sendable::Message(handler);
+        Bincode::encode(&handler_message).unwrap();
+        // Then the message itself.
+        S::encode(&message).unwrap();
+        // Send the message
+        let timer_id =
+            unsafe { host::api::timer::send_after(self.process.id(), duration.as_millis() as u64) };
+        TimerRef::new(timer_id)
+    }
+
+    /// Return a `MessageRecipient` for this process.
+    fn recipient(&self) -> MessageRecipient<M, S> {
+        self.clone()
+    }
+}
+
+impl<M, S> Clone for MessageRecipient<M, S> {
+    fn clone(&self) -> Self {
+        Self {
+            phantom_message: PhantomData,
+            phantom_serializer: PhantomData,
+            process: self.process,
+            unpacker: self.unpacker,
+        }
+    }
+}
+
+/// A reference to an arbitrary running process that is able to receive a typed
+/// request.
+///
+/// A `ProcessRef<T>` can be converted into a `RequestRecipient<M,R,S>` if `T`
+/// implements `RequestHandler<M, Result = R>`.
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct RequestRecipient<M, R, S = Bincode> {
+    phantom_message: PhantomData<M>,
+    phantom_response: PhantomData<R>,
+    phantom_serializer: PhantomData<S>,
+    process: Process<()>,
+    unpacker: usize,
+}
+
+impl<M, S, R> Request<M, S> for RequestRecipient<M, R, S>
+where
+    S: Serializer<M> + Serializer<R>,
+{
+    type Result = R;
+
+    fn request_timeout_(
+        &self,
+        request: M,
+        timeout: Option<Duration>,
+    ) -> MailboxResult<Self::Result> {
+        let tag = Tag::new();
+        // Create new message buffer.
+        unsafe { host::api::message::create_data(tag.id(), 0) };
+        // Create reference to self
+        let this: Process<()> = Process::new(node_id(), process_id());
+        // First encode the handler inside the message buffer.
+        let handler = self.unpacker as i32;
+        let handler_message = Sendable::Request(handler, this);
+        Bincode::encode(&handler_message).unwrap();
+        // Then the message itself.
+        S::encode(&request).unwrap();
+        // Send it & wait on a response!
+        let timeout_ms = match timeout {
+            Some(timeout) => timeout.as_millis() as u64,
+            None => u64::MAX,
+        };
+        let result =
+            host::send_receive_skip_search(self.process.node_id(), self.process.id(), timeout_ms);
+        if result == 9027 {
+            return MailboxResult::TimedOut;
+        };
+        let decoded = S::decode().unwrap();
+
+        MailboxResult::Message(decoded)
+    }
+
+    /// Return a `RequestRecipient` for this process
+    fn recipient(&self) -> RequestRecipient<M, Self::Result, S> {
+        self.clone()
+    }
+}
+
+impl<M, R, S> Clone for RequestRecipient<M, R, S> {
+    fn clone(&self) -> Self {
+        Self {
+            phantom_message: PhantomData,
+            phantom_serializer: PhantomData,
+            phantom_response: PhantomData,
+            process: self.process,
+            unpacker: self.unpacker,
+        }
+    }
+}
+
 /// This is a wrapper around the message/request that is sent to a process.
 ///
 /// The first `i32` value is a pointer
@@ -580,6 +716,25 @@ where
             unsafe { host::api::timer::send_after(self.process.id(), duration.as_millis() as u64) };
         TimerRef::new(timer_id)
     }
+
+    /// Return a `MessageRecipient` for this process.
+    fn recipient(&self) -> MessageRecipient<M, S> {
+        fn unpacker<TU, MU, SU>(this: &mut TU::State)
+        where
+            TU: MessageHandler<MU, SU>,
+            SU: Serializer<MU>,
+        {
+            let message: MU = SU::decode().unwrap();
+            <TU as MessageHandler<MU, SU>>::handle(this, message);
+        }
+
+        MessageRecipient {
+            phantom_message: PhantomData,
+            phantom_serializer: PhantomData,
+            process: self.process,
+            unpacker: unpacker::<T, M, S> as usize,
+        }
+    }
 }
 
 impl<M, S, T> Request<M, S> for ProcessRef<T>
@@ -633,6 +788,33 @@ where
             return MailboxResult::TimedOut;
         };
         MailboxResult::Message(S::decode().unwrap())
+    }
+
+    /// Return a `RequestRecipient` for this process
+    fn recipient(&self) -> RequestRecipient<M, Self::Result, S> {
+        fn unpacker<TU, MU, SU>(
+            this: &mut TU::State,
+            sender: Process<<TU as RequestHandler<MU, SU>>::Response, SU>,
+        ) where
+            TU: RequestHandler<MU, SU>,
+            SU: Serializer<MU> + Serializer<<TU as RequestHandler<MU, SU>>::Response>,
+        {
+            // Get content out of message
+            let message: MU = SU::decode().unwrap();
+            // Get tag out of message before the handler function maybe manipulates it.
+            let tag = unsafe { host::api::message::get_tag() };
+            let tag = Tag::from(tag);
+            let result = <TU as RequestHandler<MU, SU>>::handle(this, message);
+            sender.tag_send(tag, result);
+        }
+
+        RequestRecipient {
+            phantom_message: PhantomData,
+            phantom_serializer: PhantomData,
+            phantom_response: PhantomData,
+            process: self.process,
+            unpacker: unpacker::<T, M, S> as usize,
+        }
     }
 }
 
