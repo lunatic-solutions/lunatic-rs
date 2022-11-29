@@ -184,7 +184,7 @@ impl WasmModule {
 pub enum Param {
     I32(i32),
     I64(i64),
-    V128(u128),
+    V128(i128),
 }
 
 pub(crate) fn params_to_vec(params: &[Param]) -> Vec<u8> {

@@ -115,7 +115,7 @@ pub use function::process::Process;
 pub use lunatic_macros::{abstract_process, main};
 pub use lunatic_test::test;
 pub use mailbox::{Mailbox, MailboxResult};
-pub use module::WasmModule;
+pub use module::{Param, WasmModule};
 #[doc(hidden)]
 pub use process_local::statik::Key as __StaticProcessLocalInner;
 pub use process_local::ProcessLocal;
