@@ -315,3 +315,15 @@ pub mod version {
         pub fn patch() -> u32;
     }
 }
+
+pub mod metrics {
+    #[link(wasm_import_module = "lunatic::metrics")]
+    extern "C" {
+        pub fn counter(name: *const u8, name_len: usize, value: u64);
+        pub fn increment_counter(name: *const u8, name_len: usize);
+        pub fn gauge(name: *const u8, name_len: usize, value: f64);
+        pub fn increment_gauge(name: *const u8, name_len: usize, value: f64);
+        pub fn decrement_gauge(name: *const u8, name_len: usize, value: f64);
+        pub fn histogram(name: *const u8, name_len: usize, value: f64);
+    }
+}
