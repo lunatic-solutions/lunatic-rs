@@ -102,13 +102,13 @@ mod tag;
 pub mod distributed;
 pub mod function;
 pub mod host;
+pub mod metrics;
 pub mod net;
 pub mod process;
 pub mod protocol;
 pub mod serializer;
 pub mod supervisor;
 pub mod timer;
-pub mod metrics;
 
 pub use config::ProcessConfig;
 pub use error::LunaticError;
