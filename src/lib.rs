@@ -102,6 +102,7 @@ mod tag;
 pub mod distributed;
 pub mod function;
 pub mod host;
+pub mod metrics;
 pub mod net;
 pub mod process;
 pub mod protocol;
