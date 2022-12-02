@@ -240,6 +240,7 @@ pub mod process {
         pub fn link(tag: i64, process_id: u64);
         pub fn unlink(process_id: u64);
         pub fn kill(process_id: u64);
+        pub fn exists(process_id: u64) -> i32;
     }
 }
 

@@ -133,6 +133,14 @@ impl<M, S> Process<M, S> {
         }
     }
 
+    /// Returns `true` for processes on the local node that are running.
+    ///
+    /// Will return `false` if the process finished, failed or is running on a
+    /// remote node.
+    pub fn is_alive(&self) -> bool {
+        unsafe { host::api::process::exists(self.id) != 0 }
+    }
+
     pub fn this() -> Self {
         Self::new(node_id(), process_id())
     }

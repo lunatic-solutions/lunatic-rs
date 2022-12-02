@@ -451,6 +451,14 @@ impl<T> ProcessRef<T> {
         }
     }
 
+    /// Returns `true` for processes on the local node that are running.
+    ///
+    /// Will return `false` if the process finished, failed or is running on a
+    /// remote node.
+    pub fn is_alive(&self) -> bool {
+        unsafe { host::api::process::exists(self.process.id()) != 0 }
+    }
+
     /// Link process to the one currently running.
     pub fn link(&self) {
         // Don't use tags because a process' [`Mailbox`] can't differentiate between
