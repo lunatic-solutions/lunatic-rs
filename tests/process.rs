@@ -136,3 +136,16 @@ fn link_should_trigger_on_dead_process() {
     // Confirm it's a link broke message and not a timeout
     assert_ne!(result, 9027);
 }
+
+#[test]
+fn is_alive() {
+    let child = Process::spawn((), |_, _: Mailbox<()>| {
+        lunatic::sleep(Duration::from_millis(100));
+    });
+    // Give enough time for process to be spawned
+    lunatic::sleep(Duration::from_millis(10));
+    assert_eq!(child.is_alive(), true);
+    // Give enough time to process to finish
+    lunatic::sleep(Duration::from_millis(150));
+    assert_eq!(child.is_alive(), false);
+}

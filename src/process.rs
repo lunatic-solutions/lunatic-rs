@@ -453,9 +453,13 @@ impl<T> ProcessRef<T> {
 
     /// Returns `true` for processes on the local node that are running.
     ///
-    /// Will return `false` if the process finished, failed or is running on a
-    /// remote node.
+    /// Panics if called on a remote process.
     pub fn is_alive(&self) -> bool {
+        assert_eq!(
+            self.process.node_id(),
+            host::node_id(),
+            "is_alive() can only be used with local processes"
+        );
         unsafe { host::api::process::exists(self.process.id()) != 0 }
     }
 
