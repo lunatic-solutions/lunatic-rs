@@ -108,6 +108,8 @@ pub mod process;
 pub mod protocol;
 pub mod serializer;
 pub mod supervisor;
+#[doc(hidden)]
+pub mod test;
 pub mod timer;
 
 pub use config::ProcessConfig;

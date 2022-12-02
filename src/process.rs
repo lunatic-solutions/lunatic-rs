@@ -318,7 +318,7 @@ fn starter<T>(
     T: AbstractProcess,
 {
     let entry: fn(this: ProcessRef<T>, arg: T::Arg) -> T::State =
-        unsafe { std::mem::transmute(entry) };
+        unsafe { std::mem::transmute(entry as usize) };
     let this = unsafe { ProcessRef::new(node_id(), process_id()) };
 
     // Register name
@@ -349,12 +349,13 @@ fn starter<T>(
         match dispatcher {
             MailboxResult::Message(dispatcher) => match dispatcher {
                 Sendable::Message(handler) => {
-                    let handler: fn(state: &mut T::State) = unsafe { std::mem::transmute(handler) };
+                    let handler: fn(state: &mut T::State) =
+                        unsafe { std::mem::transmute(handler as usize) };
                     handler(&mut state);
                 }
                 Sendable::Request(handler, sender) => {
                     let handler: fn(state: &mut T::State, sender: Process<()>) =
-                        unsafe { std::mem::transmute(handler) };
+                        unsafe { std::mem::transmute(handler as usize) };
                     handler(&mut state, sender);
                 }
                 Sendable::Shutdown(sender) => {

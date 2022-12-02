@@ -272,6 +272,7 @@ pub mod wasi {
     }
 }
 
+#[allow(clashing_extern_declarations)]
 pub mod distributed {
     #[link(wasm_import_module = "lunatic::distributed")]
     extern "C" {

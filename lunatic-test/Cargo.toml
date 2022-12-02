@@ -1,6 +1,6 @@
 [package]
 name = "lunatic-test"
-version = "0.12.0"
+version = "0.12.2"
 edition = "2021"
 authors = ["Bernard Kolobara <bernard@lunatic.solutions>"]
 description = "#[lunatic::test] macro, meant as a drop-in replacement for Rust's #[test]"
@@ -11,6 +11,9 @@ license = "Apache-2.0/MIT"
 [dependencies]
 quote = "1"
 syn = { version = "1", features = ["full", "extra-traits"] }
+
+[dev-dependencies]
+lunatic = { path = "..", features = ["json_serializer", "msgpack_serializer"] }
 
 [lib]
 proc-macro = true

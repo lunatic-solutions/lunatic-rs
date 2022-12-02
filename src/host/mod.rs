@@ -70,7 +70,7 @@ pub(crate) fn spawn(
 /// https://github.com/lunatic-solutions/lunatic-rs/issues/71
 #[export_name = concat!("_lunatic_spawn_by_index_", env!("CARGO_PKG_VERSION"))]
 extern "C" fn _lunatic_spawn_by_index(function: i32, arg: i32) {
-    let function: fn(i32) = unsafe { std::mem::transmute(function) };
+    let function: fn(i32) = unsafe { std::mem::transmute(function as usize) };
     function(arg);
 }
 

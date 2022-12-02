@@ -309,7 +309,7 @@ where
         unsafe { Mailbox::<C, S>::new() }.receive()
     };
     let mailbox = unsafe { Mailbox::new() };
-    let function: fn(C, Mailbox<M, S>) = unsafe { std::mem::transmute(function) };
+    let function: fn(C, Mailbox<M, S>) = unsafe { std::mem::transmute(function as usize) };
     function(captured, mailbox);
 }
 

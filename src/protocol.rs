@@ -339,7 +339,7 @@ where
     let p_capture = unsafe { Mailbox::<ProtocolCapture<C>, S>::new() }.receive();
     let capture = p_capture.capture;
     let protocol = Protocol::from_process(p_capture.process, p_capture.tag);
-    let function: fn(C, Protocol<P, S, Z>) = unsafe { std::mem::transmute(function) };
+    let function: fn(C, Protocol<P, S, Z>) = unsafe { std::mem::transmute(function as usize) };
     function(capture, protocol);
 }
 

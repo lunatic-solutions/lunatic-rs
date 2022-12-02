@@ -2,18 +2,22 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{quote, quote_spanned};
+use syn::spanned::Spanned;
 
 /// Marks function to be executed by the lunatic runtime as a unit test. This is
 /// a drop-in replacement for the standard `#[test]` attribute macro.
 #[proc_macro_attribute]
 pub fn test(_args: TokenStream, item: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(item as syn::ItemFn);
+    let original_input = input.clone();
+    let attributes = &input.attrs;
+    let span = input.span();
 
     // Check if #[should_panic] attribute is present.
     let mut should_panic = None;
     let mut ignore = "";
-    for attribute in input.attrs.iter() {
+    for attribute in attributes.iter() {
         if let Some(ident) = attribute.path.get_ident() {
             if ident == "ignore" {
                 ignore = "#ignore_";
@@ -73,39 +77,59 @@ pub fn test(_args: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     let mut export_name = format!("#lunatic_test_{}", ignore);
-    if let Some(panic_str) = should_panic {
+    if let Some(ref panic_str) = should_panic {
         // Escape # in panic_str
         let panic_str = panic_str.replace('#', "\\#");
         export_name = format!("{}#panic_{}#", export_name, panic_str,);
     }
     let function_name = input.sig.ident.to_string();
 
-    // Only one argument of type `lunatic::Mailbox<T>` can be supplied.
-    let input = if !input.sig.inputs.is_empty() {
-        let name = input.sig.ident;
-        let arguments = input.sig.inputs;
-        let block = input.block;
+    let name = input.sig.ident;
+    let arguments = input.sig.inputs;
+    let output = input.sig.output;
+    let block = input.block;
 
-        quote! {
-            fn #name() {
-                fn __with_mailbox(#arguments) {
-                    #block
+    // `#[should_panic]` can't be combined with `Result`.
+    match output {
+        syn::ReturnType::Type(_, _) => {
+            if should_panic.is_some() {
+                return quote_spanned! {
+                    span => compile_error!("functions using `#[should_panic]` must return `()`");
                 }
-                unsafe { __with_mailbox(lunatic::Mailbox::new()) };
+                .into();
             }
         }
+        syn::ReturnType::Default => (),
+    }
+
+    let mailbox = if !arguments.is_empty() {
+        quote! { lunatic::Mailbox::new() }
     } else {
-        quote! { #input }
+        quote! {}
+    };
+
+    let wasm32_test = quote! {
+        fn #name() {
+            fn __with_mailbox(#arguments) #output {
+                #block
+            }
+            let result = unsafe { __with_mailbox(#mailbox) };
+            lunatic::test::assert_test_result(result);
+        }
     };
 
     quote! {
         // If not compiling for wasm32, fall back to #[test]
         #[cfg_attr(not(target_arch = "wasm32"), ::core::prelude::v1::test)]
+        #[cfg(not(target_arch = "wasm32"))]
+        #original_input
+
         #[cfg_attr(
             target_arch = "wasm32",
             export_name = concat!(#export_name, module_path!(), "::", #function_name)
         )]
-        #input
+        #[cfg(target_arch = "wasm32")]
+        #wasm32_test
     }
     .into()
 }
