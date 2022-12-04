@@ -1,6 +1,6 @@
 # Supervised Abstract Process Example
 
-This example shows how to call a supervised abstract process across different modules using the auto-generated public traits from the `abstract_process` macro.
+This example shows how to call a supervised abstract process across different files using the auto-generated public traits from the `abstract_process` macro.
 
 ## Files
 * `counter_abstract_process.rs`
