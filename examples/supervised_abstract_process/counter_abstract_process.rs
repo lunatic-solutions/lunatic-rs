@@ -1,11 +1,10 @@
+use lunatic::process::ProcessRef;
+use lunatic::{abstract_process, Tag};
+
+pub struct Counter(u32);
+
 /// Abstract process using abstract_process macro.
-
-use lunatic::process::{ProcessRef, StartProcess};
-use lunatic::{abstract_process, Mailbox, Tag};
-
-struct Counter(u32);
-
-// `visibility = pub` Makes the generated traits public and usable.
+/// `visibility = pub` Makes the generated traits public and usable.
 #[abstract_process(visibility = pub)]
 impl Counter {
     #[init]
