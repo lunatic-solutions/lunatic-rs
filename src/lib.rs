@@ -115,13 +115,14 @@ pub mod timer;
 pub use config::ProcessConfig;
 pub use error::LunaticError;
 pub use function::process::Process;
-pub use lunatic_macros::{abstract_process, main};
+pub use lunatic_macros::{abstract_process, main, AbstractMessage};
 pub use lunatic_test::test;
 pub use mailbox::{Mailbox, MailboxResult};
 pub use module::{Param, WasmModule};
 #[doc(hidden)]
 pub use process_local::statik::Key as __StaticProcessLocalInner;
 pub use process_local::ProcessLocal;
+use serde::{Deserialize, Serialize};
 pub use tag::Tag;
 
 /// Implemented for all resources held by the VM.
@@ -140,4 +141,39 @@ pub trait Resource {
 /// Suspends the current process for `duration` of time.
 pub fn sleep(duration: std::time::Duration) {
     unsafe { host::api::process::sleep_ms(duration.as_millis() as u64) };
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Request<R> {
+    parent: Process<R>,
+    tag: Tag,
+}
+
+impl<R> Request<R>
+where
+    R: Serialize + for<'de> Deserialize<'de>,
+{
+    pub fn new() -> Self {
+        let parent = Process::this();
+        let tag = Tag::new();
+        Request { parent, tag }
+    }
+
+    pub fn reply(&self, reply: R) {
+        self.parent.tag_send(self.tag, reply)
+    }
+
+    pub fn wait(&self) -> R {
+        let mailbox: Mailbox<R> = unsafe { Mailbox::new() };
+        mailbox.receive()
+    }
+}
+
+impl<R> Default for Request<R>
+where
+    R: Serialize + for<'de> Deserialize<'de>,
+{
+    fn default() -> Self {
+        Self::new()
+    }
 }

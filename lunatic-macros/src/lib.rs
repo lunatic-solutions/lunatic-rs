@@ -1,8 +1,12 @@
 #[allow(unused_extern_crates)]
 extern crate proc_macro;
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{quote, ToTokens};
+use syn::parse_macro_input;
 
+use crate::abstract_message::DeriveAbstractMessage;
+
+mod abstract_message;
 mod abstract_process;
 
 /// Marks the main function to be executed by the lunatic runtime as the root
@@ -173,6 +177,12 @@ pub fn abstract_process(args: TokenStream, item: TokenStream) -> TokenStream {
         Ok(abstract_process) => abstract_process.expand().into(),
         Err(err) => err.into_compile_error().into(),
     }
+}
+
+#[proc_macro_derive(AbstractMessage)]
+pub fn abstract_message(input: TokenStream) -> TokenStream {
+    let root = parse_macro_input!(input as DeriveAbstractMessage);
+    TokenStream::from(root.into_token_stream())
 }
 
 fn token_stream_with_error(mut tokens: TokenStream, error: syn::Error) -> TokenStream {
