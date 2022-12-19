@@ -128,6 +128,7 @@ impl UdpSocket {
         let lunatic_error = LunaticError::from(id);
         Err(Error::new(ErrorKind::Other, lunatic_error))
     }
+
     /// Returns the local address that this UdpSocket is bound to.
     ///
     /// This can be useful, for example, to identify when binding to port 0
@@ -146,6 +147,25 @@ impl UdpSocket {
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
+
+    /// Returns the remote address this socket was connected to.
+    pub fn peer_addr(&self) -> Result<SocketAddr> {
+        let mut dns_iter_or_error_id = 0;
+        let result = unsafe {
+            host::api::networking::udp_peer_addr(self.id, &mut dns_iter_or_error_id as *mut u64)
+        };
+        if result == 0 {
+            let mut dns_iter = SocketAddrIterator::from(dns_iter_or_error_id);
+            let addr = dns_iter.next().expect("must contain one element");
+            Ok(addr)
+        } else if result == 1 {
+            Err(Error::new(ErrorKind::NotConnected, "not connected"))
+        } else {
+            let lunatic_error = LunaticError::from(dns_iter_or_error_id);
+            Err(Error::new(ErrorKind::Other, lunatic_error))
+        }
+    }
+
     /// Connects this UDP socket to a remote address, allowing the `send` and
     /// `recv` syscalls to be used to send data and also applies filters to only
     /// receive data from the specified address.
@@ -224,6 +244,7 @@ impl UdpSocket {
         let lunatic_error = LunaticError::from(id);
         Err(Error::new(ErrorKind::Other, lunatic_error))
     }
+
     /// Sends data on the socket to the remote address to which it is connected.
     ///
     /// [`UdpSocket::connect`] will connect this socket to a remote address.
@@ -255,6 +276,7 @@ impl UdpSocket {
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
+
     /// Sends data on the socket to the given address. On success, returns the
     /// number of bytes written.
     ///
@@ -326,6 +348,7 @@ impl UdpSocket {
         let lunatic_error = LunaticError::from(nsend_or_error_id);
         Err(Error::new(ErrorKind::Other, lunatic_error))
     }
+
     /// Receives a single datagram message on the socket from the remote address
     /// to which it is connected. On success, returns the number of bytes
     /// read.
@@ -367,6 +390,7 @@ impl UdpSocket {
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
+
     /// Receives a single datagram message on the socket. On success, returns
     /// the number of bytes read and the origin.
     ///
@@ -406,6 +430,7 @@ impl UdpSocket {
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
+
     /// Sets the value for the `IP_TTL` option on this socket.
     ///
     /// This value sets the time-to-live field that is used in every packet sent
@@ -425,6 +450,7 @@ impl UdpSocket {
         // there is no error for this
         Ok(())
     }
+
     /// Sets the value of the `SO_BROADCAST` option for this socket.
     ///
     /// When enabled, this socket is allowed to send packets to a broadcast
@@ -448,6 +474,7 @@ impl UdpSocket {
         // there is no error for this
         Ok(())
     }
+
     /// Gets the value of the `IP_TTL` option for this socket.
     ///
     /// For more information about this option, see [`UdpSocket::set_ttl`].
@@ -466,6 +493,7 @@ impl UdpSocket {
         let result = unsafe { host::api::networking::get_udp_socket_ttl(self.id) };
         Ok(result)
     }
+
     /// Gets the value of the `SO_BROADCAST` option for this socket.
     ///
     /// For more information about this option, see
@@ -487,6 +515,7 @@ impl UdpSocket {
             _ => Ok(true),
         }
     }
+
     /// Creates a new independently owned handle to the underlying socket.
     ///
     /// The returned `UdpSocket` is a reference to the same socket that this
@@ -509,10 +538,12 @@ impl UdpSocket {
             consumed: UnsafeCell::new(false),
         })
     }
+
     /// Dummy fn - This is just to make porting from std easier?
     pub fn set_nonblocking(&self, _: bool) -> Result<()> {
         Ok(())
     }
+
     /// Dummy fn - This is just to make porting from std easier?
     pub fn take_error(&self) -> Result<Option<LunaticError>> {
         Ok(None)

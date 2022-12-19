@@ -1,3 +1,6 @@
+use std::io::ErrorKind;
+use std::net::IpAddr;
+
 use lunatic::net;
 use lunatic_test::test;
 
@@ -76,6 +79,25 @@ fn udp_ping_receiver_clone() {
 
     assert_eq!(len_in, 4);
     assert_eq!(buf, "P1NG".as_bytes());
+}
+
+#[test]
+fn udp_peer_addr() {
+    let sender = net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    let receiver = net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    let receiver_addr = receiver.local_addr().unwrap();
+
+    assert_eq!(
+        sender.peer_addr().unwrap_err().kind(),
+        ErrorKind::NotConnected
+    );
+
+    sender.connect(receiver_addr).expect("couldn't connect");
+
+    assert_eq!(
+        sender.peer_addr().unwrap().ip(),
+        IpAddr::from([127, 0, 0, 1])
+    );
 }
 
 #[test]

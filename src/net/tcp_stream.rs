@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+use super::SocketAddrIterator;
 use crate::error::LunaticError;
 use crate::host;
 
@@ -159,6 +160,22 @@ impl TcpStream {
         }
         let lunatic_error = LunaticError::from(id);
         Err(Error::new(ErrorKind::Other, lunatic_error))
+    }
+
+    /// Returns the remote address this socket is connected to.
+    pub fn peer_addr(&self) -> Result<SocketAddr> {
+        let mut dns_iter_or_error_id = 0;
+        let result = unsafe {
+            host::api::networking::tcp_peer_addr(self.id, &mut dns_iter_or_error_id as *mut u64)
+        };
+        if result == 0 {
+            let mut dns_iter = SocketAddrIterator::from(dns_iter_or_error_id);
+            let addr = dns_iter.next().expect("must contain one element");
+            Ok(addr)
+        } else {
+            let lunatic_error = LunaticError::from(dns_iter_or_error_id);
+            Err(Error::new(ErrorKind::Other, lunatic_error))
+        }
     }
 
     /// Sets write timeout for TcpStream
