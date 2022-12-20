@@ -177,7 +177,7 @@ fn self_reference() {
         type State = A;
 
         fn init(this: ProcessRef<Self>, start: u32) -> A {
-            // Start incrementing state state.
+            // Start incrementing state.
             this.send(Inc);
 
             A(start)

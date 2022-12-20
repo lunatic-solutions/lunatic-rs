@@ -133,6 +133,11 @@ impl<M, S> Process<M, S> {
         }
     }
 
+    /// Return reference to self.
+    pub(crate) fn this() -> Self {
+        Self::new(node_id(), process_id())
+    }
+
     /// Returns `true` for processes on the local node that are running.
     ///
     /// Panics if called on a remote process.
@@ -145,9 +150,6 @@ impl<M, S> Process<M, S> {
         unsafe { host::api::process::exists(self.id()) != 0 }
     }
 
-    pub fn this() -> Self {
-        Self::new(node_id(), process_id())
-    }
     /// Spawn a process.
     pub fn spawn<C, T>(capture: C, entry: fn(C, T)) -> T::Process
     where
