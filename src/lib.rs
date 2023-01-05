@@ -80,7 +80,7 @@ and cargo is going to automatically build your project as a WebAssembly module a
 
 ### Testing
 
-Lunatic provides a macro [`test`] to turn your tests into processes. Check out the [`tests`][3]
+Lunatic provides a macro [`macro@test`] to turn your tests into processes. Check out the [`tests`][3]
 directory for examples.
 
 [1]: https://github.com/lunatic-solutions/lunatic
@@ -104,6 +104,7 @@ pub mod function;
 pub mod host;
 pub mod metrics;
 pub mod net;
+pub mod panic;
 pub mod process;
 pub mod protocol;
 pub mod serializer;
