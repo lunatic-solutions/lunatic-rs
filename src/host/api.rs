@@ -207,6 +207,13 @@ pub mod networking {
     }
 }
 
+pub mod trap {
+    #[link(wasm_import_module = "lunatic::trap")]
+    extern "C" {
+        pub fn catch(function: usize, argument: usize) -> usize;
+    }
+}
+
 pub mod process {
     #[link(wasm_import_module = "lunatic::process")]
     extern "C" {
@@ -249,6 +256,12 @@ pub mod registry {
     extern "C" {
         pub fn put(name: *const u8, name_len: usize, node_id: u64, process_id: u64);
         pub fn get(
+            name: *const u8,
+            name_len: usize,
+            node_id: *mut u64,
+            process_id: *mut u64,
+        ) -> u32;
+        pub fn get_or_put_later(
             name: *const u8,
             name_len: usize,
             node_id: *mut u64,
