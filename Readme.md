@@ -80,7 +80,7 @@ To simplify developing, testing and running lunatic applications with cargo, you
 target = "wasm32-wasi"
 
 [target.wasm32-wasi]
-runner = "lunatic"
+runner = "lunatic run"
 ```
 
 Now you can just use the commands you were already familiar with, such as `cargo run`, `cargo test`
