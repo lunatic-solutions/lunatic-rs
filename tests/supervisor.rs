@@ -556,7 +556,7 @@ fn lookup_children() {
 }
 
 #[test]
-fn block_until_shutdown() {
+fn wait_on_shutdown() {
     struct Sup;
     impl Supervisor for Sup {
         type Arg = ();
@@ -579,5 +579,5 @@ fn block_until_shutdown() {
 
     // block main process until supervisor shuts down
     // the test will hang if block_until_shutdown() fails
-    sup_cloned.block_until_shutdown()
+    sup_cloned.wait_on_shutdown()
 }

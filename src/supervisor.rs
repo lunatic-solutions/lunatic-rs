@@ -1,7 +1,10 @@
 use std::marker::PhantomData;
 
-use crate::process::{AbstractProcess, ProcessRef, StartFailableProcess, Subscriber};
-use crate::{host, MailboxResult, Tag};
+use crate::process::{
+    AbstractProcess, ProcessRef, Request, RequestHandler, Sendable, StartFailableProcess,
+};
+use crate::serializer::{Bincode, Serializer};
+use crate::{host, MailboxResult, Process, Tag};
 
 /// A `Supervisor` can detect failures (panics) inside
 /// [`AbstractProcesses`](AbstractProcess) and restart them.
@@ -87,6 +90,88 @@ where
 
     fn handle_link_trapped(config: &mut SupervisorConfig<T>, tag: Tag) {
         T::Children::handle_failure(config, tag);
+    }
+}
+
+/// Subscriber represents a process that can be notified by a tagged message
+/// with the same tag that is used when registering the subscription.
+#[derive(Debug)]
+pub(crate) struct Subscriber {
+    process: Process<(), Bincode>,
+    tag: Tag,
+}
+
+impl Subscriber {
+    pub fn new(process: Process<(), Bincode>, tag: Tag) -> Self {
+        Self { process, tag }
+    }
+
+    pub fn notify(&self) {
+        self.process.tag_send(self.tag, ());
+    }
+}
+
+impl<T> ProcessRef<T>
+where
+    T: Supervisor,
+    T: AbstractProcess<State = SupervisorConfig<T>>,
+{
+    /// Blocks until the Supervisor shuts down.
+    ///
+    /// A tagged message will be sent to the supervisor process as a request
+    /// and the subscription will be registered. When the supervisor process
+    /// shuts down, the subscribers will be each notified by a response
+    /// message and therefore be unblocked after having received the awaited
+    /// message.
+    pub fn wait_on_shutdown(&self) {
+        fn unpacker<TU>(this: &mut TU::State, sender: Process<(), Bincode>)
+        where
+            TU: Supervisor,
+            TU: AbstractProcess<State = SupervisorConfig<TU>>,
+        {
+            let tag = unsafe { host::api::message::get_tag() };
+            let tag = Tag::from(tag);
+
+            this.subscribe_shutdown(Subscriber::new(sender, tag));
+        }
+
+        let tag = Tag::new();
+        // Create new message buffer.
+        unsafe { host::api::message::create_data(tag.id(), 0) };
+        // Create reference to self
+        let this: Process<()> = Process::this();
+        // First encode the handler inside the message buffer.
+        let handler = unpacker::<T> as usize as i32;
+        let handler_message = Sendable::Request(handler, this);
+        Bincode::encode(&handler_message).unwrap();
+        // Send it & wait on a response!
+        unsafe {
+            host::api::message::send_receive_skip_search(self.process.id(), 0);
+        };
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct GetChildren;
+impl<T> RequestHandler<GetChildren> for T
+where
+    T: Supervisor,
+    T: AbstractProcess<State = SupervisorConfig<T>>,
+{
+    type Response = <<T as Supervisor>::Children as Supervisable<T>>::Processes;
+
+    fn handle(state: &mut Self::State, _: GetChildren) -> Self::Response {
+        state.get_children()
+    }
+}
+
+impl<T> ProcessRef<T>
+where
+    T: Supervisor,
+    T: AbstractProcess<State = SupervisorConfig<T>>,
+{
+    pub fn children(&self) -> <<T as Supervisor>::Children as Supervisable<T>>::Processes {
+        self.request(GetChildren)
     }
 }
 

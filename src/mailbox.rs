@@ -8,8 +8,8 @@ use crate::host::{self};
 use crate::serializer::{Bincode, DecodeError, Serializer};
 use crate::{Process, ProcessConfig, Tag};
 
-const LINK_DIED: u32 = 1;
-const TIMEOUT: u32 = 9027;
+pub const LINK_DIED: u32 = 1;
+pub const TIMEOUT: u32 = 9027;
 
 /// Marker type indicating that the [`Mailbox`] **IS** catching deaths of linked
 /// processes.

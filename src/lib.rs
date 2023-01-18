@@ -91,6 +91,7 @@ directory for examples.
 
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
+pub mod abstract_process;
 mod config;
 mod error;
 mod macros;

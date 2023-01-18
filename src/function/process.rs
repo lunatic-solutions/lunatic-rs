@@ -1,16 +1,18 @@
 //! As the name suggests, a "function" process can be spawned just from a
 //! function. Opposite of a `AbstractProcess` that requires a `struct`.
 
+use std::any::type_name;
 use std::marker::PhantomData;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
 use crate::host::{self, node_id, process_id};
+use crate::mailbox::TIMEOUT;
 use crate::protocol::ProtocolCapture;
 use crate::serializer::{Bincode, Serializer};
 use crate::timer::TimerRef;
-use crate::{ProcessConfig, Tag};
+use crate::{MailboxResult, ProcessConfig, Tag};
 
 /// Decides what can be turned into a process.
 ///
@@ -356,6 +358,54 @@ where
         S::encode(&message).unwrap();
         // Send it!
         host::send(self.node_id, self.id);
+    }
+
+    /// Sends message and waits on response until timeout (if specified).
+    ///
+    /// # Safety
+    ///
+    /// The other side needs to be aware that the response needs to be sent back
+    /// with the `receive_tag`. There is no way to enforce this with the type
+    /// system at this level.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the received message can't be serialized
+    /// into `M` with serializer `S` or the `Response` can't be deserialized.
+    #[track_caller]
+    pub(crate) unsafe fn tag_send_receive<Response>(
+        &self,
+        send_tag: Tag,
+        receive_tag: Tag,
+        message: M,
+        timeout: Option<Duration>,
+    ) -> MailboxResult<Response>
+    where
+        S: Serializer<M>,
+        S: Serializer<Response>,
+    {
+        unsafe { host::api::message::create_data(send_tag.id(), 0) };
+
+        S::encode(&message).unwrap();
+        let timeout_ms = match timeout {
+            Some(timeout) => timeout.as_millis() as u64,
+            None => u64::MAX,
+        };
+
+        // Send message
+        host::send(self.node_id, self.id);
+        // Wait for message under a different tag
+        let receive_tags = [receive_tag.id()];
+        let result =
+            host::api::message::receive(receive_tags.as_ptr(), receive_tags.len(), timeout_ms);
+        if result == TIMEOUT {
+            MailboxResult::TimedOut
+        } else {
+            match S::decode() {
+                Ok(msg) => MailboxResult::Message(msg),
+                Err(_) => panic!("Could not deserialize message: {}", type_name::<Response>()),
+            }
+        }
     }
 }
 

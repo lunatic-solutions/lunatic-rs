@@ -60,7 +60,7 @@ fn registry_failed_process_release_lock() {
     });
 
     // Wait for the process to panic and release the lock
-    sleep(std::time::Duration::from_millis(100));
+    sleep(std::time::Duration::from_millis(10));
     unsafe {
         let name = "name";
         let mut node_id: u64 = 0;
