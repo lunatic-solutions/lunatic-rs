@@ -9,7 +9,7 @@ use super::tag::AbstractProcessTag;
 use super::{AbstractProcess, Config, StartupError};
 use crate::mailbox::LINK_DIED;
 use crate::panic::{catch_panic, Panicked};
-use crate::serializer::{self, Serializer};
+use crate::serializer::{self, CanSerialize};
 use crate::{host, Mailbox, Process, Tag};
 
 /// This is the entry point into the [`AbstractProcess`].
@@ -29,8 +29,8 @@ pub(crate) fn entry<AP: AbstractProcess>(
     ),
     _: Mailbox<(), AP::Serializer>, // Can't be used for the `AbstractProcess` special case.
 ) where
-    AP::Serializer: Serializer<()>,
-    AP::Serializer: serializer::Serializer<ShutdownMessage<(), AP::Serializer>>,
+    AP::Serializer: CanSerialize<()>,
+    AP::Serializer: serializer::CanSerialize<ShutdownMessage<(), AP::Serializer>>,
 {
     // Catch errors during startup and notify parent. Panics will also be caught.
     let mut state = match startup::<AP>(arg) {
@@ -91,8 +91,8 @@ fn loop_and_handle<AP: AbstractProcess>(state: &mut AP::State) -> Tag {
 fn shutdown<AP>(shutdown_tag: Tag, state: AP::State)
 where
     AP: AbstractProcess,
-    AP::Serializer: serializer::Serializer<()>,
-    AP::Serializer: serializer::Serializer<ShutdownMessage<(), AP::Serializer>>,
+    AP::Serializer: serializer::CanSerialize<()>,
+    AP::Serializer: serializer::CanSerialize<ShutdownMessage<(), AP::Serializer>>,
 {
     AP::terminate(state);
     let shutdown_message: ShutdownMessage<(), AP::Serializer> = AP::Serializer::decode().unwrap();

@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 
 use super::messages::RequestMessage;
 use super::{AbstractProcess, DeferredRequestHandler, MessageHandler, RequestHandler};
-use crate::serializer::Serializer;
+use crate::serializer::CanSerialize;
 use crate::Tag;
 
 pub struct Message<T>(PhantomData<T>);
@@ -17,7 +17,7 @@ pub trait Handler<AP: AbstractProcess> {
 impl<AP, T> Handler<AP> for Message<T>
 where
     AP: MessageHandler<T>,
-    AP::Serializer: Serializer<T>,
+    AP::Serializer: CanSerialize<T>,
 {
     fn handle(_: Tag, state: &mut <AP as AbstractProcess>::State) {
         let state = super::State { state };
@@ -29,9 +29,9 @@ where
 impl<AP, T> Handler<AP> for Request<T>
 where
     AP: RequestHandler<T>,
-    AP::Serializer: Serializer<T>,
-    AP::Serializer: Serializer<AP::Response>,
-    AP::Serializer: Serializer<RequestMessage<T, AP::Response, AP::Serializer>>,
+    AP::Serializer: CanSerialize<T>,
+    AP::Serializer: CanSerialize<AP::Response>,
+    AP::Serializer: CanSerialize<RequestMessage<T, AP::Response, AP::Serializer>>,
 {
     fn handle(response_tag: Tag, state: &mut <AP as AbstractProcess>::State) {
         let state = super::State { state };
@@ -45,9 +45,9 @@ where
 impl<AP, T> Handler<AP> for DeferredRequest<T>
 where
     AP: DeferredRequestHandler<T>,
-    AP::Serializer: Serializer<T>,
-    AP::Serializer: Serializer<AP::Response>,
-    AP::Serializer: Serializer<RequestMessage<T, AP::Response, AP::Serializer>>,
+    AP::Serializer: CanSerialize<T>,
+    AP::Serializer: CanSerialize<AP::Response>,
+    AP::Serializer: CanSerialize<RequestMessage<T, AP::Response, AP::Serializer>>,
 {
     fn handle(response_tag: Tag, state: &mut <AP as AbstractProcess>::State) {
         let state = super::State { state };

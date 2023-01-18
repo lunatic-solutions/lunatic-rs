@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use super::messages::ShutdownMessage;
 use super::{lifecycles, AbstractProcess, ProcessRef, StartupError};
 use crate::protocol::ProtocolCapture;
-use crate::serializer::Serializer;
+use crate::serializer::CanSerialize;
 use crate::{host, Mailbox, Process, ProcessConfig, Tag};
 
 trait IntoAbstractProcessBuilder<T> {}
@@ -75,23 +75,23 @@ where
     #[track_caller]
     pub fn start(&self, arg: T::Arg) -> Result<ProcessRef<T>, StartupError<T>>
     where
-        T::Serializer: Serializer<()>,
-        T::Serializer: Serializer<ShutdownMessage<(), T::Serializer>>,
-        T::Serializer: Serializer<(
+        T::Serializer: CanSerialize<()>,
+        T::Serializer: CanSerialize<ShutdownMessage<(), T::Serializer>>,
+        T::Serializer: CanSerialize<(
             Process<Result<(), StartupError<T>>, T::Serializer>,
             Tag,
             T::Arg,
         )>,
         // TODO: Remove this constraints once Processes/Protocols are refactored.
-        T::Serializer: Serializer<ProtocolCapture<T::Arg>>,
-        T::Serializer: Serializer<
+        T::Serializer: CanSerialize<ProtocolCapture<T::Arg>>,
+        T::Serializer: CanSerialize<
             ProtocolCapture<(
                 Process<Result<(), StartupError<T>>, T::Serializer>,
                 Tag,
                 T::Arg,
             )>,
         >,
-        T::Serializer: Serializer<ProtocolCapture<ProtocolCapture<T::Arg>>>,
+        T::Serializer: CanSerialize<ProtocolCapture<ProtocolCapture<T::Arg>>>,
     {
         let this = Process::<Result<(), StartupError<T>>, T::Serializer>::this();
         let init_tag = Tag::new();
@@ -154,23 +154,23 @@ where
         arg: T::Arg,
     ) -> Result<ProcessRef<T>, StartupError<T>>
     where
-        T::Serializer: Serializer<()>,
-        T::Serializer: Serializer<ShutdownMessage<(), T::Serializer>>,
-        T::Serializer: Serializer<(
+        T::Serializer: CanSerialize<()>,
+        T::Serializer: CanSerialize<ShutdownMessage<(), T::Serializer>>,
+        T::Serializer: CanSerialize<(
             Process<Result<(), StartupError<T>>, T::Serializer>,
             Tag,
             T::Arg,
         )>,
         // TODO: Remove this constraints once Processes/Protocols are refactored.
-        T::Serializer: Serializer<ProtocolCapture<T::Arg>>,
-        T::Serializer: Serializer<
+        T::Serializer: CanSerialize<ProtocolCapture<T::Arg>>,
+        T::Serializer: CanSerialize<
             ProtocolCapture<(
                 Process<Result<(), StartupError<T>>, T::Serializer>,
                 Tag,
                 T::Arg,
             )>,
         >,
-        T::Serializer: Serializer<ProtocolCapture<ProtocolCapture<T::Arg>>>,
+        T::Serializer: CanSerialize<ProtocolCapture<ProtocolCapture<T::Arg>>>,
     {
         let name: &str = name.as_ref();
         let name = format!("{} + ProcessRef + {}", name, std::any::type_name::<T>());

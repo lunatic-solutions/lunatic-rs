@@ -4,7 +4,7 @@ use std::mem::ManuallyDrop;
 use std::time::Duration;
 
 use crate::function::process::IntoProcess;
-use crate::serializer::{Bincode, Serializer};
+use crate::serializer::{Bincode, CanSerialize};
 use crate::{host, Mailbox, MailboxResult, Process, ProcessConfig, Tag};
 
 /// A value that the protocol captures from the parent process.
@@ -74,7 +74,7 @@ impl<P, S, Z> Protocol<P, S, Z> {
 
 impl<P, A, S, Z> Protocol<Send<A, P>, S, Z>
 where
-    S: Serializer<A>,
+    S: CanSerialize<A>,
 {
     /// Send a value of type `A` over the session. Returns a session with
     /// protocol `P`.
@@ -91,7 +91,7 @@ where
 
 impl<P, A, S, Z> Protocol<Recv<A, P>, S, Z>
 where
-    S: Serializer<A>,
+    S: CanSerialize<A>,
 {
     /// Receives a value of type `A` from the session. Returns a tuple
     /// containing the resulting session and the received value.
@@ -106,7 +106,7 @@ where
 
 impl<A, S, Z> Protocol<Recv<A, TaskEnd>, S, Z>
 where
-    S: Serializer<A>,
+    S: CanSerialize<A>,
 {
     /// A task is a special case of a protocol spawned with the `spawn!(@task
     /// ...)` macro. It only returns one value.
@@ -132,7 +132,7 @@ where
 
 impl<P, Q, S, Z> Protocol<Choose<P, Q>, S, Z>
 where
-    S: Serializer<bool>,
+    S: CanSerialize<bool>,
 {
     /// Perform an active choice, selecting protocol `P`.
     #[must_use]
@@ -159,7 +159,7 @@ where
 
 impl<P, Q, S, Z> Protocol<Offer<P, Q>, S, Z>
 where
-    S: Serializer<bool>,
+    S: CanSerialize<bool>,
 {
     /// Passive choice. This allows the other end of the session to select one
     /// of two options for continuing the protocol: either `P` or `Q`.
@@ -298,7 +298,7 @@ where
         node: Option<u64>,
     ) -> Self::Process
     where
-        S: Serializer<ProtocolCapture<C>>,
+        S: CanSerialize<ProtocolCapture<C>>,
     {
         let entry = entry as usize as i32;
         let node_id = node.unwrap_or_else(host::node_id);
@@ -332,7 +332,7 @@ where
 /// process.
 fn type_helper_wrapper<C, P, S, Z>(function: i32)
 where
-    S: Serializer<ProtocolCapture<C>>,
+    S: CanSerialize<ProtocolCapture<C>>,
     P: HasDual + 'static,
     Z: 'static,
 {

@@ -2,7 +2,7 @@
 #![allow(clippy::unit_arg)]
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use lunatic::serializer::Serializer;
+use lunatic::serializer::CanSerialize;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]

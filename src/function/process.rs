@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::host::{self, node_id, process_id};
 use crate::mailbox::TIMEOUT;
 use crate::protocol::ProtocolCapture;
-use crate::serializer::{Bincode, Serializer};
+use crate::serializer::{Bincode, CanSerialize};
 use crate::timer::TimerRef;
 use crate::{MailboxResult, ProcessConfig, Tag};
 
@@ -28,7 +28,7 @@ pub trait IntoProcess<M, S> {
         node: Option<u64>,
     ) -> Self::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>;
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>;
 }
 
 /// A marker trait expressing that a process can be spawned from this type
@@ -155,7 +155,7 @@ impl<M, S> Process<M, S> {
     /// Spawn a process.
     pub fn spawn<C, T>(capture: C, entry: fn(C, T)) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
         T: NoLink,
     {
@@ -165,7 +165,7 @@ impl<M, S> Process<M, S> {
     /// Spawn a process on a remote node.
     pub fn spawn_node<C, T>(node_id: u64, capture: C, entry: fn(C, T)) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
         T: NoLink,
     {
@@ -180,7 +180,7 @@ impl<M, S> Process<M, S> {
         entry: fn(C, T),
     ) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
         T: NoLink,
     {
@@ -190,7 +190,7 @@ impl<M, S> Process<M, S> {
     /// Spawn a linked process.
     pub fn spawn_link<C, T>(capture: C, entry: fn(C, T)) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
     {
         T::spawn(capture, entry, Some(Tag::new()), None, None)
@@ -201,7 +201,7 @@ impl<M, S> Process<M, S> {
     /// Allows the caller to provide a tag for the link.
     pub fn spawn_link_tag<C, T>(capture: C, tag: Tag, entry: fn(C, T)) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
     {
         T::spawn(capture, entry, Some(tag), None, None)
@@ -210,7 +210,7 @@ impl<M, S> Process<M, S> {
     /// Spawn a process with a custom configuration.
     pub fn spawn_config<C, T>(config: &ProcessConfig, capture: C, entry: fn(C, T)) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
         T: NoLink,
     {
@@ -224,7 +224,7 @@ impl<M, S> Process<M, S> {
         entry: fn(C, T),
     ) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
     {
         T::spawn(capture, entry, Some(Tag::new()), Some(config), None)
@@ -239,7 +239,7 @@ impl<M, S> Process<M, S> {
         entry: fn(C, T),
     ) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
     {
         T::spawn(capture, entry, Some(tag), Some(config), None)
@@ -311,7 +311,7 @@ impl<M, S> Process<M, S> {
 
 impl<M, S> Process<M, S>
 where
-    S: Serializer<M>,
+    S: CanSerialize<M>,
 {
     /// Send a message to the process.
     ///
@@ -381,8 +381,8 @@ where
         timeout: Option<Duration>,
     ) -> MailboxResult<Response>
     where
-        S: Serializer<M>,
-        S: Serializer<Response>,
+        S: CanSerialize<M>,
+        S: CanSerialize<Response>,
     {
         unsafe { host::api::message::create_data(send_tag.id(), 0) };
 

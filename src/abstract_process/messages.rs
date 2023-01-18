@@ -10,7 +10,7 @@ pub(crate) struct ReturnAddress<Response, Serializer> {
 
 impl<Response, Serializer> ReturnAddress<Response, Serializer>
 where
-    Serializer: serializer::Serializer<Response>,
+    Serializer: serializer::CanSerialize<Response>,
 {
     pub(crate) fn from_self() -> Self {
         let process = Process::this();

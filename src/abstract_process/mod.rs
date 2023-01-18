@@ -23,9 +23,9 @@ pub trait AbstractProcess: Sized
 where
     // The serializer needs to be able to serialize the arguments used
     // for initialization
-    Self::Serializer: serializer::Serializer<Self::Arg>,
+    Self::Serializer: serializer::CanSerialize<Self::Arg>,
     // and errors that happen during the startup and need to be communicated to the parent
-    Self::Serializer: serializer::Serializer<Result<(), StartupError<Self>>>,
+    Self::Serializer: serializer::CanSerialize<Result<(), StartupError<Self>>>,
 {
     /// The state of the process.
     ///
@@ -80,22 +80,22 @@ where
     fn start(arg: Self::Arg) -> Result<ProcessRef<Self>, StartupError<Self>>
     where
         // TODO: Clean up serialization dependencies
-        Self::Serializer: serializer::Serializer<()>,
-        Self::Serializer: serializer::Serializer<(
+        Self::Serializer: serializer::CanSerialize<()>,
+        Self::Serializer: serializer::CanSerialize<(
             Process<Result<(), StartupError<Self>>, Self::Serializer>,
             Tag,
             Self::Arg,
         )>,
-        Self::Serializer: serializer::Serializer<ProtocolCapture<Self::Arg>>,
-        Self::Serializer: serializer::Serializer<
+        Self::Serializer: serializer::CanSerialize<ProtocolCapture<Self::Arg>>,
+        Self::Serializer: serializer::CanSerialize<
             ProtocolCapture<(
                 Process<Result<(), StartupError<Self>>, Self::Serializer>,
                 Tag,
                 Self::Arg,
             )>,
         >,
-        Self::Serializer: serializer::Serializer<ProtocolCapture<ProtocolCapture<Self::Arg>>>,
-        Self::Serializer: serializer::Serializer<ShutdownMessage<(), Self::Serializer>>,
+        Self::Serializer: serializer::CanSerialize<ProtocolCapture<ProtocolCapture<Self::Arg>>>,
+        Self::Serializer: serializer::CanSerialize<ShutdownMessage<(), Self::Serializer>>,
     {
         AbstractProcessBuilder::<Self>::new().start(arg)
     }
@@ -114,22 +114,22 @@ where
     ) -> Result<ProcessRef<Self>, StartupError<Self>>
     where
         // TODO: Clean up serialization dependencies
-        Self::Serializer: serializer::Serializer<()>,
-        Self::Serializer: serializer::Serializer<(
+        Self::Serializer: serializer::CanSerialize<()>,
+        Self::Serializer: serializer::CanSerialize<(
             Process<Result<(), StartupError<Self>>, Self::Serializer>,
             Tag,
             Self::Arg,
         )>,
-        Self::Serializer: serializer::Serializer<ProtocolCapture<Self::Arg>>,
-        Self::Serializer: serializer::Serializer<
+        Self::Serializer: serializer::CanSerialize<ProtocolCapture<Self::Arg>>,
+        Self::Serializer: serializer::CanSerialize<
             ProtocolCapture<(
                 Process<Result<(), StartupError<Self>>, Self::Serializer>,
                 Tag,
                 Self::Arg,
             )>,
         >,
-        Self::Serializer: serializer::Serializer<ProtocolCapture<ProtocolCapture<Self::Arg>>>,
-        Self::Serializer: serializer::Serializer<ShutdownMessage<(), Self::Serializer>>,
+        Self::Serializer: serializer::CanSerialize<ProtocolCapture<ProtocolCapture<Self::Arg>>>,
+        Self::Serializer: serializer::CanSerialize<ShutdownMessage<(), Self::Serializer>>,
     {
         AbstractProcessBuilder::<Self>::new().start_as(name, arg)
     }
@@ -192,15 +192,15 @@ impl<AP: AbstractProcess> Config<AP> {
 
 pub trait MessageHandler<Message>: AbstractProcess
 where
-    Self::Serializer: serializer::Serializer<Message>,
+    Self::Serializer: serializer::CanSerialize<Message>,
 {
     fn handle(state: State<Self>, message: Message);
 }
 
 pub trait RequestHandler<Request>: AbstractProcess
 where
-    Self::Serializer: serializer::Serializer<Request>,
-    Self::Serializer: serializer::Serializer<Self::Response>,
+    Self::Serializer: serializer::CanSerialize<Request>,
+    Self::Serializer: serializer::CanSerialize<Self::Response>,
 {
     type Response;
 
@@ -209,8 +209,8 @@ where
 
 pub trait DeferredRequestHandler<Request>: AbstractProcess
 where
-    Self::Serializer: serializer::Serializer<Request>,
-    Self::Serializer: serializer::Serializer<Self::Response>,
+    Self::Serializer: serializer::CanSerialize<Request>,
+    Self::Serializer: serializer::CanSerialize<Self::Response>,
 {
     type Response;
 
@@ -257,7 +257,7 @@ pub struct DeferredResponse<Response, Serializer> {
 
 impl<Response, Serializer> DeferredResponse<Response, Serializer>
 where
-    Serializer: serializer::Serializer<Response>,
+    Serializer: serializer::CanSerialize<Response>,
 {
     pub fn send_response(self, response: Response) {
         self.return_address.send_response(response, self.tag);
@@ -365,8 +365,8 @@ where
     where
         // The serializer needs to be able to serialize values of `ShutdownMessage` & `()` for the
         // return value.
-        T::Serializer: serializer::Serializer<ShutdownMessage<(), T::Serializer>>,
-        T::Serializer: serializer::Serializer<()>,
+        T::Serializer: serializer::CanSerialize<ShutdownMessage<(), T::Serializer>>,
+        T::Serializer: serializer::CanSerialize<()>,
     {
         let return_address = ReturnAddress::from_self();
         let message = ShutdownMessage(return_address);
@@ -388,7 +388,7 @@ where
     #[track_caller]
     pub fn send<M: 'static>(&self, message: M)
     where
-        T::Serializer: serializer::Serializer<M>,
+        T::Serializer: serializer::CanSerialize<M>,
     {
         let handler_id = T::Handlers::handler_id::<Message<M>>();
         let tag = AbstractProcessTag::from_u6(handler_id);
@@ -409,9 +409,9 @@ where
     ) -> Result<T::Response, Timeout>
     where
         T: RequestHandler<R>,
-        T::Serializer: serializer::Serializer<R>,
-        T::Serializer: serializer::Serializer<T::Response>,
-        T::Serializer: serializer::Serializer<RequestMessage<R, T::Response, T::Serializer>>,
+        T::Serializer: serializer::CanSerialize<R>,
+        T::Serializer: serializer::CanSerialize<T::Response>,
+        T::Serializer: serializer::CanSerialize<RequestMessage<R, T::Response, T::Serializer>>,
     {
         let return_address = ReturnAddress::from_self();
         let message = RequestMessage(request, return_address);
@@ -442,9 +442,9 @@ where
     ) -> Result<T::Response, Timeout>
     where
         T: DeferredRequestHandler<R>,
-        T::Serializer: serializer::Serializer<R>,
-        T::Serializer: serializer::Serializer<T::Response>,
-        T::Serializer: serializer::Serializer<RequestMessage<R, T::Response, T::Serializer>>,
+        T::Serializer: serializer::CanSerialize<R>,
+        T::Serializer: serializer::CanSerialize<T::Response>,
+        T::Serializer: serializer::CanSerialize<RequestMessage<R, T::Response, T::Serializer>>,
     {
         let return_address = ReturnAddress::from_self();
         let message = RequestMessage(request, return_address);

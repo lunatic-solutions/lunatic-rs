@@ -4,7 +4,7 @@ use std::time::Duration;
 use crate::distributed::node_id;
 use crate::host::{self, api};
 use crate::mailbox::Catching;
-use crate::serializer::{Bincode, Serializer};
+use crate::serializer::{Bincode, CanSerialize};
 use crate::timer::TimerRef;
 use crate::{Mailbox, MailboxResult, Process, ProcessConfig, Tag};
 
@@ -99,7 +99,7 @@ pub trait AbstractProcess {
 /// Defines a handler for a message of type `M`.
 pub trait MessageHandler<M, S = Bincode>: AbstractProcess
 where
-    S: Serializer<M>,
+    S: CanSerialize<M>,
 {
     fn handle(state: &mut Self::State, message: M);
 }
@@ -107,7 +107,7 @@ where
 /// Defines a handler for a request of type `M`.
 pub trait RequestHandler<M, S = Bincode>: AbstractProcess
 where
-    S: Serializer<M>,
+    S: CanSerialize<M>,
 {
     type Response;
 
@@ -379,7 +379,7 @@ fn starter<T>(
 
 pub trait Message<M, S>
 where
-    S: Serializer<M>,
+    S: CanSerialize<M>,
 {
     fn send(&self, message: M);
     fn send_after(&self, message: M, duration: Duration) -> TimerRef;
@@ -387,7 +387,7 @@ where
 
 pub trait Request<M, S>
 where
-    S: Serializer<M>,
+    S: CanSerialize<M>,
 {
     type Result;
 
@@ -543,14 +543,14 @@ impl<M, S, T> Message<M, S> for ProcessRef<T>
 where
     T: AbstractProcess,
     T: MessageHandler<M, S>,
-    S: Serializer<M>,
+    S: CanSerialize<M>,
 {
     /// Send message to the process.
     fn send(&self, message: M) {
         fn unpacker<TU, MU, SU>(this: &mut TU::State)
         where
             TU: MessageHandler<MU, SU>,
-            SU: Serializer<MU>,
+            SU: CanSerialize<MU>,
         {
             let message: MU = SU::decode().unwrap();
             <TU as MessageHandler<MU, SU>>::handle(this, message);
@@ -573,7 +573,7 @@ where
         fn unpacker<TU, MU, SU>(this: &mut TU::State)
         where
             TU: MessageHandler<MU, SU>,
-            SU: Serializer<MU>,
+            SU: CanSerialize<MU>,
         {
             let message: MU = SU::decode().unwrap();
             <TU as MessageHandler<MU, SU>>::handle(this, message);
@@ -598,7 +598,7 @@ impl<M, S, T> Request<M, S> for ProcessRef<T>
 where
     T: AbstractProcess,
     T: RequestHandler<M, S>,
-    S: Serializer<M> + Serializer<<T as RequestHandler<M, S>>::Response>,
+    S: CanSerialize<M> + CanSerialize<<T as RequestHandler<M, S>>::Response>,
 {
     type Result = <T as RequestHandler<M, S>>::Response;
 
@@ -612,7 +612,7 @@ where
             sender: Process<<TU as RequestHandler<MU, SU>>::Response, SU>,
         ) where
             TU: RequestHandler<MU, SU>,
-            SU: Serializer<MU> + Serializer<<TU as RequestHandler<MU, SU>>::Response>,
+            SU: CanSerialize<MU> + CanSerialize<<TU as RequestHandler<MU, SU>>::Response>,
         {
             // Get content out of message
             let message: MU = SU::decode().unwrap();

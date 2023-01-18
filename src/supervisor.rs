@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use crate::process::{
     AbstractProcess, ProcessRef, Request, RequestHandler, Sendable, StartFailableProcess,
 };
-use crate::serializer::{Bincode, Serializer};
+use crate::serializer::{Bincode, CanSerialize};
 use crate::{host, MailboxResult, Process, Tag};
 
 /// A `Supervisor` can detect failures (panics) inside
