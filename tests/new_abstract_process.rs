@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use lunatic::abstract_process::handlers::{DeferredRequest, Message, Request};
-use lunatic::abstract_process::{
+use lunatic::ap::handlers::{DeferredRequest, Message, Request};
+use lunatic::ap::{
     AbstractProcess, Config, DeferredRequestHandler, DeferredResponse, MessageHandler, ProcessRef,
     RequestHandler, StartupError, State, Timeout,
 };
@@ -214,6 +214,8 @@ impl AbstractProcess for RegisteredAP {
     type StartupError = ();
 
     fn init(_: Config<Self>, _: Self::Arg) -> Result<(), ()> {
+        // Doing a lookup in `init` should not deadlock.
+        let _ = ProcessRef::<InitOkAP>::lookup("_");
         Ok(())
     }
 }
@@ -400,7 +402,7 @@ impl RequestHandler<()> for RequestHandlerTimeoutAP {
 fn request_timeout() {
     let ap = RequestHandlerTimeoutAP::link().start(()).unwrap();
     let response = ap.request((), Some(Duration::from_millis(10)));
-    assert_eq!(response, Err(lunatic::abstract_process::Timeout));
+    assert_eq!(response, Err(lunatic::ap::Timeout));
 }
 
 /// `AbstractProcess` that handles a deferred `String` request/response

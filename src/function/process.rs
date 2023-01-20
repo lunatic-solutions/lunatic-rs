@@ -360,6 +360,24 @@ where
         host::send(self.node_id, self.id);
     }
 
+    /// Send a message to the process with a specific tag, after the specified
+    /// duration has passed.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the received message can't be serialized
+    /// into `M` with serializer `S`.
+    pub fn tag_send_after(&self, tag: Tag, message: M, duration: Duration) -> TimerRef {
+        // Create new message.
+        unsafe { host::api::message::create_data(tag.id(), 0) };
+        // During serialization resources will add themselves to the message.
+        S::encode(&message).unwrap();
+        // Send it!
+        let timer_id =
+            unsafe { host::api::timer::send_after(self.id, duration.as_millis() as u64) };
+        TimerRef::new(timer_id)
+    }
+
     /// Sends message and waits on response until timeout (if specified).
     ///
     /// # Safety
@@ -392,12 +410,8 @@ where
             None => u64::MAX,
         };
 
-        // Send message
-        host::send(self.node_id, self.id);
-        // Wait for message under a different tag
-        let receive_tags = [receive_tag.id()];
         let result =
-            host::api::message::receive(receive_tags.as_ptr(), receive_tags.len(), timeout_ms);
+            host::send_receive_skip_search(self.node_id, self.id, receive_tag.id(), timeout_ms);
         if result == TIMEOUT {
             MailboxResult::TimedOut
         } else {

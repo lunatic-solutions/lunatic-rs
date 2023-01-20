@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use lunatic::process::{AbstractProcess, ProcessRef, Request, RequestHandler, StartProcess};
+use lunatic::ap::handlers::Request;
+use lunatic::ap::{AbstractProcess, Config, RequestHandler, State};
+use lunatic::serializer::Json;
 use lunatic::{spawn_link, Mailbox, Process};
 use lunatic_test::test;
 
@@ -71,15 +73,18 @@ fn request_reply(mailbox: Mailbox<u64>) {
     impl AbstractProcess for Adder {
         type Arg = ();
         type State = Self;
+        type Serializer = Json;
+        type Handlers = (Request<(i32, i32)>,);
+        type StartupError = ();
 
-        fn init(_: ProcessRef<Self>, _: ()) -> Adder {
-            Adder
+        fn init(_: Config<Self>, _: ()) -> Result<Adder, ()> {
+            Ok(Adder)
         }
     }
     impl RequestHandler<(i32, i32)> for Adder {
         type Response = i32;
 
-        fn handle(_: &mut Self::State, (a, b): (i32, i32)) -> i32 {
+        fn handle(_: State<Self>, (a, b): (i32, i32)) -> i32 {
             a + b
         }
     }
@@ -90,16 +95,16 @@ fn request_reply(mailbox: Mailbox<u64>) {
     });
 
     // Spawn another process that can reply to us with an i32 message.
-    let add_server = Adder::start((), None);
+    let add_server = Adder::link().start(()).unwrap();
 
     // Ignore all messages in the mailbox and make specific requests to the
     // `add_server`.
     for _ in 0..1_000 {
-        assert_eq!(add_server.request((1, 1)), 2);
-        assert_eq!(add_server.request((1, 2)), 3);
-        assert_eq!(add_server.request((8, 8)), 16);
-        assert_eq!(add_server.request((16, 16)), 32);
-        assert_eq!(add_server.request((128, -128)), 0);
+        assert_eq!(add_server.request((1, 1), None).unwrap(), 2);
+        assert_eq!(add_server.request((1, 2), None).unwrap(), 3);
+        assert_eq!(add_server.request((8, 8), None).unwrap(), 16);
+        assert_eq!(add_server.request((16, 16), None).unwrap(), 32);
+        assert_eq!(add_server.request((128, -128), None).unwrap(), 0);
     }
 }
 

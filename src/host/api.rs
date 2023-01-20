@@ -27,7 +27,7 @@ pub mod message {
         pub fn push_tls_stream(tls_stream_id: u64) -> u64;
         pub fn take_tls_stream(index: u64) -> u64;
         pub fn send(process_id: u64) -> u32;
-        pub fn send_receive_skip_search(process_id: u64, timeout: u64) -> u32;
+        pub fn send_receive_skip_search(process_id: u64, wait_on_tag: i64, timeout: u64) -> u32;
         pub fn receive(tag: *const i64, tag_len: usize, timeout: u64) -> u32;
     }
 }
@@ -308,7 +308,12 @@ pub mod distributed {
         pub fn node_id() -> u64;
         pub fn module_id() -> u64;
         pub fn send(node_id: u64, process_id: u64) -> u32;
-        pub fn send_receive_skip_search(node_id: u64, process_id: u64, timeout: u64) -> u32;
+        pub fn send_receive_skip_search(
+            node_id: u64,
+            process_id: u64,
+            wait_on_tag: i64,
+            timeout: u64,
+        ) -> u32;
         pub fn spawn(
             node_id: u64,
             config_id: i64,

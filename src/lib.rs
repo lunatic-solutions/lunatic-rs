@@ -91,7 +91,6 @@ directory for examples.
 
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
-pub mod abstract_process;
 mod config;
 mod error;
 mod macros;
@@ -100,13 +99,13 @@ mod module;
 mod process_local;
 mod tag;
 
+pub mod ap;
 pub mod distributed;
 pub mod function;
 pub mod host;
 pub mod metrics;
 pub mod net;
 pub mod panic;
-pub mod process;
 pub mod protocol;
 pub mod serializer;
 pub mod supervisor;

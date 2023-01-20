@@ -3,8 +3,8 @@ use crate::{serializer, Process, Tag};
 /// Contains information about the request sender, so that a response can be
 /// sent back to the correct process.
 #[derive(serde::Serialize, serde::Deserialize)]
+#[serde(bound = "")]
 pub(crate) struct ReturnAddress<Response, Serializer> {
-    #[serde(bound(serialize = "", deserialize = ""))]
     process: Process<Response, Serializer>,
 }
 
@@ -35,13 +35,12 @@ pub(crate) const SHUTDOWN_HANDLER: u8 = 32;
 ///
 /// The message combined with the `SHUTDOWN_HANDLER` data inside the tag.
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct ShutdownMessage<Response, Serializer>(
-    #[serde(bound(serialize = "", deserialize = ""))] pub(crate) ReturnAddress<Response, Serializer>,
-);
+#[serde(bound = "")]
+pub struct ShutdownMessage<Serializer>(pub(crate) ReturnAddress<(), Serializer>);
 
 /// An incoming message indicating a request for the [`AbstractProcess`].
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct RequestMessage<T, Response, Serializer>(
     pub(crate) T,
-    #[serde(bound(serialize = "", deserialize = ""))] pub(crate) ReturnAddress<Response, Serializer>,
+    #[serde(bound = "")] pub(crate) ReturnAddress<Response, Serializer>,
 );

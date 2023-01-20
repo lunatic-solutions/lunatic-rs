@@ -1,9 +1,9 @@
 mod builder;
 mod lifecycles;
-mod messages;
 mod tag;
 
 pub mod handlers;
+pub(crate) mod messages;
 
 use std::any::type_name;
 use std::fmt::Debug;
@@ -17,15 +17,42 @@ use self::handlers::{DeferredRequest, Handlers, Message, Request};
 use self::messages::{RequestMessage, ReturnAddress, ShutdownMessage, SHUTDOWN_HANDLER};
 use self::tag::AbstractProcessTag;
 use crate::protocol::ProtocolCapture;
-use crate::{host, serializer, Process, ProcessConfig, Tag};
+use crate::serializer::CanSerialize;
+use crate::timer::TimerRef;
+use crate::{host, Process, ProcessConfig, Tag};
 
 pub trait AbstractProcess: Sized
 where
-    // The serializer needs to be able to serialize the arguments used
-    // for initialization
-    Self::Serializer: serializer::CanSerialize<Self::Arg>,
-    // and errors that happen during the startup and need to be communicated to the parent
-    Self::Serializer: serializer::CanSerialize<Result<(), StartupError<Self>>>,
+    // The serializer needs to be able to serialize types that are used
+    // for starting up, shutting down and internal implementation
+    // details. The following section lists all requirements:
+    //
+    // Arguments that are sent from parent to the `init` function
+    Self::Serializer: CanSerialize<Self::Arg>,
+    // Errors that can be returned during startup to the parent
+    Self::Serializer: CanSerialize<Result<(), StartupError<Self>>>,
+    // Every `AbstractProcess` needs to be able to receive a shutdown
+    // message
+    Self::Serializer: CanSerialize<ShutdownMessage<Self::Serializer>>,
+    // This is more of an implementation detail. The internal reference
+    // to the `AbstractProcess` will be held in the shape of a
+    // `Process<(), Self::Serializer>` type. This requires the serializer
+    // to work with `()`
+    Self::Serializer: CanSerialize<()>,
+    // Similar to the previous requirement, the next two are inherited
+    // from the `Process::spawn_*` family of functions
+    Self::Serializer: CanSerialize<(
+        Process<Result<(), StartupError<Self>>, Self::Serializer>,
+        Tag,
+        Self::Arg,
+    )>,
+    Self::Serializer: CanSerialize<
+        ProtocolCapture<(
+            Process<Result<(), StartupError<Self>>, Self::Serializer>,
+            Tag,
+            Self::Arg,
+        )>,
+    >,
 {
     /// The state of the process.
     ///
@@ -57,7 +84,7 @@ where
     type Handlers: Handlers<Self>;
 
     /// Errors that can be returned from the `init` call to the spawner.
-    type StartupError;
+    type StartupError: Debug;
 
     /// Entry function of the new process.
     ///
@@ -77,26 +104,7 @@ where
     fn handle_link_death(_state: &mut Self::State, _tag: Tag) {}
 
     /// Starts a new `AbstractProcess` and returns a reference to it.
-    fn start(arg: Self::Arg) -> Result<ProcessRef<Self>, StartupError<Self>>
-    where
-        // TODO: Clean up serialization dependencies
-        Self::Serializer: serializer::CanSerialize<()>,
-        Self::Serializer: serializer::CanSerialize<(
-            Process<Result<(), StartupError<Self>>, Self::Serializer>,
-            Tag,
-            Self::Arg,
-        )>,
-        Self::Serializer: serializer::CanSerialize<ProtocolCapture<Self::Arg>>,
-        Self::Serializer: serializer::CanSerialize<
-            ProtocolCapture<(
-                Process<Result<(), StartupError<Self>>, Self::Serializer>,
-                Tag,
-                Self::Arg,
-            )>,
-        >,
-        Self::Serializer: serializer::CanSerialize<ProtocolCapture<ProtocolCapture<Self::Arg>>>,
-        Self::Serializer: serializer::CanSerialize<ShutdownMessage<(), Self::Serializer>>,
-    {
+    fn start(arg: Self::Arg) -> Result<ProcessRef<Self>, StartupError<Self>> {
         AbstractProcessBuilder::<Self>::new().start(arg)
     }
 
@@ -111,26 +119,7 @@ where
     fn start_as<S: AsRef<str>>(
         name: S,
         arg: Self::Arg,
-    ) -> Result<ProcessRef<Self>, StartupError<Self>>
-    where
-        // TODO: Clean up serialization dependencies
-        Self::Serializer: serializer::CanSerialize<()>,
-        Self::Serializer: serializer::CanSerialize<(
-            Process<Result<(), StartupError<Self>>, Self::Serializer>,
-            Tag,
-            Self::Arg,
-        )>,
-        Self::Serializer: serializer::CanSerialize<ProtocolCapture<Self::Arg>>,
-        Self::Serializer: serializer::CanSerialize<
-            ProtocolCapture<(
-                Process<Result<(), StartupError<Self>>, Self::Serializer>,
-                Tag,
-                Self::Arg,
-            )>,
-        >,
-        Self::Serializer: serializer::CanSerialize<ProtocolCapture<ProtocolCapture<Self::Arg>>>,
-        Self::Serializer: serializer::CanSerialize<ShutdownMessage<(), Self::Serializer>>,
-    {
+    ) -> Result<ProcessRef<Self>, StartupError<Self>> {
         AbstractProcessBuilder::<Self>::new().start_as(name, arg)
     }
 
@@ -192,15 +181,15 @@ impl<AP: AbstractProcess> Config<AP> {
 
 pub trait MessageHandler<Message>: AbstractProcess
 where
-    Self::Serializer: serializer::CanSerialize<Message>,
+    Self::Serializer: CanSerialize<Message>,
 {
     fn handle(state: State<Self>, message: Message);
 }
 
 pub trait RequestHandler<Request>: AbstractProcess
 where
-    Self::Serializer: serializer::CanSerialize<Request>,
-    Self::Serializer: serializer::CanSerialize<Self::Response>,
+    Self::Serializer: CanSerialize<Request>,
+    Self::Serializer: CanSerialize<Self::Response>,
 {
     type Response;
 
@@ -209,8 +198,8 @@ where
 
 pub trait DeferredRequestHandler<Request>: AbstractProcess
 where
-    Self::Serializer: serializer::CanSerialize<Request>,
-    Self::Serializer: serializer::CanSerialize<Self::Response>,
+    Self::Serializer: CanSerialize<Request>,
+    Self::Serializer: CanSerialize<Self::Response>,
 {
     type Response;
 
@@ -257,7 +246,7 @@ pub struct DeferredResponse<Response, Serializer> {
 
 impl<Response, Serializer> DeferredResponse<Response, Serializer>
 where
-    Serializer: serializer::CanSerialize<Response>,
+    Serializer: CanSerialize<Response>,
 {
     pub fn send_response(self, response: Response) {
         self.return_address.send_response(response, self.tag);
@@ -296,7 +285,7 @@ where
         self.process.id()
     }
 
-    /// Returns the node ID .
+    /// Returns the node ID.
     pub fn node_id(&self) -> u64 {
         self.process.node_id()
     }
@@ -365,8 +354,8 @@ where
     where
         // The serializer needs to be able to serialize values of `ShutdownMessage` & `()` for the
         // return value.
-        T::Serializer: serializer::CanSerialize<ShutdownMessage<(), T::Serializer>>,
-        T::Serializer: serializer::CanSerialize<()>,
+        T::Serializer: CanSerialize<ShutdownMessage<T::Serializer>>,
+        T::Serializer: CanSerialize<()>,
     {
         let return_address = ReturnAddress::from_self();
         let message = ShutdownMessage(return_address);
@@ -374,7 +363,7 @@ where
         let (receive_tag, _) = AbstractProcessTag::extract_u6_data(send_tag);
         unsafe {
             // Cast into the right type for sending.
-            let process: Process<ShutdownMessage<(), T::Serializer>, T::Serializer> =
+            let process: Process<ShutdownMessage<T::Serializer>, T::Serializer> =
                 mem::transmute(self.process);
             match process.tag_send_receive(send_tag, receive_tag, message, timeout) {
                 crate::MailboxResult::Message(()) => Ok(()),
@@ -388,13 +377,26 @@ where
     #[track_caller]
     pub fn send<M: 'static>(&self, message: M)
     where
-        T::Serializer: serializer::CanSerialize<M>,
+        T::Serializer: CanSerialize<M>,
     {
         let handler_id = T::Handlers::handler_id::<Message<M>>();
         let tag = AbstractProcessTag::from_u6(handler_id);
         // Cast into the right type for sending.
         let process: Process<M, T::Serializer> = unsafe { std::mem::transmute(self.process) };
         process.tag_send(tag, message);
+    }
+
+    /// Send message to the process after the specified duration has passed.
+    #[track_caller]
+    pub fn send_after<M: 'static>(&self, message: M, duration: Duration) -> TimerRef
+    where
+        T::Serializer: CanSerialize<M>,
+    {
+        let handler_id = T::Handlers::handler_id::<Message<M>>();
+        let tag = AbstractProcessTag::from_u6(handler_id);
+        // Cast into the right type for sending.
+        let process: Process<M, T::Serializer> = unsafe { std::mem::transmute(self.process) };
+        process.tag_send_after(tag, message, duration)
     }
 
     /// Make a request to the process.
@@ -409,9 +411,9 @@ where
     ) -> Result<T::Response, Timeout>
     where
         T: RequestHandler<R>,
-        T::Serializer: serializer::CanSerialize<R>,
-        T::Serializer: serializer::CanSerialize<T::Response>,
-        T::Serializer: serializer::CanSerialize<RequestMessage<R, T::Response, T::Serializer>>,
+        T::Serializer: CanSerialize<R>,
+        T::Serializer: CanSerialize<T::Response>,
+        T::Serializer: CanSerialize<RequestMessage<R, T::Response, T::Serializer>>,
     {
         let return_address = ReturnAddress::from_self();
         let message = RequestMessage(request, return_address);
@@ -442,9 +444,9 @@ where
     ) -> Result<T::Response, Timeout>
     where
         T: DeferredRequestHandler<R>,
-        T::Serializer: serializer::CanSerialize<R>,
-        T::Serializer: serializer::CanSerialize<T::Response>,
-        T::Serializer: serializer::CanSerialize<RequestMessage<R, T::Response, T::Serializer>>,
+        T::Serializer: CanSerialize<R>,
+        T::Serializer: CanSerialize<T::Response>,
+        T::Serializer: CanSerialize<RequestMessage<R, T::Response, T::Serializer>>,
     {
         let return_address = ReturnAddress::from_self();
         let message = RequestMessage(request, return_address);
