@@ -3,7 +3,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
-use syn::Token;
+use syn::{PathArguments, Token, Type};
 
 /// AbstractProcess macro.
 pub struct AbstractProcess {
@@ -13,12 +13,12 @@ pub struct AbstractProcess {
     item_impl: syn::ItemImpl,
     /// Arg type in abstract process implementation.
     arg_ty: syn::Type,
-    /// Init method.
+    /// `init` method.
     init: syn::ImplItemMethod,
     /// Terminate method.
     terminate: Option<syn::ImplItemMethod>,
-    /// Handle link trapped method.
-    handle_link_trapped: Option<syn::ImplItemMethod>,
+    /// Handle link died method.
+    handle_link_death: Option<syn::ImplItemMethod>,
     /// Message handler methods.
     message_handlers: Vec<syn::ImplItemMethod>,
     /// Request handler methods.
@@ -53,7 +53,7 @@ impl AbstractProcess {
                 ))
             }
         };
-        let (init, terminate, handle_link_trapped, message_handlers, request_handlers) = item_impl
+        let (init, terminate, handle_link_death, message_handlers, request_handlers) = item_impl
             .items
             .clone()
             .into_iter()
@@ -90,7 +90,7 @@ impl AbstractProcess {
                     let (
                         mut init,
                         mut terminate,
-                        mut handle_link_trapped,
+                        mut handle_link_death,
                         mut message_handlers,
                         mut request_handlers,
                     ) = acc?;
@@ -117,14 +117,14 @@ impl AbstractProcess {
                             terminate = Some(impl_item_method);
                         }
                         ItemAttr::HandleLinkTrapped => {
-                            if handle_link_trapped.is_some() {
+                            if handle_link_death.is_some() {
                                 return Err(syn::Error::new(
                                     impl_item_method.sig.ident.span(),
-                                    "handle_link_trapped method already defined",
+                                    "handle_link_death method already defined",
                                 ));
                             }
 
-                            handle_link_trapped = Some(impl_item_method);
+                            handle_link_death = Some(impl_item_method);
                         }
                         ItemAttr::HandleMessage => {
                             message_handlers.push(impl_item_method);
@@ -137,7 +137,7 @@ impl AbstractProcess {
                     Ok((
                         init,
                         terminate,
-                        handle_link_trapped,
+                        handle_link_death,
                         message_handlers,
                         request_handlers,
                     ))
@@ -172,7 +172,7 @@ impl AbstractProcess {
             arg_ty,
             init,
             terminate,
-            handle_link_trapped,
+            handle_link_death,
             message_handlers,
             request_handlers,
             message_builder_ident,
@@ -228,6 +228,7 @@ impl AbstractProcess {
     /// __MsgWrap(Param1, Param2);
     /// ```
     fn expand_handler_wrapper(&self, impl_item_method: &syn::ImplItemMethod) -> TokenStream {
+        let vis = &self.args.visibility;
         let ident = Self::handler_wrapper_ident(&impl_item_method.sig.ident);
         let (_, ty_generics, _) = &self.item_impl.generics.split_for_impl();
         let phantom_generics = &self.item_impl.generics.params;
@@ -240,7 +241,7 @@ impl AbstractProcess {
 
         quote! {
             #[derive(serde::Serialize, serde::Deserialize)]
-            struct #ident #ty_generics (
+            #vis struct #ident #ty_generics (
                 #phantom_field
                 #( #fields ),*
             );
@@ -277,33 +278,79 @@ impl AbstractProcess {
 
         let (impl_generics, _ty_generics, where_clause) = generics.split_for_impl();
         let arg_ty = &self.arg_ty;
+        let serializer = match &self.args.serializer {
+            Some(serializer) => quote!(#serializer),
+            None => quote!(lunatic::serializer::Bincode),
+        };
+        let handlers = self.expand_type_handlers();
 
-        let init_impl = self.expand_init_impl();
+        let (init_impl, startup_error) = self.expand_init_impl();
         let terminate_impl = self.expand_terminate_impl();
-        let handle_link_trapped_impl = self.expand_handle_link_trapped_impl();
+        let handle_link_death_impl = self.expand_handle_link_death_impl();
 
         quote! {
-            impl #impl_generics lunatic::process::AbstractProcess for #self_ty #where_clause {
+            impl #impl_generics lunatic::ap::AbstractProcess for #self_ty #where_clause {
                 type State = #self_ty;
                 type Arg = #arg_ty;
+                type Serializer = #serializer;
+                type Handlers = (#handlers);
+                type StartupError = #startup_error;
 
                 #init_impl
                 #terminate_impl
-                #handle_link_trapped_impl
+                #handle_link_death_impl
             }
         }
     }
 
+    /// Collects all wrapper types and adds them to the `AP::Handlers` tuple.
+    fn expand_type_handlers(&self) -> TokenStream {
+        let message_wrappers = self.message_handlers.iter().map(|impl_item_method| {
+            let ident = Self::handler_wrapper_ident(&impl_item_method.sig.ident);
+            let (_, generics, _) = &self.item_impl.generics.split_for_impl();
+            quote! { lunatic::ap::handlers::Message<#ident #generics>, }
+        });
+        let request_wrappers = self.request_handlers.iter().map(|impl_item_method| {
+            let ident = Self::handler_wrapper_ident(&impl_item_method.sig.ident);
+            let (_, generics, _) = &self.item_impl.generics.split_for_impl();
+            quote! { lunatic::ap::handlers::Request<#ident #generics>, }
+        });
+
+        message_wrappers.chain(request_wrappers).collect()
+    }
+
     /// Expands the `init` method in the abstract process implementation.
-    fn expand_init_impl(&self) -> TokenStream {
+    fn expand_init_impl(&self) -> (TokenStream, TokenStream) {
         let ident = &self.init.sig.ident;
         let arg_ty = &self.arg_ty;
 
-        quote! {
-            fn init(this: ProcessRef<Self>, arg: #arg_ty) -> Self::State {
-                Self::#ident(this, arg)
+        let init = quote! {
+            fn init(config: lunatic::ap::Config<Self>, arg: #arg_ty) -> Result<Self::State, Self::StartupError> {
+                Self::#ident(config, arg)
             }
-        }
+        };
+
+        // Extract startup error type from `Result<T, Error>`.
+        let startup_error = match &self.init.sig.output {
+            syn::ReturnType::Type(_, ret_type) => {
+                match ret_type.as_ref() {
+                    Type::Path(ret_type) => match ret_type.path.segments.last() {
+                        Some(ret_type_segments) => match &ret_type_segments.arguments {
+                            PathArguments::AngleBracketed(generics) => {
+                                // Error is the last argument in `Result<T, Error>`.
+                                let last = generics.args.last();
+                                quote! { #last }
+                            }
+                            _ => quote! { () },
+                        },
+                        _ => quote! { () },
+                    },
+                    _ => quote! { () },
+                }
+            }
+            _ => quote! { () },
+        };
+        (init, startup_error)
     }
 
     /// Expands the `terminate` method in the abstract process implementation.
@@ -322,16 +369,16 @@ impl AbstractProcess {
             .unwrap_or_default()
     }
 
-    /// Expands the `handle_link_trapped` method in the abstract process
+    /// Expands the `handle_link_death` method in the abstract process
     /// implementation.
-    fn expand_handle_link_trapped_impl(&self) -> TokenStream {
-        self.handle_link_trapped
+    fn expand_handle_link_death_impl(&self) -> TokenStream {
+        self.handle_link_death
             .as_ref()
-            .map(|handle_link_trapped| {
-                let ident = &handle_link_trapped.sig.ident;
+            .map(|handle_link_death| {
+                let ident = &handle_link_death.sig.ident;
 
                 quote! {
-                    fn handle_link_trapped(state: &mut Self::State, tag: lunatic::Tag) {
+                    fn handle_link_death(mut state: lunatic::ap::State<Self>, tag: lunatic::Tag) {
                         state.#ident(tag);
                     }
                 }
@@ -361,8 +408,8 @@ impl AbstractProcess {
 
             quote! {
                 #( #attrs )*
-                impl #impl_generics lunatic::process::MessageHandler<#message_type #ty_generics> for #self_ty #where_clause {
-                    fn handle(state: &mut Self::State, message: #message_type #ty_generics) {
+                impl #impl_generics lunatic::ap::MessageHandler<#message_type #ty_generics> for #self_ty #where_clause {
+                    fn handle(mut state: lunatic::ap::State<Self>, message: #message_type #ty_generics) {
                         state.#fn_ident(#( #message_fields ),*)
                     }
                 }
@@ -402,10 +449,10 @@ impl AbstractProcess {
 
             quote! {
                 #( #attrs )*
-                impl #impl_generics lunatic::process::RequestHandler<#request_type #ty_generics> for #self_ty #where_clause {
+                impl #impl_generics lunatic::ap::RequestHandler<#request_type #ty_generics> for #self_ty #where_clause {
                     type Response = #response_type;
 
-                    fn handle(state: &mut Self::State, request: #request_type #ty_generics) -> Self::Response {
+                    fn handle(mut state: lunatic::ap::State<Self>, request: #request_type #ty_generics) -> Self::Response {
                         state.#fn_ident(#( #request_fields ),*)
                     }
                 }
@@ -519,7 +566,6 @@ impl AbstractProcess {
                 quote! {
                     #( #attrs )*
                     fn #ident #generics (&self #(, #args )*) {
-                        use lunatic::process::Message;
                         let msg = #message_type(#arg_phantom #( #handler_args ),*);
                         self.send(msg);
                     }
@@ -543,15 +589,14 @@ impl AbstractProcess {
                 quote! {
                     #( #attrs )*
                     fn #ident #generics (&self #(, #args )*) -> #return_ty {
-                        use lunatic::process::Request;
                         let req = #message_type(#arg_phantom #( #handler_args ),*);
-                        self.request(req)
+                        self.request(req, None).unwrap()
                     }
                 }
             });
 
         quote! {
-            impl #impl_generics #handler_trait_ident #ty_generics for lunatic::process::ProcessRef<#self_ty> #where_clause {
+            impl #impl_generics #handler_trait_ident #ty_generics for lunatic::ap::ProcessRef<#self_ty> #where_clause {
                 #( #message_handler_impls )*
                 #( #request_handler_impls )*
 
@@ -602,7 +647,6 @@ impl AbstractProcess {
                 quote! {
                     #( #attrs )*
                     #vis fn #ident(&self #(, #args )*) {
-                        use lunatic::process::Message;
                         let msg = #message_type(#arg_phantom #( #handler_args ),*);
                         self.process_ref.send_after(msg, self.duration);
                     }
@@ -625,10 +669,9 @@ impl AbstractProcess {
 
                 quote! {
                     #( #attrs )*
-                    #vis fn #ident(&self #(, #args )*) -> lunatic::MailboxResult<#return_ty> {
-                        use lunatic::process::Request;
+                    #vis fn #ident(&self #(, #args )*) -> Result<#return_ty, lunatic::ap::Timeout> {
                         let req = #message_type(#arg_phantom #( #handler_args ),*);
-                        self.process_ref.request_timeout(req, self.duration)
+                        self.process_ref.request(req, Some(self.duration))
                     }
                 }
             });
@@ -636,11 +679,11 @@ impl AbstractProcess {
         quote! {
             #vis struct #message_builder_ident #ty_generics #where_clause {
                 duration: std::time::Duration,
-                process_ref: lunatic::process::ProcessRef<#self_ty>,
+                process_ref: lunatic::ap::ProcessRef<#self_ty>,
             }
 
             impl #impl_generics #message_builder_ident #ty_generics #where_clause {
-                fn new(duration: std::time::Duration, process_ref: ProcessRef<#self_ty>) -> Self {
+                fn new(duration: std::time::Duration, process_ref: lunatic::ap::ProcessRef<#self_ty>) -> Self {
                     Self {
                         duration,
                         process_ref,
@@ -652,11 +695,11 @@ impl AbstractProcess {
 
             #vis struct #request_builder_ident #ty_generics #where_clause {
                 duration: std::time::Duration,
-                process_ref: lunatic::process::ProcessRef<#self_ty>,
+                process_ref: lunatic::ap::ProcessRef<#self_ty>,
             }
 
             impl #impl_generics #request_builder_ident #ty_generics #where_clause {
-                fn new(duration: std::time::Duration, process_ref: ProcessRef<#self_ty>) -> Self {
+                fn new(duration: std::time::Duration, process_ref: lunatic::ap::ProcessRef<#self_ty>) -> Self {
                     Self {
                         duration,
                         process_ref,
@@ -678,6 +721,7 @@ impl AbstractProcess {
 pub struct Args {
     trait_name: Option<syn::LitStr>,
     visibility: Option<syn::Visibility>,
+    serializer: Option<syn::Type>,
 }
 
 impl Args {
@@ -706,6 +750,15 @@ impl Args {
             }
 
             self.visibility = Some(input.parse()?);
+        } else if ident == "serializer" {
+            if self.serializer.is_some() {
+                return Err(syn::Error::new(
+                    ident.span(),
+                    "serializer already specified",
+                ));
+            }
+
+            self.serializer = Some(input.parse()?);
         } else {
             return Err(syn::Error::new(ident.span(), "unknown argument"));
         }
@@ -738,7 +791,7 @@ impl ItemAttr {
         match s {
             "init" => Some(ItemAttr::Init),
             "terminate" => Some(ItemAttr::Terminate),
-            "handle_link_trapped" => Some(ItemAttr::HandleLinkTrapped),
+            "handle_link_death" => Some(ItemAttr::HandleLinkTrapped),
             "handle_message" => Some(ItemAttr::HandleMessage),
             "handle_request" => Some(ItemAttr::HandleRequest),
             _ => None,

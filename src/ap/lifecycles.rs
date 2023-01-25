@@ -12,6 +12,9 @@ use crate::panic::{catch_panic, Panicked};
 use crate::serializer::CanSerialize;
 use crate::{host, Mailbox, Process, Tag};
 
+type ParentProcessRef<AP> =
+    Process<Result<(), StartupError<AP>>, <AP as AbstractProcess>::Serializer>;
+
 /// This is the entry point into the [`AbstractProcess`].
 ///
 /// The entry point will get a reference to the parent, so that it can notify it
@@ -22,11 +25,7 @@ use crate::{host, Mailbox, Process, Tag};
 /// After the initialization finishes, it will spin in a loop waiting for
 /// commands, until the `Shutdown` command is received.
 pub(crate) fn entry<AP: AbstractProcess>(
-    (parent, init_tag, arg): (
-        Process<Result<(), StartupError<AP>>, AP::Serializer>,
-        Tag,
-        AP::Arg,
-    ),
+    (parent, init_tag, arg): (ParentProcessRef<AP>, Tag, AP::Arg),
     _: Mailbox<(), AP::Serializer>, // Can't be used for the `AbstractProcess` special case.
 ) where
     AP::Serializer: CanSerialize<()>,
@@ -68,7 +67,7 @@ fn loop_and_handle<AP: AbstractProcess>(state: &mut AP::State) -> Tag {
         if unsafe { host::api::message::receive(null(), 0, u64::MAX) } == LINK_DIED {
             let tag = unsafe { host::api::message::get_tag() };
             let tag = Tag::from(tag);
-            AP::handle_link_death(state, tag);
+            AP::handle_link_death(super::State { state }, tag);
             continue;
         }
 

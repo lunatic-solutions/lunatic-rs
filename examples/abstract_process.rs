@@ -1,4 +1,4 @@
-use lunatic::process::{ProcessRef, StartProcess};
+use lunatic::ap::{AbstractProcess, Config};
 use lunatic::{abstract_process, Mailbox, Tag};
 
 struct Counter(u32);
@@ -6,8 +6,8 @@ struct Counter(u32);
 #[abstract_process]
 impl Counter {
     #[init]
-    fn init(_: ProcessRef<Self>, start: u32) -> Self {
-        Self(start)
+    fn init(_: Config<Self>, start: u32) -> Result<Self, ()> {
+        Ok(Self(start))
     }
 
     #[terminate]
@@ -15,8 +15,8 @@ impl Counter {
         println!("Shutdown process");
     }
 
-    #[handle_link_trapped]
-    fn handle_link_trapped(&self, _tag: Tag) {
+    #[handle_link_death]
+    fn handle_link_death(&self, _tag: Tag) {
         println!("Link trapped");
     }
 
@@ -33,7 +33,7 @@ impl Counter {
 
 #[lunatic::main]
 fn main(_: Mailbox<()>) {
-    let counter = Counter::start_link(0, None);
+    let counter = Counter::link().start(0).unwrap();
     assert_eq!(counter.count(), 0);
 
     counter.increment();

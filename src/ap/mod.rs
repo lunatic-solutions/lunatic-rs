@@ -101,7 +101,7 @@ where
     fn terminate(_state: Self::State) {}
 
     /// This function will be called if another linked process dies.
-    fn handle_link_death(_state: &mut Self::State, _tag: Tag) {}
+    fn handle_link_death(_state: State<Self>, _tag: Tag) {}
 
     /// Starts a new `AbstractProcess` and returns a reference to it.
     fn start(arg: Self::Arg) -> Result<ProcessRef<Self>, StartupError<Self>> {
@@ -123,19 +123,19 @@ where
         AbstractProcessBuilder::<Self>::new().start_as(name, arg)
     }
 
-    fn link() -> AbstractProcessBuilder<Self> {
+    fn link() -> AbstractProcessBuilder<'static, Self> {
         AbstractProcessBuilder::new().link()
     }
 
-    fn link_with(tag: Tag) -> AbstractProcessBuilder<Self> {
+    fn link_with(tag: Tag) -> AbstractProcessBuilder<'static, Self> {
         AbstractProcessBuilder::new().link_with(tag)
     }
 
-    fn configure(config: ProcessConfig) -> AbstractProcessBuilder<Self> {
+    fn configure(config: &ProcessConfig) -> AbstractProcessBuilder<Self> {
         AbstractProcessBuilder::new().configure(config)
     }
 
-    fn on_node(node: u64) -> AbstractProcessBuilder<Self> {
+    fn on_node(node: u64) -> AbstractProcessBuilder<'static, Self> {
         AbstractProcessBuilder::new().on_node(node)
     }
 }

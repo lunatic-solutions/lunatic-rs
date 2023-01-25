@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use lunatic::ap::handlers::Request;
 use lunatic::ap::{AbstractProcess, Config, RequestHandler, State};
 use lunatic::host::node_id;
 use lunatic::serializer::MessagePack;
@@ -36,8 +37,11 @@ fn main() {
     config.set_max_fuel(1);
 
     if !nodes.is_empty() {
-        let add_server = Adder::start_node_config((), None, nodes[0], &config);
-        assert_eq!(add_server.request((1, 1)), 2);
+        let add_server = Adder::on_node(nodes[0])
+            .configure(&config)
+            .start(())
+            .unwrap();
+        assert_eq!(add_server.request((1, 1), None).unwrap(), 2);
     }
 
     let msgs = [10, 582, 172, 45];

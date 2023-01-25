@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use lunatic::host::process_id;
 use lunatic::{sleep, Mailbox, Process, ProcessConfig};
 
 #[lunatic::main]

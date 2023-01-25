@@ -13,18 +13,18 @@ trait IntoAbstractProcessBuilder<T> {}
 /// It implements the same public interface as [`AbstractProcess`], so that the
 /// builder pattern can simply start with the [`AbstractProcess`] and transition
 /// to the [`AbstractProcessBuilder`].
-pub struct AbstractProcessBuilder<T: ?Sized> {
+pub struct AbstractProcessBuilder<'a, T: ?Sized> {
     link: Option<Tag>,
-    config: Option<ProcessConfig>,
+    config: Option<&'a ProcessConfig>,
     node: Option<u64>,
     phantom: PhantomData<T>,
 }
 
-impl<T> AbstractProcessBuilder<T>
+impl<'a, T> AbstractProcessBuilder<'a, T>
 where
     T: AbstractProcess,
 {
-    pub(crate) fn new() -> AbstractProcessBuilder<T> {
+    pub(crate) fn new() -> AbstractProcessBuilder<'a, T> {
         AbstractProcessBuilder {
             link: None,
             config: None,
@@ -33,7 +33,7 @@ where
         }
     }
 
-    pub fn link(self) -> AbstractProcessBuilder<T> {
+    pub fn link(self) -> AbstractProcessBuilder<'a, T> {
         AbstractProcessBuilder {
             link: Some(Tag::new()),
             config: self.config,
@@ -42,7 +42,7 @@ where
         }
     }
 
-    pub fn link_with(self, tag: Tag) -> AbstractProcessBuilder<T> {
+    pub fn link_with(self, tag: Tag) -> AbstractProcessBuilder<'a, T> {
         AbstractProcessBuilder {
             link: Some(tag),
             config: self.config,
@@ -51,7 +51,7 @@ where
         }
     }
 
-    pub fn configure(self, config: ProcessConfig) -> AbstractProcessBuilder<T> {
+    pub fn configure(self, config: &'a ProcessConfig) -> AbstractProcessBuilder<'a, T> {
         AbstractProcessBuilder {
             link: self.link,
             config: Some(config),
@@ -60,7 +60,7 @@ where
         }
     }
 
-    pub fn on_node(self, node: u64) -> AbstractProcessBuilder<T> {
+    pub fn on_node(self, node: u64) -> AbstractProcessBuilder<'a, T> {
         AbstractProcessBuilder {
             link: self.link,
             config: self.config,

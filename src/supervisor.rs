@@ -93,8 +93,8 @@ where
         config.terminate();
     }
 
-    fn handle_link_death(sup_config: &mut SupervisorConfig<T>, tag: Tag) {
-        T::Children::handle_failure(sup_config, tag);
+    fn handle_link_death(mut sup_config: State<Self>, tag: Tag) {
+        T::Children::handle_failure(&mut sup_config, tag);
     }
 }
 

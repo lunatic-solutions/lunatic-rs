@@ -291,7 +291,7 @@ impl AbstractProcess for HandleLinkPanicAP {
         Ok(Self { panicked: false })
     }
 
-    fn handle_link_death(state: &mut Self::State, tag: lunatic::Tag) {
+    fn handle_link_death(mut state: State<Self>, tag: lunatic::Tag) {
         println!("Link trapped: {:?}", tag);
         state.panicked = true;
     }
