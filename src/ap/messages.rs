@@ -1,4 +1,5 @@
-use crate::{serializer, Process, Tag};
+use crate::serializer::CanSerialize;
+use crate::{Process, Tag};
 
 /// Contains information about the request sender, so that a response can be
 /// sent back to the correct process.
@@ -10,7 +11,7 @@ pub(crate) struct ReturnAddress<Response, Serializer> {
 
 impl<Response, Serializer> ReturnAddress<Response, Serializer>
 where
-    Serializer: serializer::CanSerialize<Response>,
+    Serializer: CanSerialize<Response>,
 {
     pub(crate) fn from_self() -> Self {
         let process = Process::this();

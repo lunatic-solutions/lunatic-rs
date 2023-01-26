@@ -430,7 +430,7 @@ impl DeferredRequestHandler<String> for DeferredStringRequestHandlerAP {
     fn handle(
         _: State<Self>,
         request: String,
-        deferred_response: DeferredResponse<Self::Response, Self::Serializer>,
+        deferred_response: DeferredResponse<Self::Response, Self>,
     ) {
         spawn_link!(|request, deferred_response| {
             request.push_str(" world");
@@ -464,7 +464,7 @@ impl AbstractProcess for DeferredRequestTimeoutAP {
 impl DeferredRequestHandler<String> for DeferredRequestTimeoutAP {
     type Response = String;
 
-    fn handle(_: State<Self>, _: String, _: DeferredResponse<Self::Response, Self::Serializer>) {
+    fn handle(_: State<Self>, _: String, _: DeferredResponse<Self::Response, Self>) {
         // Never return response
     }
 }

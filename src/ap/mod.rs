@@ -206,7 +206,7 @@ where
     fn handle(
         state: State<Self>,
         request: Request,
-        deferred_response: DeferredResponse<Self::Response, Self::Serializer>,
+        deferred_response: DeferredResponse<Self::Response, Self>,
     );
 }
 
@@ -239,14 +239,14 @@ impl<'a, AP: AbstractProcess> DerefMut for State<'a, AP> {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(bound = "")]
-pub struct DeferredResponse<Response, Serializer> {
+pub struct DeferredResponse<Response, AP: AbstractProcess> {
     tag: Tag,
-    return_address: ReturnAddress<Response, Serializer>,
+    return_address: ReturnAddress<Response, AP::Serializer>,
 }
 
-impl<Response, Serializer> DeferredResponse<Response, Serializer>
+impl<Response, AP: AbstractProcess> DeferredResponse<Response, AP>
 where
-    Serializer: CanSerialize<Response>,
+    AP::Serializer: CanSerialize<Response>,
 {
     pub fn send_response(self, response: Response) {
         self.return_address.send_response(response, self.tag);

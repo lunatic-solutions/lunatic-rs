@@ -127,7 +127,7 @@ where
     fn handle(
         mut state: State<Self>,
         _: ShutdownSubscribe,
-        subscriber: DeferredResponse<(), Self::Serializer>,
+        subscriber: DeferredResponse<(), Self>,
     ) {
         state.subscribe_shutdown(subscriber)
     }
@@ -171,7 +171,7 @@ where
     children: Option<<<T as Supervisor>::Children as Supervisable<T>>::Processes>,
     children_args: Option<<<T as Supervisor>::Children as Supervisable<T>>::Args>,
     children_tags: Option<<<T as Supervisor>::Children as Supervisable<T>>::Tags>,
-    terminate_subscribers: Vec<DeferredResponse<(), Bincode>>,
+    terminate_subscribers: Vec<DeferredResponse<(), T>>,
     phantom: PhantomData<T>,
 }
 
@@ -200,7 +200,7 @@ where
         T::Children::terminate(self);
     }
 
-    pub(crate) fn subscribe_shutdown(&mut self, subscriber: DeferredResponse<(), Bincode>) {
+    pub(crate) fn subscribe_shutdown(&mut self, subscriber: DeferredResponse<(), T>) {
         self.terminate_subscribers.push(subscriber);
     }
 }
