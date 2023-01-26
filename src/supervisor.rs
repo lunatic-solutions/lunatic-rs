@@ -111,7 +111,7 @@ where
     /// message and therefore be unblocked after having received the awaited
     /// message.
     pub fn wait_on_shutdown(&self) {
-        self.deferred_request(ShutdownSubscribe, None).unwrap();
+        self.deferred_request(ShutdownSubscribe);
     }
 }
 
@@ -153,7 +153,7 @@ where
     T: AbstractProcess<State = SupervisorConfig<T>, Serializer = Bincode>,
 {
     pub fn children(&self) -> <<T as Supervisor>::Children as Supervisable<T>>::Processes {
-        self.request(GetChildren, None).unwrap()
+        self.request(GetChildren)
     }
 }
 
@@ -263,14 +263,14 @@ mod macros {
         ($config:ident, []) => {}; // base case
         ($config:ident, [$head_i:tt $($rest_i:tt)*]) => { // recursive case
             macros::reverse_shutdown!($config, [$($rest_i)*]);
-            $config.children.as_ref().unwrap().$head_i.shutdown(None).unwrap();
+            $config.children.as_ref().unwrap().$head_i.shutdown();
         };
         // reverse_shutdown!(config, skip tag, [...]) shuts down all children with unmatched tags
         ($config:ident, skip $tag:ident, []) => {}; // base case
         ($config:ident, skip $tag:ident, [$head_i:tt $($rest_i:tt)*]) => { // recursive case
             macros::reverse_shutdown!($config, skip $tag, [$($rest_i)*]);
             if $tag != $config.children_tags.as_ref().unwrap().$head_i {
-                $config.children.as_ref().unwrap().$head_i.shutdown(None).unwrap();
+                $config.children.as_ref().unwrap().$head_i.shutdown();
             }
         };
         // reverse_shutdown!(config, after tag, [...]) shuts down the children after the tag

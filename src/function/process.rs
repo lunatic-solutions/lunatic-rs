@@ -11,7 +11,7 @@ use crate::host::{self, node_id, process_id};
 use crate::mailbox::TIMEOUT;
 use crate::protocol::ProtocolCapture;
 use crate::serializer::{Bincode, CanSerialize};
-use crate::timer::TimerRef;
+use crate::time::TimerRef;
 use crate::{MailboxResult, ProcessConfig, Tag};
 
 /// Decides what can be turned into a process.

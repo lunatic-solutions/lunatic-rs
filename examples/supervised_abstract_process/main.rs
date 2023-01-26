@@ -1,7 +1,7 @@
 mod counter_abstract_process;
 
 // Import the auto-generated `CounterHandler` public trait.
-use counter_abstract_process::{Counter, CounterHandler};
+use counter_abstract_process::{Counter, CounterMessages, CounterRequests};
 use lunatic::ap::{AbstractProcess, ProcessRef};
 use lunatic::supervisor::{Supervisor, SupervisorConfig, SupervisorStrategy};
 use lunatic::Mailbox;

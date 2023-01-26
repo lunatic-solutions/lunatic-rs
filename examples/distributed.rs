@@ -41,7 +41,7 @@ fn main() {
             .configure(&config)
             .start(())
             .unwrap();
-        assert_eq!(add_server.request((1, 1), None).unwrap(), 2);
+        assert_eq!(add_server.request((1, 1)), 2);
     }
 
     let msgs = [10, 582, 172, 45];

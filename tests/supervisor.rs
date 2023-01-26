@@ -64,7 +64,7 @@ impl AbstractProcess for A {
     fn init(_: Config<Self>, (count, name): Self::Arg) -> Result<A, ()> {
         if let Some(logger) = ProcessRef::<Logger>::lookup(LOGGER_NAME) {
             let log = LogEvent::Init(name);
-            logger.request(log, None).unwrap();
+            logger.request(log);
         }
         Ok(A { count, name })
     }
@@ -72,7 +72,7 @@ impl AbstractProcess for A {
     fn terminate(state: Self::State) {
         if let Some(logger) = ProcessRef::<Logger>::lookup(LOGGER_NAME) {
             let log = LogEvent::Shutdown(state.name);
-            logger.request(log, None).unwrap();
+            logger.request(log);
         }
     }
 }
@@ -101,7 +101,7 @@ impl MessageHandler<Panic> for A {
     fn handle(state: State<Self>, _: Panic) {
         if let Some(logger) = ProcessRef::<Logger>::lookup(LOGGER_NAME) {
             let log = LogEvent::Panic(state.name);
-            logger.request(log, None).unwrap();
+            logger.request(log);
         }
         panic!();
     }
@@ -127,7 +127,7 @@ fn one_failing_process() {
 
     // Starting state should be 4
     for i in 4..30 {
-        assert_eq!(i, child.request(Count, None).unwrap());
+        assert_eq!(i, child.request(Count));
         child.send(Inc);
     }
 
@@ -140,7 +140,7 @@ fn one_failing_process() {
 
     // Starting state should be 4 again
     for i in 4..30 {
-        assert_eq!(i, child.request(Count, None).unwrap());
+        assert_eq!(i, child.request(Count));
         child.send(Inc);
     }
 }
@@ -167,12 +167,12 @@ fn two_failing_process_one_for_one() {
 
     // Starting state should be 33 for a
     for i in 33..36 {
-        assert_eq!(i, a.request(Count, None).unwrap());
+        assert_eq!(i, a.request(Count));
         a.send(Inc);
     }
     // Starting state should be 44 for b
     for i in 44..88 {
-        assert_eq!(i, b.request(Count, None).unwrap());
+        assert_eq!(i, b.request(Count));
         b.send(Inc);
     }
 
@@ -180,7 +180,7 @@ fn two_failing_process_one_for_one() {
     b.send(Panic);
     sleep(Duration::from_millis(10));
 
-    let log = logger.request(TakeLogs, None).unwrap();
+    let log = logger.request(TakeLogs);
     assert_eq!(
         log,
         vec![
@@ -198,12 +198,12 @@ fn two_failing_process_one_for_one() {
 
     // The state for a shouldn't be restarted.
     for i in 36..99 {
-        assert_eq!(i, a.request(Count, None).unwrap());
+        assert_eq!(i, a.request(Count));
         a.send(Inc);
     }
     // But b should
     for i in 44..66 {
-        assert_eq!(i, b.request(Count, None).unwrap());
+        assert_eq!(i, b.request(Count));
         b.send(Inc);
     }
 
@@ -211,7 +211,7 @@ fn two_failing_process_one_for_one() {
     a.send(Panic);
     sleep(Duration::from_millis(10));
 
-    let log = logger.request(TakeLogs, None).unwrap();
+    let log = logger.request(TakeLogs);
     assert_eq!(
         log,
         vec![
@@ -226,12 +226,12 @@ fn two_failing_process_one_for_one() {
 
     // The state for a shouldn't be restarted.
     for i in 33..50 {
-        assert_eq!(i, a.request(Count, None).unwrap());
+        assert_eq!(i, a.request(Count));
         a.send(Inc);
     }
     // But b should
     for i in 66..100 {
-        assert_eq!(i, b.request(Count, None).unwrap());
+        assert_eq!(i, b.request(Count));
         b.send(Inc);
     }
 }
@@ -258,12 +258,12 @@ fn two_failing_process_one_for_all() {
 
     // Starting state should be 33 for a
     for i in 33..36 {
-        assert_eq!(i, a.request(Count, None).unwrap());
+        assert_eq!(i, a.request(Count));
         a.send(Inc);
     }
     // Starting state should be 44 for b
     for i in 44..88 {
-        assert_eq!(i, b.request(Count, None).unwrap());
+        assert_eq!(i, b.request(Count));
         b.send(Inc);
     }
 
@@ -271,7 +271,7 @@ fn two_failing_process_one_for_all() {
     b.send(Panic);
     sleep(Duration::from_millis(10));
 
-    let log = logger.request(TakeLogs, None).unwrap();
+    let log = logger.request(TakeLogs);
     assert_eq!(
         log,
         vec![
@@ -292,12 +292,12 @@ fn two_failing_process_one_for_all() {
 
     // The state for a should be restarted.
     for i in 33..36 {
-        assert_eq!(i, a.request(Count, None).unwrap());
+        assert_eq!(i, a.request(Count));
         a.send(Inc);
     }
     // So should b
     for i in 44..66 {
-        assert_eq!(i, b.request(Count, None).unwrap());
+        assert_eq!(i, b.request(Count));
         b.send(Inc);
     }
 
@@ -305,7 +305,7 @@ fn two_failing_process_one_for_all() {
     a.send(Panic);
     sleep(Duration::from_millis(10));
 
-    let log = logger.request(TakeLogs, None).unwrap();
+    let log = logger.request(TakeLogs);
     assert_eq!(
         log,
         vec![
@@ -323,12 +323,12 @@ fn two_failing_process_one_for_all() {
 
     // The state for a should be restarted.
     for i in 33..50 {
-        assert_eq!(i, a.request(Count, None).unwrap());
+        assert_eq!(i, a.request(Count));
         a.send(Inc);
     }
     // So should a
     for i in 44..66 {
-        assert_eq!(i, b.request(Count, None).unwrap());
+        assert_eq!(i, b.request(Count));
         b.send(Inc);
     }
 }
@@ -364,7 +364,7 @@ fn four_failing_process_rest_for_all() {
     b.send(Panic);
     sleep(Duration::from_millis(10));
 
-    let logs = logger.request(TakeLogs, None).unwrap();
+    let logs = logger.request(TakeLogs);
     assert_eq!(
         logs,
         vec![
@@ -390,7 +390,7 @@ fn four_failing_process_rest_for_all() {
     a.send(Panic);
     sleep(Duration::from_millis(10));
 
-    let logs = logger.request(TakeLogs, None).unwrap();
+    let logs = logger.request(TakeLogs);
     assert_eq!(
         logs,
         vec![
@@ -414,7 +414,7 @@ fn four_failing_process_rest_for_all() {
     d.send(Panic);
     sleep(Duration::from_millis(10));
 
-    let logs = logger.request(TakeLogs, None).unwrap();
+    let logs = logger.request(TakeLogs);
     assert_eq!(
         logs,
         vec![
@@ -490,8 +490,8 @@ fn shutdown() {
 
     let logger = Logger::link().start_as(LOGGER_NAME, ()).unwrap();
     let sup = Sup::link().start(()).unwrap();
-    sup.shutdown(None).unwrap();
-    let log = logger.request(TakeLogs, None).unwrap();
+    sup.shutdown();
+    let log = logger.request(TakeLogs);
     assert_eq!(
         log,
         vec![
@@ -527,11 +527,11 @@ fn lookup_children() {
     Sup::link().start(()).unwrap();
 
     let first = ProcessRef::<A>::lookup("first").unwrap();
-    assert_eq!(first.request(Count, None).unwrap(), 0);
+    assert_eq!(first.request(Count), 0);
     let second = ProcessRef::<A>::lookup("second").unwrap();
-    assert_eq!(second.request(Count, None).unwrap(), 1);
+    assert_eq!(second.request(Count), 1);
     let third = ProcessRef::<A>::lookup("third").unwrap();
-    assert_eq!(third.request(Count, None).unwrap(), 2);
+    assert_eq!(third.request(Count), 2);
 
     // Kill third and inc count to 4
     third.send(Panic);
@@ -539,10 +539,10 @@ fn lookup_children() {
     let third = ProcessRef::<A>::lookup("third").unwrap();
     third.send(Inc);
     third.send(Inc);
-    assert_eq!(third.request(Count, None).unwrap(), 4);
+    assert_eq!(third.request(Count), 4);
     // Holding multiple references is ok
     let third = ProcessRef::<A>::lookup("third").unwrap();
-    assert_eq!(third.request(Count, None).unwrap(), 4);
+    assert_eq!(third.request(Count), 4);
 }
 
 #[test]
@@ -564,7 +564,7 @@ fn wait_on_shutdown() {
     // Shutdown supervisor process after a delay
     spawn!(|sup, _mailbox: Mailbox<()>| {
         sleep(Duration::from_millis(10));
-        sup.shutdown(None).unwrap();
+        sup.shutdown();
     });
 
     // block main process until supervisor shuts down

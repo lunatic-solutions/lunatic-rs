@@ -42,7 +42,7 @@ fn shutdown() {
     }
 
     let a = A::link().start(()).unwrap();
-    a.shutdown(None).unwrap();
+    a.shutdown();
 }
 
 #[test]
@@ -382,7 +382,7 @@ fn reply_types() {
 }
 
 #[test]
-fn send_after() {
+fn send_with_delay() {
     struct Counter {
         count: u32,
     }
@@ -406,7 +406,7 @@ fn send_after() {
     }
 
     let counter = Counter::link().start(2).unwrap();
-    counter.after(Duration::from_millis(10)).increment();
+    counter.with_delay(Duration::from_millis(10)).increment();
     assert_eq!(2, counter.count());
     sleep(Duration::from_millis(15));
     assert_eq!(3, counter.count());
@@ -475,9 +475,9 @@ fn visibility() {
         }
     }
 
-    use m::{Counter, CounterHandler};
+    use m::{Counter, CounterMessages, CounterRequests};
     let counter = Counter::link().start(2).unwrap();
-    counter.after(Duration::from_millis(10)).increment();
+    counter.with_delay(Duration::from_millis(10)).increment();
     assert_eq!(2, counter.count());
     sleep(Duration::from_millis(15));
     assert_eq!(3, counter.count());
@@ -489,7 +489,9 @@ fn wrapper_rename() {
         count: u32,
     }
 
-    #[abstract_process(trait_name = "CounterExt", visibility = pub)]
+    #[abstract_process(message_trait_name = "CounterMsgExt",
+                       request_trait_name = "CounterReqExt",
+                       visibility = pub)]
     impl Counter {
         #[init]
         fn init(_config: Config<Self>, count: u32) -> Result<Self, ()> {
@@ -508,7 +510,7 @@ fn wrapper_rename() {
     }
 
     let counter = Counter::link().start(2).unwrap();
-    counter.after(Duration::from_millis(10)).increment();
+    counter.with_delay(Duration::from_millis(10)).increment();
     assert_eq!(2, counter.count());
     sleep(Duration::from_millis(15));
     assert_eq!(3, counter.count());
@@ -552,7 +554,7 @@ fn generics() {
     assert_eq!(0f32, counter.sum());
     counter.add(PI);
     assert_eq!(PI, counter.sum());
-    counter.after(Duration::from_millis(10)).add(PI);
+    counter.with_delay(Duration::from_millis(10)).add(PI);
     sleep(Duration::from_millis(15));
     let s = counter
         .with_timeout(Duration::from_millis(10))

@@ -18,7 +18,7 @@ use self::messages::{RequestMessage, ReturnAddress, ShutdownMessage, SHUTDOWN_HA
 use self::tag::AbstractProcessTag;
 use crate::protocol::ProtocolCapture;
 use crate::serializer::CanSerialize;
-use crate::timer::TimerRef;
+use crate::time::{Timeout, TimerRef, WithDelay, WithTimeout};
 use crate::{host, Process, ProcessConfig, Tag};
 
 pub trait AbstractProcess: Sized
@@ -259,7 +259,7 @@ where
 /// messages of different types, as long as the traits
 /// `MessageHandler<Message>`, `RequestHandler<Request>` or
 /// `DeferredRequestHandler<Request>` are implemented for `T`.
-#[derive(Copy, serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[serde(bound = "")]
 pub struct ProcessRef<T>
 where
@@ -269,6 +269,8 @@ where
     // be different and will be transmuted just in time before the request is sent out.
     process: Process<(), T::Serializer>,
 }
+
+impl<T: AbstractProcess> Copy for ProcessRef<T> {}
 
 impl<T> ProcessRef<T>
 where
@@ -347,10 +349,23 @@ where
     }
 
     /// Shuts the [`AbstractProcess`] down.
+    #[track_caller]
+    pub fn shutdown(&self)
+    where
+        // The serializer needs to be able to serialize values of `ShutdownMessage` & `()` for the
+        // return value.
+        T::Serializer: CanSerialize<ShutdownMessage<T::Serializer>>,
+        T::Serializer: CanSerialize<()>,
+    {
+        self.shutdown_timeout(None).unwrap();
+    }
+
+    /// Shuts the [`AbstractProcess`] down.
     ///
     /// If a timeout is specified the function will only block for the timeout
     /// period before returning `Err(Timeout)`.
-    pub fn shutdown(&self, timeout: Option<Duration>) -> Result<(), Timeout>
+    #[track_caller]
+    pub(crate) fn shutdown_timeout(&self, timeout: Option<Duration>) -> Result<(), Timeout>
     where
         // The serializer needs to be able to serialize values of `ShutdownMessage` & `()` for the
         // return value.
@@ -388,7 +403,7 @@ where
 
     /// Send message to the process after the specified duration has passed.
     #[track_caller]
-    pub fn send_after<M: 'static>(&self, message: M, duration: Duration) -> TimerRef
+    pub(crate) fn delayed_send<M: 'static>(&self, message: M, duration: Duration) -> TimerRef
     where
         T::Serializer: CanSerialize<M>,
     {
@@ -400,11 +415,23 @@ where
     }
 
     /// Make a request to the process.
+    #[track_caller]
+    pub fn request<R: 'static>(&self, request: R) -> T::Response
+    where
+        T: RequestHandler<R>,
+        T::Serializer: CanSerialize<R>,
+        T::Serializer: CanSerialize<T::Response>,
+        T::Serializer: CanSerialize<RequestMessage<R, T::Response, T::Serializer>>,
+    {
+        self.request_timeout(request, None).unwrap()
+    }
+
+    /// Make a request to the process.
     //
     /// If a timeout is specified the function will only block for the timeout
     /// period before returning `Err(Timeout)`.
     #[track_caller]
-    pub fn request<R: 'static>(
+    pub(crate) fn request_timeout<R: 'static>(
         &self,
         request: R,
         timeout: Option<Duration>,
@@ -433,11 +460,23 @@ where
     }
 
     /// Make a deferred request to the process.
+    #[track_caller]
+    pub fn deferred_request<R: 'static>(&self, request: R) -> T::Response
+    where
+        T: DeferredRequestHandler<R>,
+        T::Serializer: CanSerialize<R>,
+        T::Serializer: CanSerialize<T::Response>,
+        T::Serializer: CanSerialize<RequestMessage<R, T::Response, T::Serializer>>,
+    {
+        self.deferred_request_timeout(request, None).unwrap()
+    }
+
+    /// Make a deferred request to the process.
     //
     /// If a timeout is specified the function will only block for the timeout
     /// period before returning `Err(Timeout)`.
     #[track_caller]
-    pub fn deferred_request<R: 'static>(
+    pub(crate) fn deferred_request_timeout<R: 'static>(
         &self,
         request: R,
         timeout: Option<Duration>,
@@ -463,6 +502,23 @@ where
                 _ => unreachable!("send_receive should panic in case of other errors"),
             }
         }
+    }
+
+    /// Set a timeout on the next action performed on this process.
+    ///
+    /// Timeouts affect [`ProcessRef::shutdown`], [`ProcessRef::request`] and
+    /// [`ProcessRef::deferred_request`] functions.
+    pub fn with_timeout(self, timeout: Duration) -> WithTimeout<ProcessRef<T>> {
+        WithTimeout::from(timeout, self)
+    }
+
+    /// Set a delay on the next [`ProcessRef::send`] performed on this process.
+    ///
+    /// This is a non-blocking function, meaning that `send` is going to be
+    /// performed in the background while the execution continues. The `send`
+    /// call will return a reference to the timer allowing you to cancel it.
+    pub fn with_delay(self, timeout: Duration) -> WithDelay<ProcessRef<T>> {
+        WithDelay::from(timeout, self)
     }
 }
 
@@ -554,7 +610,3 @@ where
 }
 
 impl<AP: AbstractProcess> Eq for StartupError<AP> where AP::StartupError: Eq {}
-
-/// Error result of [`ProcessRef::shutdown`] & [`ProcessRef::request`].
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct Timeout;

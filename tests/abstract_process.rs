@@ -3,9 +3,10 @@ use std::time::Duration;
 use lunatic::ap::handlers::{DeferredRequest, Message, Request};
 use lunatic::ap::{
     AbstractProcess, Config, DeferredRequestHandler, DeferredResponse, MessageHandler, ProcessRef,
-    RequestHandler, StartupError, State, Timeout,
+    RequestHandler, StartupError, State,
 };
 use lunatic::serializer::Bincode;
+use lunatic::time::Timeout;
 use lunatic::{sleep, spawn_link, test};
 
 /// This `AbstractProcess` always panics on `init`.
@@ -74,7 +75,7 @@ fn init_ok() {
 #[test]
 fn shutdown_ok() {
     let ap = InitOkAP::start(()).unwrap();
-    ap.shutdown(None).unwrap();
+    ap.shutdown();
 }
 
 /// `AbstractProcess` that fails to shut down in time.
@@ -99,7 +100,10 @@ impl AbstractProcess for ShutdownTimeoutAP {
 #[test]
 fn shutdown_timeout() {
     let ap = ShutdownTimeoutAP::start(()).unwrap();
-    assert!(ap.shutdown(Some(Duration::from_millis(10))).is_err());
+    assert!(ap
+        .with_timeout(Duration::from_millis(10))
+        .shutdown()
+        .is_err());
 }
 
 /// `AbstractProcess` with float array as `init` arguments.
@@ -144,15 +148,15 @@ fn float_message_and_request_handling() {
     ap.send(Add(0.2));
     ap.send(Add(0.1));
     ap.send(Add(1.0));
-    assert_eq!(ap.request(Sum, None).unwrap(), 2.0);
+    assert_eq!(ap.request(Sum), 2.0);
     ap.send(Add(0.1));
-    assert_eq!(ap.request(Sum, None).unwrap(), 2.1);
+    assert_eq!(ap.request(Sum), 2.1);
     ap.send(Add(0.1));
-    assert_eq!(ap.request(Sum, None).unwrap(), 2.2);
+    assert_eq!(ap.request(Sum), 2.2);
     ap.send(Add(0.3));
-    assert_eq!(ap.request(Sum, None).unwrap(), 2.5);
+    assert_eq!(ap.request(Sum), 2.5);
     ap.send(Add(0.1));
-    assert_eq!(ap.request(Sum, None).unwrap(), 2.6);
+    assert_eq!(ap.request(Sum), 2.6);
 }
 
 /// `AbstractProcess` that self-references itself during `init` and in handlers.
@@ -200,7 +204,7 @@ fn self_ref() {
     let ap = SelfRefAP::link().start(0).unwrap();
     // Give enough time to increment state.
     sleep(Duration::from_millis(20));
-    assert_eq!(ap.request(Count, None).unwrap(), 10);
+    assert_eq!(ap.request(Count), 10);
 }
 
 /// `AbstractProcess` that is registered under a well-known name.
@@ -312,7 +316,7 @@ impl RequestHandler<DidPanick> for HandleLinkPanicAP {
 fn handle_link_panic() {
     let ap = HandleLinkPanicAP::start(()).unwrap();
     sleep(Duration::from_millis(10));
-    assert!(ap.request(DidPanick, None).unwrap());
+    assert!(ap.request(DidPanick));
 }
 
 /// `AbstractProcess` that handles `String` message
@@ -371,7 +375,7 @@ impl RequestHandler<String> for StringRequestHandlerAP {
 #[test]
 fn handle_request() {
     let ap = StringRequestHandlerAP::link().start(()).unwrap();
-    let response = ap.request("Hello".to_owned(), None).unwrap();
+    let response = ap.request("Hello".to_owned());
     assert_eq!(response, "Hello world");
 }
 
@@ -401,8 +405,8 @@ impl RequestHandler<()> for RequestHandlerTimeoutAP {
 #[test]
 fn request_timeout() {
     let ap = RequestHandlerTimeoutAP::link().start(()).unwrap();
-    let response = ap.request((), Some(Duration::from_millis(10)));
-    assert_eq!(response, Err(lunatic::ap::Timeout));
+    let response = ap.with_timeout(Duration::from_millis(10)).request(());
+    assert_eq!(response, Err(Timeout));
 }
 
 /// `AbstractProcess` that handles a deferred `String` request/response
@@ -438,7 +442,7 @@ impl DeferredRequestHandler<String> for DeferredStringRequestHandlerAP {
 #[test]
 fn deferred_handle_request() {
     let ap = DeferredStringRequestHandlerAP::link().start(()).unwrap();
-    let response = ap.deferred_request("Hello".to_owned(), None).unwrap();
+    let response = ap.deferred_request("Hello".to_owned());
     assert_eq!(response, "Hello world");
 }
 
@@ -468,6 +472,8 @@ impl DeferredRequestHandler<String> for DeferredRequestTimeoutAP {
 #[test]
 fn deferred_request_timeout() {
     let ap = DeferredRequestTimeoutAP::link().start(()).unwrap();
-    let response = ap.deferred_request("Hello".to_owned(), Some(Duration::from_millis(10)));
+    let response = ap
+        .with_timeout(Duration::from_millis(10))
+        .deferred_request("Hello".to_owned());
     assert_eq!(response, Err(Timeout));
 }

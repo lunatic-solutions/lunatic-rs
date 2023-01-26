@@ -100,11 +100,11 @@ fn request_reply(mailbox: Mailbox<u64>) {
     // Ignore all messages in the mailbox and make specific requests to the
     // `add_server`.
     for _ in 0..1_000 {
-        assert_eq!(add_server.request((1, 1), None).unwrap(), 2);
-        assert_eq!(add_server.request((1, 2), None).unwrap(), 3);
-        assert_eq!(add_server.request((8, 8), None).unwrap(), 16);
-        assert_eq!(add_server.request((16, 16), None).unwrap(), 32);
-        assert_eq!(add_server.request((128, -128), None).unwrap(), 0);
+        assert_eq!(add_server.request((1, 1)), 2);
+        assert_eq!(add_server.request((1, 2)), 3);
+        assert_eq!(add_server.request((8, 8)), 16);
+        assert_eq!(add_server.request((16, 16)), 32);
+        assert_eq!(add_server.request((128, -128)), 0);
     }
 }
 

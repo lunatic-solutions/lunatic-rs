@@ -26,6 +26,6 @@ impl RequestHandler<(i32, i32)> for Adder {
 #[lunatic::main]
 fn main(_: Mailbox<()>) {
     let add_server = Adder::link().start(()).unwrap();
-    assert_eq!(add_server.request((1, 1), None).unwrap(), 2);
-    assert_eq!(add_server.request((1, 2), None).unwrap(), 3);
+    assert_eq!(add_server.request((1, 1)), 2);
+    assert_eq!(add_server.request((1, 2)), 3);
 }

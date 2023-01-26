@@ -111,7 +111,7 @@ pub mod serializer;
 pub mod supervisor;
 #[doc(hidden)]
 pub mod test;
-pub mod timer;
+pub mod time;
 
 pub use config::ProcessConfig;
 pub use error::LunaticError;

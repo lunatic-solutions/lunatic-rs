@@ -27,7 +27,7 @@ impl MessageHandler<()> for P {
 #[should_panic]
 fn send_after() {
     let process = P::link().start(()).unwrap();
-    process.send_after((), Duration::from_millis(10));
+    process.with_delay(Duration::from_millis(10)).send(());
 
     // give enough time to fail
     lunatic::sleep(Duration::from_millis(25));
@@ -36,7 +36,7 @@ fn send_after() {
 #[test]
 fn send_after_needs_more_time() {
     let process = P::link().start(()).unwrap();
-    process.send_after((), Duration::from_millis(25));
+    process.with_delay(Duration::from_millis(25)).send(());
 
     // sleep for some time, but not enough for the message to be sent
     lunatic::sleep(Duration::from_millis(10));
@@ -45,7 +45,7 @@ fn send_after_needs_more_time() {
 #[test]
 fn cancel_send_after() {
     let process = P::link().start(()).unwrap();
-    let timer_ref = process.send_after((), Duration::from_millis(10));
+    let timer_ref = process.with_delay(Duration::from_millis(10)).send(());
     timer_ref.cancel();
 
     // give enough time for the message to be sent if it wasn't canceled

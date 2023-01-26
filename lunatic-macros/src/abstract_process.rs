@@ -5,7 +5,6 @@ use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
 use syn::{PathArguments, Token, Type};
 
-/// AbstractProcess macro.
 pub struct AbstractProcess {
     /// Arguments passed to the `#[abstract_process(...)]` macro.
     args: Args,
@@ -23,12 +22,10 @@ pub struct AbstractProcess {
     message_handlers: Vec<syn::ImplItemMethod>,
     /// Request handler methods.
     request_handlers: Vec<syn::ImplItemMethod>,
-    /// Ident of the message builder struct.
-    message_builder_ident: syn::Ident,
-    /// Ident of the request builder struct.
-    request_builder_ident: syn::Ident,
-    /// Ident of the handler trait.
-    handler_trait_ident: syn::Ident,
+    /// Name of trait wrapping messages
+    message_trait_name: syn::Ident,
+    /// Name of trait wrapping requests
+    request_trait_name: syn::Ident,
 }
 
 impl AbstractProcess {
@@ -158,13 +155,16 @@ impl AbstractProcess {
             syn::FnArg::Typed(typed_arg) => *typed_arg.ty.clone(),
         };
 
-        let message_builder_ident = format_ident!("{}MsgBuilder", self_ident);
-        let request_builder_ident = format_ident!("{}ReqBuilder", self_ident);
-        let handler_trait_ident = args
-            .trait_name
+        let message_trait_name = args
+            .message_trait_name
             .as_ref()
-            .map(|trait_name| format_ident!("{}", trait_name.value()))
-            .unwrap_or_else(|| format_ident!("{}Handler", self_ident));
+            .map(|message_trait_name| format_ident!("{}", message_trait_name.value()))
+            .unwrap_or_else(|| format_ident!("{}Messages", self_ident));
+        let request_trait_name = args
+            .request_trait_name
+            .as_ref()
+            .map(|request_trait_name| format_ident!("{}", request_trait_name.value()))
+            .unwrap_or_else(|| format_ident!("{}Requests", self_ident));
 
         Ok(AbstractProcess {
             args,
@@ -175,9 +175,8 @@ impl AbstractProcess {
             handle_link_death,
             message_handlers,
             request_handlers,
-            message_builder_ident,
-            request_builder_ident,
-            handler_trait_ident,
+            message_trait_name,
+            request_trait_name,
         })
     }
 
@@ -190,7 +189,6 @@ impl AbstractProcess {
         let request_handler_impls = self.expand_request_handler_impls();
         let handler_trait = self.expand_handler_trait();
         let impl_handler_trait = self.expand_impl_handler_trait();
-        let message_builders = self.expand_builders();
 
         quote! {
             #handler_wrappers
@@ -200,7 +198,6 @@ impl AbstractProcess {
             #request_handler_impls
             #handler_trait
             #impl_handler_trait
-            #message_builders
         }
     }
 
@@ -386,7 +383,7 @@ impl AbstractProcess {
             .unwrap_or_default()
     }
 
-    /// Expands the `MessageHandler` implementations for the message hander
+    /// Expands the `MessageHandler` implementations for the message handler
     /// wrapper types.
     fn expand_message_handler_impls(&self) -> TokenStream {
         let message_handler_impls = self.message_handlers.iter().map(|message_handler| {
@@ -421,7 +418,7 @@ impl AbstractProcess {
         }
     }
 
-    /// Expands the `RequestHandler` implementations for the request hander
+    /// Expands the `RequestHandler` implementations for the request handler
     /// wrapper types.
     fn expand_request_handler_impls(&self) -> TokenStream {
         let request_handler_impls = self.request_handlers.iter().map(|request_handler| {
@@ -471,9 +468,8 @@ impl AbstractProcess {
             item_impl,
             message_handlers,
             request_handlers,
-            message_builder_ident,
-            request_builder_ident,
-            handler_trait_ident,
+            message_trait_name,
+            request_trait_name,
             ..
         } = self;
         let vis = &args.visibility;
@@ -491,9 +487,12 @@ impl AbstractProcess {
                     ..
                 } = handler;
 
+                let return_ty_type = format_ident!("ReturnTy_{}", ident);
                 quote! {
+                    #[allow(non_camel_case_types)]
+                    type #return_ty_type;
                     #( #attrs )*
-                    fn #ident #generics (&self #(, #args )*);
+                    fn #ident #generics (&self #(, #args )*) -> Self::#return_ty_type;
                 }
             });
 
@@ -506,26 +505,25 @@ impl AbstractProcess {
                     ident,
                     generics,
                     args,
-                    return_ty,
                     ..
                 } = handler;
 
+                let return_ty_type = format_ident!("ReturnTy_{}", ident);
                 quote! {
+                    #[allow(non_camel_case_types)]
+                    type #return_ty_type;
                     #( #attrs )*
-                    fn #ident #generics (&self #(, #args )*) -> #return_ty;
+                    fn #ident #generics (&self #(, #args )*) -> Self::#return_ty_type;
                 }
             });
 
         quote! {
-            #vis trait #handler_trait_ident #ty_generics #where_clause {
+            #vis trait #message_trait_name #ty_generics #where_clause {
                 #( #message_handler_defs )*
+            }
+
+            #vis trait #request_trait_name #ty_generics #where_clause {
                 #( #request_handler_defs )*
-
-                /// Set a delay before sending the message.
-                fn after(&self, duration: std::time::Duration) -> #message_builder_ident #ty_generics;
-
-                /// Set a timeout for the request.
-                fn with_timeout(&self, duration: std::time::Duration) -> #request_builder_ident #ty_generics;
             }
         }
     }
@@ -536,9 +534,8 @@ impl AbstractProcess {
             item_impl,
             message_handlers,
             request_handlers,
-            message_builder_ident,
-            request_builder_ident,
-            handler_trait_ident,
+            message_trait_name,
+            request_trait_name,
             ..
         } = self;
         let self_ty = &item_impl.self_ty;
@@ -563,11 +560,38 @@ impl AbstractProcess {
                     ..
                 } = handler;
 
+                let return_ty_type = format_ident!("ReturnTy_{}", ident);
                 quote! {
+                    type #return_ty_type = ();
                     #( #attrs )*
                     fn #ident #generics (&self #(, #args )*) {
                         let msg = #message_type(#arg_phantom #( #handler_args ),*);
                         self.send(msg);
+                    }
+                }
+            });
+
+        let message_delay_handler_impls = message_handlers
+            .iter()
+            .map(HandlerStructure::from_handler)
+            .map(|handler| {
+                let HandlerStructure {
+                    attrs,
+                    ident,
+                    generics,
+                    args,
+                    message_type,
+                    handler_args,
+                    ..
+                } = handler;
+
+                let return_ty_type = format_ident!("ReturnTy_{}", ident);
+                quote! {
+                    type #return_ty_type = lunatic::time::TimerRef;
+                    #( #attrs )*
+                    fn #ident #generics (&self #(, #args )*) -> lunatic::time::TimerRef {
+                        let msg = #message_type(#arg_phantom #( #handler_args ),*);
+                        self.send(msg)
                     }
                 }
             });
@@ -586,132 +610,64 @@ impl AbstractProcess {
                     handler_args,
                 } = handler;
 
+                let return_ty_type = format_ident!("ReturnTy_{}", ident);
                 quote! {
+                    type #return_ty_type = #return_ty;
                     #( #attrs )*
-                    fn #ident #generics (&self #(, #args )*) -> #return_ty {
+                    fn #ident #generics (&self #(, #args )*) -> Self::#return_ty_type {
                         let req = #message_type(#arg_phantom #( #handler_args ),*);
-                        self.request(req, None).unwrap()
+                        self.request(req)
                     }
                 }
             });
 
-        quote! {
-            impl #impl_generics #handler_trait_ident #ty_generics for lunatic::ap::ProcessRef<#self_ty> #where_clause {
-                #( #message_handler_impls )*
-                #( #request_handler_impls )*
-
-                fn after(&self, duration: std::time::Duration) -> #message_builder_ident #ty_generics {
-                    #message_builder_ident::new(duration, self.clone())
-                }
-
-                fn with_timeout(&self, duration: std::time::Duration) -> #request_builder_ident #ty_generics {
-                    #request_builder_ident::new(duration, self.clone())
-                }
-            }
-        }
-    }
-
-    /// Expands the builder types.
-    fn expand_builders(&self) -> TokenStream {
-        let Self {
-            args,
-            item_impl,
-            message_handlers,
-            request_handlers,
-            message_builder_ident,
-            request_builder_ident,
-            ..
-        } = self;
-        let vis = &args.visibility;
-        let (impl_generics, ty_generics, where_clause) = item_impl.generics.split_for_impl();
-        let self_ty = &item_impl.self_ty;
-        let arg_phantom = if !item_impl.generics.params.is_empty() {
-            Some(quote! { std::marker::PhantomData, })
-        } else {
-            None
-        };
-
-        let message_builder_methods = message_handlers
+        let request_timeout_handler_impls = request_handlers
             .iter()
             .map(HandlerStructure::from_handler)
             .map(|handler| {
                 let HandlerStructure {
                     attrs,
                     ident,
-                    args,
-                    message_type,
-                    handler_args,
-                    ..
-                } = handler;
-
-                quote! {
-                    #( #attrs )*
-                    #vis fn #ident(&self #(, #args )*) {
-                        let msg = #message_type(#arg_phantom #( #handler_args ),*);
-                        self.process_ref.send_after(msg, self.duration);
-                    }
-                }
-            });
-
-        let request_builder_methods = request_handlers
-            .iter()
-            .map(HandlerStructure::from_handler)
-            .map(|handler| {
-                let HandlerStructure {
-                    attrs,
-                    ident,
+                    generics,
                     args,
                     return_ty,
                     message_type,
                     handler_args,
-                    ..
                 } = handler;
 
+                let return_ty_type = format_ident!("ReturnTy_{}", ident);
                 quote! {
+                    type #return_ty_type = Result<#return_ty, lunatic::time::Timeout>;
                     #( #attrs )*
-                    #vis fn #ident(&self #(, #args )*) -> Result<#return_ty, lunatic::ap::Timeout> {
+                    fn #ident #generics (&self #(, #args )*) -> Self::#return_ty_type {
                         let req = #message_type(#arg_phantom #( #handler_args ),*);
-                        self.process_ref.request(req, Some(self.duration))
+                        self.request(req)
                     }
                 }
             });
 
         quote! {
-            #vis struct #message_builder_ident #ty_generics #where_clause {
-                duration: std::time::Duration,
-                process_ref: lunatic::ap::ProcessRef<#self_ty>,
+            impl #impl_generics #message_trait_name #ty_generics for lunatic::ap::ProcessRef<#self_ty> #where_clause {
+                #( #message_handler_impls )*
             }
 
-            impl #impl_generics #message_builder_ident #ty_generics #where_clause {
-                fn new(duration: std::time::Duration, process_ref: lunatic::ap::ProcessRef<#self_ty>) -> Self {
-                    Self {
-                        duration,
-                        process_ref,
-                    }
-                }
-
-                #( #message_builder_methods )*
+            impl #impl_generics #request_trait_name #ty_generics for lunatic::ap::ProcessRef<#self_ty> #where_clause {
+                #( #request_handler_impls )*
             }
 
-            #vis struct #request_builder_ident #ty_generics #where_clause {
-                duration: std::time::Duration,
-                process_ref: lunatic::ap::ProcessRef<#self_ty>,
+            impl #impl_generics #message_trait_name #ty_generics for
+                    lunatic::time::WithDelay<lunatic::ap::ProcessRef<#self_ty>> #where_clause {
+                #( #message_delay_handler_impls )*
             }
 
-            impl #impl_generics #request_builder_ident #ty_generics #where_clause {
-                fn new(duration: std::time::Duration, process_ref: lunatic::ap::ProcessRef<#self_ty>) -> Self {
-                    Self {
-                        duration,
-                        process_ref,
-                    }
-                }
-
-                #( #request_builder_methods )*
+            impl #impl_generics #request_trait_name #ty_generics for
+                    lunatic::time::WithTimeout<lunatic::ap::ProcessRef<#self_ty>> #where_clause {
+                #( #request_timeout_handler_impls )*
             }
         }
     }
 
-    /// Creates an ident for a handler ident.
+    /// Create a wrapper name for the request and send
     fn handler_wrapper_ident(ident: impl ToString) -> syn::Ident {
         format_ident!("__MsgWrap{}", ident.to_string().to_case(Case::Pascal))
     }
@@ -719,7 +675,8 @@ impl AbstractProcess {
 
 #[derive(Default)]
 pub struct Args {
-    trait_name: Option<syn::LitStr>,
+    message_trait_name: Option<syn::LitStr>,
+    request_trait_name: Option<syn::LitStr>,
     visibility: Option<syn::Visibility>,
     serializer: Option<syn::Type>,
 }
@@ -732,15 +689,24 @@ impl Args {
 
         let ident: syn::Ident = input.parse()?;
         let _: syn::Token![=] = input.parse()?;
-        if ident == "trait_name" {
-            if self.trait_name.is_some() {
+        if ident == "message_trait_name" {
+            if self.message_trait_name.is_some() {
                 return Err(syn::Error::new(
                     ident.span(),
-                    "trait name already specified",
+                    "message trait name already specified",
                 ));
             }
 
-            self.trait_name = Some(input.parse()?);
+            self.message_trait_name = Some(input.parse()?);
+        } else if ident == "request_trait_name" {
+            if self.request_trait_name.is_some() {
+                return Err(syn::Error::new(
+                    ident.span(),
+                    "request trait name already specified",
+                ));
+            }
+
+            self.request_trait_name = Some(input.parse()?);
         } else if ident == "visibility" {
             if self.visibility.is_some() {
                 return Err(syn::Error::new(
