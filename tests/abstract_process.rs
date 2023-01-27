@@ -393,7 +393,6 @@ fn shutdown_timeout() {
 
 // Tests macro works with no use statements
 mod no_imports_test {
-
     struct Counter(u32);
 
     #[lunatic::abstract_process]
