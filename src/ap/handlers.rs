@@ -1,3 +1,5 @@
+//! All handlers that can be used inside of [`AbstractProcess::Handlers`] tuple.
+
 use std::any::{type_name, TypeId};
 use std::marker::PhantomData;
 

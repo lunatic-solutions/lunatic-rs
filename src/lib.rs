@@ -16,7 +16,7 @@ function.
 
 * **[`Process`]** - A process that can receive messages through a [`Mailbox`] or
     [`Protocol`](protocol::Protocol).
-* **[`AbstractProcess`](process::AbstractProcess)** - Abstracts state management and message/request
+* **[`AbstractProcess`](AbstractProcess)** - Abstracts state management and message/request
     handling.
 * **[`Supervisor`](supervisor::Supervisor)** - A process that can supervise others and re-spawn
     them if they fail.
@@ -71,8 +71,14 @@ To simplify developing, testing and running lunatic applications with cargo, you
 target = "wasm32-wasi"
 
 [target.wasm32-wasi]
-runner = "lunatic"
+runner = "lunatic run"
 ```
+
+or inside of your Cargo project just run:
+```
+lunatic init
+```
+This will automatically crate the file above.
 
 Now you can just use the commands you were already familiar with, such as `cargo run`, `cargo test`
 and cargo is going to automatically build your project as a WebAssembly module and run it inside
@@ -80,7 +86,7 @@ and cargo is going to automatically build your project as a WebAssembly module a
 
 ### Testing
 
-Lunatic provides a macro [`macro@test`] to turn your tests into processes. Check out the [`tests`][3]
+Lunatic provides a [`macro@test`] macro to run your tests inside processes. Check out the [`tests`][3]
 directory for examples.
 
 [1]: https://github.com/lunatic-solutions/lunatic
@@ -113,6 +119,7 @@ pub mod supervisor;
 pub mod test;
 pub mod time;
 
+pub use ap::AbstractProcess;
 pub use config::ProcessConfig;
 pub use error::LunaticError;
 pub use function::process::Process;

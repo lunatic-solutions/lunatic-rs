@@ -105,6 +105,9 @@ where
 {
     /// Blocks until the Supervisor shuts down.
     ///
+    /// This function will not request a shutdown, just wait until someone else
+    /// shuts the supervisor down.
+    ///
     /// A tagged message will be sent to the supervisor process as a request
     /// and the subscription will be registered. When the supervisor process
     /// shuts down, the subscribers will be each notified by a response

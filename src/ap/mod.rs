@@ -1,3 +1,5 @@
+//! Contains the [`AbstractProcess`] abstraction.
+
 mod builder;
 mod lifecycles;
 mod tag;
@@ -21,6 +23,84 @@ use crate::serializer::CanSerialize;
 use crate::time::{Timeout, TimerRef, WithDelay, WithTimeout};
 use crate::{host, Process, ProcessConfig, Tag};
 
+/// Building block for processes that act as a server of a client-server
+/// relation.
+///
+/// An `AbstractProcess` is like any other process in lunatic, it can hold
+/// state, receive messages and so on. Their main advantage is that they
+/// provide a type-safe interface for dealing with requests.
+///
+/// ### Startup
+///
+/// `AbstractProcesses` can be started using the [`Self::start`] function, or
+/// [`Self::start_as`] for a named process. Calls to these functions will block
+/// until the process is started and the [`Self::init`] function finishes. A
+/// custom return error can be specified using the [`Self::StartupError`] type.
+/// If the `init` function panics, the start functions will return a
+/// [`StartupError::InitPanicked`] error.
+///
+/// ### Handlers
+///
+/// Handlers are used to define the types of messages that can be handled by
+/// abstract processes. Handlers are defined using the traits
+/// [`MessageHandler`], [`RequestHandler`] and [`DeferredRequestHandler`].
+///
+/// [`MessageHandler`] are used to handle asynchronous messages sent to the
+/// abstract process. This means that the sender doesn't wait for an answer.
+///
+/// The following example shows a `Counter` abstract process that is able to
+/// handle `Increment` messages. During the handling of a message the handler
+/// has access to the internal state of the abstract process.
+///
+/// ```rust
+/// #[derive(serde::Serialize, serde::Deserialize)]
+/// struct Increment;
+/// impl MessageHandler<Increment> for Counter {
+///     fn handle(mut state: State<Self>, _: Increment) {
+///         state.0 += 1;
+///     }
+/// }
+/// ```
+///
+/// [`RequestHandler`] and [`DeferredRequestHandler`] expect a return value and
+/// the requests are made synchronous, this means that the sender waits for a
+/// response.
+///
+/// ```rust
+/// #[derive(serde::Serialize, serde::Deserialize)]
+/// struct Count;
+/// impl RequestHandler<Count> for Counter {
+///     type Response = u32;
+///     fn handle(state: State<Self>, _: Count) -> Self::Response {
+///         state.0
+///     }
+/// }
+/// ```
+///
+/// In case of a [`DeferredRequestHandler`], the response doesn't need to be
+/// immediate and can be even delegated to a 3rd process.
+///
+/// ```rust
+/// impl DeferredRequestHandler<Count> for Counter {
+///     type Response = u32;
+///     fn handle(_: State<Self>, _: String, dr: DeferredResponse<Self::Response, Self>) {
+///         dr.send_response(u32);
+///     }
+/// }
+/// ```
+///
+/// _It is not enough just to define the handlers, they also need to be
+/// associated with the `AbstractProcess` using the [`Self::Handlers`] type:_
+///
+/// ```rust
+/// type Handlers = (Message<Increment>, Request<Count>, DeferredRequest<Count>);
+/// ```
+///
+/// ### Shutdown
+///
+/// An abstract process can be shut down using the [`ProcessRef::shutdown`]
+/// call. This function will block, until the [`Self::terminate`] function
+/// finishes.
 pub trait AbstractProcess: Sized
 where
     // The serializer needs to be able to serialize types that are used
@@ -71,8 +151,8 @@ where
 
     /// Handlers for incoming messages, requests and deferred requests.
     ///
-    /// They are defined as a tuple and wrapped into `Message`, `Request`
-    /// wrappers. E.g.
+    /// They are defined as a tuple and wrapped into `Message`, `Request` and
+    /// `DeferredRequest` wrappers.
     /// ```
     /// type Handlers = (Message<Handler1>, Message<Handler2>, Request<Handler3>);
     /// ```
@@ -90,10 +170,10 @@ where
     ///
     /// This function is executed inside the new process. It will receive the
     /// arguments passed to the [`start`](AbstractProcess::start) or
-    /// [`start_link`](AbstractProcess::start_link) function by the parent. And
+    /// [`start_as`](AbstractProcess::start_as) function by the parent. And
     /// will return the starting state of the newly spawned process.
     ///
-    /// The parent will block on the call of `start` or `start_link` until this
+    /// The parent will block on the call of `start` or `start_as` until this
     /// function finishes. This allows startups to be synchronized.
     fn init(config: Config<Self>, arg: Self::Arg) -> Result<Self::State, Self::StartupError>;
 
@@ -104,6 +184,12 @@ where
     fn handle_link_death(_state: State<Self>, _tag: Tag) {}
 
     /// Starts a new `AbstractProcess` and returns a reference to it.
+    ///
+    /// This call will block until the `init` function finishes. If the `init`
+    /// function returns an error, it will be returned as
+    /// `StartupError::Custom(error)`. If the `init` function panics during
+    /// execution, it will return [`StartupError::InitPanicked`].
+    #[track_caller]
     fn start(arg: Self::Arg) -> Result<ProcessRef<Self>, StartupError<Self>> {
         AbstractProcessBuilder::<Self>::new().start(arg)
     }
@@ -113,9 +199,15 @@ where
     /// `Err(StartupError::NameAlreadyRegistered(proc))` with a reference to the
     /// existing process.
     ///
+    /// This call will block until the `init` function finishes. If the `init`
+    /// function returns an error, it will be returned as
+    /// `StartupError::Custom(error)`. If the `init` function panics during
+    /// execution, it will return [`StartupError::InitPanicked`].
+    ///
     /// If used in combination with the [`on_node`](Self::on_node) option, the
-    /// name registration will be performed on the local and not the remote
-    /// node.
+    /// name registration will be performed on the local node and not the remote
+    /// one.
+    #[track_caller]
     fn start_as<S: AsRef<str>>(
         name: S,
         arg: Self::Arg,
@@ -123,18 +215,22 @@ where
         AbstractProcessBuilder::<Self>::new().start_as(name, arg)
     }
 
+    /// Links the to be spawned process to the parent.
     fn link() -> AbstractProcessBuilder<'static, Self> {
         AbstractProcessBuilder::new().link()
     }
 
+    /// Links the to be spawned process to the parent with a specific [`Tag`].
     fn link_with(tag: Tag) -> AbstractProcessBuilder<'static, Self> {
         AbstractProcessBuilder::new().link_with(tag)
     }
 
+    /// Allows for spawning the process with a specific configuration.
     fn configure(config: &ProcessConfig) -> AbstractProcessBuilder<Self> {
         AbstractProcessBuilder::new().configure(config)
     }
 
+    /// Sets the node on which the process will be spawned.
     fn on_node(node: u64) -> AbstractProcessBuilder<'static, Self> {
         AbstractProcessBuilder::new().on_node(node)
     }
@@ -210,7 +306,7 @@ where
     );
 }
 
-/// A reference to the state inside [`AbstractProcess`] handlers.
+/// A reference to the state inside handlers.
 pub struct State<'a, AP: AbstractProcess> {
     state: &'a mut AP::State,
 }

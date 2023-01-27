@@ -74,9 +74,9 @@ pub trait NoLink {}
 ///
 /// Processes don't share any memory and messages sent between them need to be
 /// serialized. By default, the [`Bincode`] serializer is used, but other
-/// serializers that implement the [`Serializer`] trait can be used instead. The
-/// serializer just needs to be added to the [`Mailbox`](crate::Mailbox) type
-/// (e.g. `Mailbox<i32, MessagePack>`).
+/// serializers that implement the [`CanSerialize`] trait can be used instead.
+/// The serializer just needs to be added to the [`Mailbox`](crate::Mailbox)
+/// type (e.g. `Mailbox<i32, MessagePack>`).
 ///
 /// Processes can also be linked together using the
 /// [`spawn_link`](Self::spawn_link`) function. This means that if one of them

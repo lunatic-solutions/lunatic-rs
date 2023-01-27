@@ -11,8 +11,8 @@ trait IntoAbstractProcessBuilder<T> {}
 /// it should be spawned on, if the process should be linked and with which tag.
 ///
 /// It implements the same public interface as [`AbstractProcess`], so that the
-/// builder pattern can simply start with the [`AbstractProcess`] and transition
-/// to the [`AbstractProcessBuilder`].
+/// builder pattern can start with the [`AbstractProcess`] and transition to the
+/// [`AbstractProcessBuilder`].
 pub struct AbstractProcessBuilder<'a, T: ?Sized> {
     link: Option<Tag>,
     config: Option<&'a ProcessConfig>,
@@ -33,6 +33,7 @@ where
         }
     }
 
+    /// Links the to be spawned process to the parent.
     pub fn link(self) -> AbstractProcessBuilder<'a, T> {
         AbstractProcessBuilder {
             link: Some(Tag::new()),
@@ -42,6 +43,7 @@ where
         }
     }
 
+    /// Links the to be spawned process to the parent with a specific [`Tag`].
     pub fn link_with(self, tag: Tag) -> AbstractProcessBuilder<'a, T> {
         AbstractProcessBuilder {
             link: Some(tag),
@@ -51,6 +53,7 @@ where
         }
     }
 
+    /// Allows for spawning the process with a specific configuration.
     pub fn configure(self, config: &'a ProcessConfig) -> AbstractProcessBuilder<'a, T> {
         AbstractProcessBuilder {
             link: self.link,
@@ -60,6 +63,7 @@ where
         }
     }
 
+    /// Sets the node on which the process will be spawned.
     pub fn on_node(self, node: u64) -> AbstractProcessBuilder<'a, T> {
         AbstractProcessBuilder {
             link: self.link,
@@ -69,6 +73,12 @@ where
         }
     }
 
+    /// Starts a new `AbstractProcess` and returns a reference to it.
+    ///
+    /// This call will block until the `init` function finishes. If the `init`
+    /// function returns an error, it will be returned as
+    /// `StartupError::Custom(error)`. If the `init` function panics during
+    /// execution, it will return [`StartupError::InitPanicked`].
     #[track_caller]
     pub fn start(&self, arg: T::Arg) -> Result<ProcessRef<T>, StartupError<T>> {
         let init_tag = Tag::new();
@@ -88,9 +98,14 @@ where
     /// `Err(StartupError::NameAlreadyRegistered(proc))` with a reference to the
     /// existing process.
     ///
+    /// This call will block until the `init` function finishes. If the `init`
+    /// function returns an error, it will be returned as
+    /// `StartupError::Custom(error)`. If the `init` function panics during
+    /// execution, it will return [`StartupError::InitPanicked`].
+    ///
     /// If used in combination with the [`on_node`](Self::on_node) option, the
-    /// name registration will be performed on the local and not the remote
-    /// node.
+    /// name registration will be performed on the local node and not the remote
+    /// one.
     #[track_caller]
     pub fn start_as<S: AsRef<str>>(
         &self,
