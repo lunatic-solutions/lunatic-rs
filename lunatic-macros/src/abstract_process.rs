@@ -300,7 +300,7 @@ impl AbstractProcess {
         let arg_ty = &self.arg_ty;
 
         quote! {
-            fn init(this: ProcessRef<Self>, arg: #arg_ty) -> Self::State {
+            fn init(this: lunatic::process::ProcessRef<Self>, arg: #arg_ty) -> Self::State {
                 Self::#ident(this, arg)
             }
         }
@@ -640,7 +640,7 @@ impl AbstractProcess {
             }
 
             impl #impl_generics #message_builder_ident #ty_generics #where_clause {
-                fn new(duration: std::time::Duration, process_ref: ProcessRef<#self_ty>) -> Self {
+                fn new(duration: std::time::Duration, process_ref: lunatic::process::ProcessRef<#self_ty>) -> Self {
                     Self {
                         duration,
                         process_ref,
@@ -656,7 +656,7 @@ impl AbstractProcess {
             }
 
             impl #impl_generics #request_builder_ident #ty_generics #where_clause {
-                fn new(duration: std::time::Duration, process_ref: ProcessRef<#self_ty>) -> Self {
+                fn new(duration: std::time::Duration, process_ref: lunatic::process::ProcessRef<#self_ty>) -> Self {
                     Self {
                         duration,
                         process_ref,

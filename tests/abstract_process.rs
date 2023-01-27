@@ -390,3 +390,37 @@ fn shutdown_timeout() {
 
     assert!(response.is_timed_out());
 }
+
+// Tests macro works with no use statements
+mod no_imports_test {
+
+    struct Counter(u32);
+
+    #[lunatic::abstract_process]
+    impl Counter {
+        #[init]
+        fn init(_: lunatic::process::ProcessRef<Self>, start: u32) -> Self {
+            Self(start)
+        }
+
+        #[terminate]
+        fn terminate(self) {
+            println!("Shutdown process");
+        }
+
+        #[handle_link_trapped]
+        fn handle_link_trapped(&self, _tag: lunatic::Tag) {
+            println!("Link trapped");
+        }
+
+        #[handle_message]
+        fn increment(&mut self) {
+            self.0 += 1;
+        }
+
+        #[handle_request]
+        fn count(&self) -> u32 {
+            self.0
+        }
+    }
+}
