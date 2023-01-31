@@ -1,22 +1,27 @@
 use std::time::Duration;
 
+use lunatic::ap::handlers::Request;
+use lunatic::ap::{AbstractProcess, Config, RequestHandler, State};
 use lunatic::host::node_id;
-use lunatic::process::{AbstractProcess, ProcessRef, Request, RequestHandler, StartProcess};
+use lunatic::serializer::MessagePack;
 use lunatic::{sleep, Mailbox, Process, ProcessConfig};
 
 struct Adder;
 impl AbstractProcess for Adder {
     type Arg = ();
     type State = Self;
+    type Handlers = (Request<(i32, i32)>,);
+    type Serializer = MessagePack;
+    type StartupError = ();
 
-    fn init(_: ProcessRef<Self>, _: ()) -> Adder {
-        Adder
+    fn init(_: Config<Self>, _: ()) -> Result<Adder, ()> {
+        Ok(Adder)
     }
 }
 impl RequestHandler<(i32, i32)> for Adder {
     type Response = i32;
 
-    fn handle(_: &mut Self::State, (a, b): (i32, i32)) -> i32 {
+    fn handle(_: State<Self>, (a, b): (i32, i32)) -> i32 {
         println!("Got {a}, {b} to add");
         a + b
     }
@@ -32,7 +37,10 @@ fn main() {
     config.set_max_fuel(1);
 
     if !nodes.is_empty() {
-        let add_server = Adder::start_node_config((), None, nodes[0], &config);
+        let add_server = Adder::on_node(nodes[0])
+            .configure(&config)
+            .start(())
+            .unwrap();
         assert_eq!(add_server.request((1, 1)), 2);
     }
 

@@ -17,7 +17,8 @@ pub fn nodes() -> Vec<u64> {
     nodes
 }
 
-/// Executes a lookup query request to the control node and returns `u64` node ids.
+/// Executes a lookup query request to the control node and returns `u64` node
+/// ids.
 ///
 /// Query is defined like an URL Query string, e.g. `name=node01&group=workers`.
 pub fn lookup_nodes(query: &'static str) -> Result<Vec<u64>, LunaticError> {
@@ -38,12 +39,7 @@ pub fn lookup_nodes(query: &'static str) -> Result<Vec<u64>, LunaticError> {
     }
     let mut nodes = vec![0; nodes_len as usize];
     let copied_cnt = unsafe {
-        copy_lookup_nodes_results(
-            query_id,
-            nodes.as_mut_ptr(),
-            nodes_len as u32,
-            &mut error_id,
-        )
+        copy_lookup_nodes_results(query_id, nodes.as_mut_ptr(), nodes_len, &mut error_id)
     };
     if copied_cnt < 0 {
         return Err(LunaticError::from(error_id));

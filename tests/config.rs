@@ -77,7 +77,8 @@ fn config_with_compute_limit() {
     let mut config = ProcessConfig::new().unwrap();
     config.set_max_fuel(1);
 
-    let task = spawn_link!(@task &config, || (0..10_000).into_iter().count());
+    let task =
+        spawn_link!(@task &config, || (0..10_000).into_iter().map(|v| v.to_string()).count());
     let _ = task.result();
 }
 

@@ -1,16 +1,18 @@
 //! As the name suggests, a "function" process can be spawned just from a
 //! function. Opposite of a `AbstractProcess` that requires a `struct`.
 
+use std::any::type_name;
 use std::marker::PhantomData;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
 use crate::host::{self, node_id, process_id};
+use crate::mailbox::TIMEOUT;
 use crate::protocol::ProtocolCapture;
-use crate::serializer::{Bincode, Serializer};
-use crate::timer::TimerRef;
-use crate::{ProcessConfig, Tag};
+use crate::serializer::{Bincode, CanSerialize};
+use crate::time::TimerRef;
+use crate::{MailboxResult, ProcessConfig, Tag};
 
 /// Decides what can be turned into a process.
 ///
@@ -26,7 +28,7 @@ pub trait IntoProcess<M, S> {
         node: Option<u64>,
     ) -> Self::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>;
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>;
 }
 
 /// A marker trait expressing that a process can be spawned from this type
@@ -72,9 +74,9 @@ pub trait NoLink {}
 ///
 /// Processes don't share any memory and messages sent between them need to be
 /// serialized. By default, the [`Bincode`] serializer is used, but other
-/// serializers that implement the [`Serializer`] trait can be used instead. The
-/// serializer just needs to be added to the [`Mailbox`](crate::Mailbox) type
-/// (e.g. `Mailbox<i32, MessagePack>`).
+/// serializers that implement the [`CanSerialize`] trait can be used instead.
+/// The serializer just needs to be added to the [`Mailbox`](crate::Mailbox)
+/// type (e.g. `Mailbox<i32, MessagePack>`).
 ///
 /// Processes can also be linked together using the
 /// [`spawn_link`](Self::spawn_link`) function. This means that if one of them
@@ -133,6 +135,11 @@ impl<M, S> Process<M, S> {
         }
     }
 
+    /// Return reference to self.
+    pub(crate) fn this() -> Self {
+        Self::new(node_id(), process_id())
+    }
+
     /// Returns `true` for processes on the local node that are running.
     ///
     /// Panics if called on a remote process.
@@ -145,13 +152,10 @@ impl<M, S> Process<M, S> {
         unsafe { host::api::process::exists(self.id()) != 0 }
     }
 
-    pub fn this() -> Self {
-        Self::new(node_id(), process_id())
-    }
     /// Spawn a process.
     pub fn spawn<C, T>(capture: C, entry: fn(C, T)) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
         T: NoLink,
     {
@@ -161,7 +165,7 @@ impl<M, S> Process<M, S> {
     /// Spawn a process on a remote node.
     pub fn spawn_node<C, T>(node_id: u64, capture: C, entry: fn(C, T)) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
         T: NoLink,
     {
@@ -176,7 +180,7 @@ impl<M, S> Process<M, S> {
         entry: fn(C, T),
     ) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
         T: NoLink,
     {
@@ -186,7 +190,7 @@ impl<M, S> Process<M, S> {
     /// Spawn a linked process.
     pub fn spawn_link<C, T>(capture: C, entry: fn(C, T)) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
     {
         T::spawn(capture, entry, Some(Tag::new()), None, None)
@@ -197,7 +201,7 @@ impl<M, S> Process<M, S> {
     /// Allows the caller to provide a tag for the link.
     pub fn spawn_link_tag<C, T>(capture: C, tag: Tag, entry: fn(C, T)) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
     {
         T::spawn(capture, entry, Some(tag), None, None)
@@ -206,7 +210,7 @@ impl<M, S> Process<M, S> {
     /// Spawn a process with a custom configuration.
     pub fn spawn_config<C, T>(config: &ProcessConfig, capture: C, entry: fn(C, T)) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
         T: NoLink,
     {
@@ -220,7 +224,7 @@ impl<M, S> Process<M, S> {
         entry: fn(C, T),
     ) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
     {
         T::spawn(capture, entry, Some(Tag::new()), Some(config), None)
@@ -235,7 +239,7 @@ impl<M, S> Process<M, S> {
         entry: fn(C, T),
     ) -> T::Process
     where
-        S: Serializer<C> + Serializer<ProtocolCapture<C>>,
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
     {
         T::spawn(capture, entry, Some(tag), Some(config), None)
@@ -307,7 +311,7 @@ impl<M, S> Process<M, S> {
 
 impl<M, S> Process<M, S>
 where
-    S: Serializer<M>,
+    S: CanSerialize<M>,
 {
     /// Send a message to the process.
     ///
@@ -354,6 +358,68 @@ where
         S::encode(&message).unwrap();
         // Send it!
         host::send(self.node_id, self.id);
+    }
+
+    /// Send a message to the process with a specific tag, after the specified
+    /// duration has passed.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the received message can't be serialized
+    /// into `M` with serializer `S`.
+    pub fn tag_send_after(&self, tag: Tag, message: M, duration: Duration) -> TimerRef {
+        // Create new message.
+        unsafe { host::api::message::create_data(tag.id(), 0) };
+        // During serialization resources will add themselves to the message.
+        S::encode(&message).unwrap();
+        // Send it!
+        let timer_id =
+            unsafe { host::api::timer::send_after(self.id, duration.as_millis() as u64) };
+        TimerRef::new(timer_id)
+    }
+
+    /// Sends message and waits on response until timeout (if specified).
+    ///
+    /// # Safety
+    ///
+    /// The other side needs to be aware that the response needs to be sent back
+    /// with the `receive_tag`. There is no way to enforce this with the type
+    /// system at this level.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the received message can't be serialized
+    /// into `M` with serializer `S` or the `Response` can't be deserialized.
+    #[track_caller]
+    pub(crate) unsafe fn tag_send_receive<Response>(
+        &self,
+        send_tag: Tag,
+        receive_tag: Tag,
+        message: M,
+        timeout: Option<Duration>,
+    ) -> MailboxResult<Response>
+    where
+        S: CanSerialize<M>,
+        S: CanSerialize<Response>,
+    {
+        unsafe { host::api::message::create_data(send_tag.id(), 0) };
+
+        S::encode(&message).unwrap();
+        let timeout_ms = match timeout {
+            Some(timeout) => timeout.as_millis() as u64,
+            None => u64::MAX,
+        };
+
+        let result =
+            host::send_receive_skip_search(self.node_id, self.id, receive_tag.id(), timeout_ms);
+        if result == TIMEOUT {
+            MailboxResult::TimedOut
+        } else {
+            match S::decode() {
+                Ok(msg) => MailboxResult::Message(msg),
+                Err(_) => panic!("Could not deserialize message: {}", type_name::<Response>()),
+            }
+        }
     }
 }
 

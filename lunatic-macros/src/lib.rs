@@ -52,8 +52,9 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// - Use `#[init]`, `#[terminate]`, and `#[handle_link_trapped]` attributes to
 /// specify methods for implementing [`AbstractProcess`].
-/// - Use `#[handle_message]` and `#[handle_request]` attributes to specify
-/// message and request handlers.
+/// - Use `#[handle_message]`, `#[handle_request]` and
+///   `#[handle_deferred_request]` attributes to specify message and request
+///   handlers.
 ///
 /// Specifying message types is unnecessary because the macro will create
 /// wrapper types for messages on all handlers. Handlers can take an arbitrary
@@ -68,19 +69,16 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 /// # Examples
 ///
 /// ```ignore
-/// use lunatic::{
-///     abstract_process,
-///     process::{Message, ProcessRef, Request, StartProcess},
-///     Tag,
-/// };
+/// use lunatic::ap::{AbstractProcess, Config, DeferredResponse};
+/// use lunatic::{abstract_process, Mailbox, Tag};
 ///
 /// struct Counter(u32);
 ///
 /// #[abstract_process]
 /// impl Counter {
 ///     #[init]
-///     fn init(_: ProcessRef<Self>, start: u32) -> Self {
-///         Self(start)
+///     fn init(_: Config<Self>, start: u32) -> Result<Self, ()> {
+///         Ok(Self(start))
 ///     }
 ///
 ///     #[terminate]
@@ -88,8 +86,8 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///         println!("Shutdown process");
 ///     }
 ///
-///     #[handle_link_trapped]
-///     fn handle_link_trapped(&self, tag: Tag) {
+///     #[handle_link_death]
+///     fn handle_link_death(&self, _tag: Tag) {
 ///         println!("Link trapped");
 ///     }
 ///
@@ -102,70 +100,25 @@ pub fn main(_args: TokenStream, item: TokenStream) -> TokenStream {
 ///     fn count(&self) -> u32 {
 ///         self.0
 ///     }
+///
+///     #[handle_deferred_request]
+///     fn add_to_count(&self, a: u32, b: u32, dr: DeferredResponse<u32, Self>) {
+///         dr.send_response(self.0 + a + b)
+///     }
 /// }
 ///
-///
-/// let counter = Counter::start(5, None);
+/// let counter = Counter::link().start(0).unwrap();
 /// counter.increment();
-/// assert_eq!(counter.count(), 6);
+/// assert_eq!(counter.count(), 1);
+/// counter.increment();
+/// assert_eq!(
+///         counter
+///             .with_timeout(Duration::from_millis(10))
+///             .add_to_count(1, 1)
+///             .unwrap(),
+///         4
+///     );
 /// ```
-///
-/// A more complicated example
-///
-/// ```ignore
-/// use lunatic::{
-///     abstract_process,
-///     process::{Message, ProcessRef, Request, StartProcess},
-/// }
-///
-/// struct A;
-///
-/// #[derive(serde::Serialize, serde::Deserialize)]
-/// struct Person {
-///     name: String,
-///     age: u16,
-/// }
-///
-/// #[abstract_process(trait_name = "AHandler", visibility = pub)]
-/// impl A {
-///     #[init]
-///     fn init(_: ProcessRef<Self>, _: ()) -> A {
-///         A
-///     }
-///
-///     #[hanlde_message]
-///     fn multiple_arguments(&self, a: u8, (b, c): (bool, char)) {
-///         assert_eq!(a, 5);
-///         assert_eq!(b, false);
-///         assert_eq!(c, 'a');
-///     }
-///
-///     #[handle_request]
-///     fn unpack_struct(&self, Person { name, age }: Person) -> String {
-///         assert_eq!(name, "Mark");
-///         assert_eq!(age, 5);
-///         self.create_greeting(name)
-///     }
-///
-///     fn create_greeting(&self, name: String) {
-///         format!("Hi {}!", name)
-///     }
-/// }
-///
-///
-/// let a = A::start_link((), None);
-///
-/// a.multiple_arguments(5, (false, 'a'));
-///
-/// let person = Person {
-///     name: "Mark".to_owned(),
-///     age: 4,
-/// };
-///
-/// let greeting = a.unpack_struct(person);
-/// assert_eq!(greeting, "Hi Mark!");
-/// ```
-///
 /// [`AbstractProcess`]: process/trait.AbstractProcess.html
 #[proc_macro_attribute]
 pub fn abstract_process(args: TokenStream, item: TokenStream) -> TokenStream {

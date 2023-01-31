@@ -4,8 +4,7 @@ use std::time::Duration;
 use crate::distributed::node_id;
 use crate::host::{self, api};
 use crate::mailbox::Catching;
-use crate::serializer::{Bincode, Serializer};
-use crate::supervisor::{Supervisable, Supervisor, SupervisorConfig};
+use crate::serializer::{Bincode, CanSerialize};
 use crate::timer::TimerRef;
 use crate::{Mailbox, MailboxResult, Process, ProcessConfig, Tag};
 
@@ -100,7 +99,7 @@ pub trait AbstractProcess {
 /// Defines a handler for a message of type `M`.
 pub trait MessageHandler<M, S = Bincode>: AbstractProcess
 where
-    S: Serializer<M>,
+    S: CanSerialize<M>,
 {
     fn handle(state: &mut Self::State, message: M);
 }
@@ -108,7 +107,7 @@ where
 /// Defines a handler for a request of type `M`.
 pub trait RequestHandler<M, S = Bincode>: AbstractProcess
 where
-    S: Serializer<M>,
+    S: CanSerialize<M>,
 {
     type Response;
 
@@ -380,7 +379,7 @@ fn starter<T>(
 
 pub trait Message<M, S>
 where
-    S: Serializer<M>,
+    S: CanSerialize<M>,
 {
     fn send(&self, message: M);
     fn send_after(&self, message: M, duration: Duration) -> TimerRef;
@@ -388,7 +387,7 @@ where
 
 pub trait Request<M, S>
 where
-    S: Serializer<M>,
+    S: CanSerialize<M>,
 {
     type Result;
 
@@ -419,7 +418,7 @@ pub struct ProcessRef<T>
 where
     T: ?Sized,
 {
-    process: Process<()>,
+    pub(crate) process: Process<()>,
     phantom: PhantomData<T>,
 }
 
@@ -532,7 +531,7 @@ where
 ///
 /// The first `i32` value is a pointer
 #[derive(serde::Serialize, serde::Deserialize)]
-enum Sendable {
+pub(crate) enum Sendable {
     Message(i32),
     // The process type can't be carried over as a generic and is set here to `()`, but
     // overwritten at the time of returning with the correct type.
@@ -544,14 +543,14 @@ impl<M, S, T> Message<M, S> for ProcessRef<T>
 where
     T: AbstractProcess,
     T: MessageHandler<M, S>,
-    S: Serializer<M>,
+    S: CanSerialize<M>,
 {
     /// Send message to the process.
     fn send(&self, message: M) {
         fn unpacker<TU, MU, SU>(this: &mut TU::State)
         where
             TU: MessageHandler<MU, SU>,
-            SU: Serializer<MU>,
+            SU: CanSerialize<MU>,
         {
             let message: MU = SU::decode().unwrap();
             <TU as MessageHandler<MU, SU>>::handle(this, message);
@@ -574,7 +573,7 @@ where
         fn unpacker<TU, MU, SU>(this: &mut TU::State)
         where
             TU: MessageHandler<MU, SU>,
-            SU: Serializer<MU>,
+            SU: CanSerialize<MU>,
         {
             let message: MU = SU::decode().unwrap();
             <TU as MessageHandler<MU, SU>>::handle(this, message);
@@ -599,7 +598,7 @@ impl<M, S, T> Request<M, S> for ProcessRef<T>
 where
     T: AbstractProcess,
     T: RequestHandler<M, S>,
-    S: Serializer<M> + Serializer<<T as RequestHandler<M, S>>::Response>,
+    S: CanSerialize<M> + CanSerialize<<T as RequestHandler<M, S>>::Response>,
 {
     type Result = <T as RequestHandler<M, S>>::Response;
 
@@ -613,7 +612,7 @@ where
             sender: Process<<TU as RequestHandler<MU, SU>>::Response, SU>,
         ) where
             TU: RequestHandler<MU, SU>,
-            SU: Serializer<MU> + Serializer<<TU as RequestHandler<MU, SU>>::Response>,
+            SU: CanSerialize<MU> + CanSerialize<<TU as RequestHandler<MU, SU>>::Response>,
         {
             // Get content out of message
             let message: MU = SU::decode().unwrap();
@@ -646,88 +645,6 @@ where
             return MailboxResult::TimedOut;
         };
         MailboxResult::Message(S::decode().unwrap())
-    }
-}
-
-/// Subscriber represents a process that can be notified by a tagged message
-/// with the same tag that is used when registering the subscription.
-#[derive(Debug)]
-pub(crate) struct Subscriber {
-    process: Process<(), Bincode>,
-    tag: Tag,
-}
-
-impl Subscriber {
-    pub fn new(process: Process<(), Bincode>, tag: Tag) -> Self {
-        Self { process, tag }
-    }
-
-    pub fn notify(&self) {
-        self.process.tag_send(self.tag, ());
-    }
-}
-
-impl<T> ProcessRef<T>
-where
-    T: Supervisor,
-    T: AbstractProcess<State = SupervisorConfig<T>>,
-{
-    /// Block until the Supervisor shuts down.
-    ///
-    /// A tagged message will be sent to the supervisor process as a request
-    /// and the subscription will be registered. When the supervisor process
-    /// shuts down, the subscribers will be each notified by a response
-    /// message and therefore be unblocked after having received the awaited
-    /// message.
-    pub fn block_until_shutdown(&self) {
-        fn unpacker<TU>(this: &mut TU::State, sender: Process<(), Bincode>)
-        where
-            TU: Supervisor,
-            TU: AbstractProcess<State = SupervisorConfig<TU>>,
-        {
-            let tag = unsafe { host::api::message::get_tag() };
-            let tag = Tag::from(tag);
-
-            this.subscribe_shutdown(Subscriber::new(sender, tag));
-        }
-
-        let tag = Tag::new();
-        // Create new message buffer.
-        unsafe { host::api::message::create_data(tag.id(), 0) };
-        // Create reference to self
-        let this: Process<()> = Process::this();
-        // First encode the handler inside the message buffer.
-        let handler = unpacker::<T> as usize as i32;
-        let handler_message = Sendable::Request(handler, this);
-        Bincode::encode(&handler_message).unwrap();
-        // Send it & wait on a response!
-        unsafe {
-            host::api::message::send_receive_skip_search(self.process.id(), 0);
-        };
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-struct GetChildren;
-impl<T> RequestHandler<GetChildren> for T
-where
-    T: Supervisor,
-    T: AbstractProcess<State = SupervisorConfig<T>>,
-{
-    type Response = <<T as Supervisor>::Children as Supervisable<T>>::Processes;
-
-    fn handle(state: &mut Self::State, _: GetChildren) -> Self::Response {
-        state.get_children()
-    }
-}
-
-impl<T> ProcessRef<T>
-where
-    T: Supervisor,
-    T: AbstractProcess<State = SupervisorConfig<T>>,
-{
-    pub fn children(&self) -> <<T as Supervisor>::Children as Supervisable<T>>::Processes {
-        self.request(GetChildren)
     }
 }
 
