@@ -22,7 +22,9 @@ impl Tag {
     /// they occurred inside the same process.
     pub fn new() -> Tag {
         unsafe {
-            COUNTER += 1;
+            // Wrap around after 7 bytes. The top byte is reserved for special purposes.
+            // Like encoding the handler ID for `AbstractProcesses`.
+            COUNTER = (COUNTER + 1) % 0xFFFFFFFFFFFFFF;
             Tag(COUNTER)
         }
     }

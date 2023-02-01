@@ -1,7 +1,7 @@
 use std::f32::consts::PI;
 use std::time::Duration;
 
-use lunatic::process::{ProcessRef, StartProcess};
+use lunatic::ap::{AbstractProcess, Config};
 use lunatic::{abstract_process, host, sleep, spawn_link, test, Tag};
 
 #[test]
@@ -11,18 +11,17 @@ fn init() {
     #[abstract_process]
     impl A {
         #[init]
-        fn init(_process: ProcessRef<Self>, _count: (u32, String)) -> Self {
-            Self {}
+        fn init(_config: Config<Self>, _count: (u32, String)) -> Result<Self, ()> {
+            Ok(Self {})
         }
     }
 
-    A::start_link(
-        (
+    A::link()
+        .start((
             42,
             "the meaning of life, the universe, and everything".to_owned(),
-        ),
-        None,
-    );
+        ))
+        .unwrap();
 }
 
 #[test]
@@ -32,8 +31,8 @@ fn shutdown() {
     #[abstract_process]
     impl A {
         #[init]
-        fn init(_: ProcessRef<Self>, _: ()) -> A {
-            A
+        fn init(_: Config<Self>, _: ()) -> Result<A, ()> {
+            Ok(A)
         }
 
         #[terminate]
@@ -42,7 +41,7 @@ fn shutdown() {
         }
     }
 
-    let a = A::start_link((), None);
+    let a = A::link().start(()).unwrap();
     a.shutdown();
 }
 
@@ -55,15 +54,15 @@ fn handle_link_trapped() {
     #[abstract_process]
     impl A {
         #[init]
-        fn init(_process: ProcessRef<Self>, _arg: ()) -> Self {
+        fn init(_config: Config<Self>, _arg: ()) -> Result<Self, ()> {
             unsafe { host::api::process::die_when_link_dies(0) };
             spawn_link!(|| panic!());
-            Self {
+            Ok(Self {
                 link_trapped: false,
-            }
+            })
         }
 
-        #[handle_link_trapped]
+        #[handle_link_death]
         fn handle_link_trapped(&mut self, tag: Tag) {
             println!("Link trapped: {:?}", tag);
             self.link_trapped = true;
@@ -75,7 +74,7 @@ fn handle_link_trapped() {
         }
     }
 
-    let a = A::start((), None);
+    let a = A::start(()).unwrap();
     sleep(Duration::from_millis(10));
     assert!(a.is_link_trapped());
 }
@@ -89,8 +88,8 @@ fn handle_zero_argument() {
     #[abstract_process]
     impl Counter {
         #[init]
-        fn init(_process: ProcessRef<Self>, count: u32) -> Self {
-            Self { count }
+        fn init(_config: Config<Self>, count: u32) -> Result<Self, ()> {
+            Ok(Self { count })
         }
 
         #[handle_message]
@@ -117,7 +116,7 @@ fn handle_zero_argument() {
         }
     }
 
-    let counter = Counter::start_link(2, None);
+    let counter = Counter::link().start(2).unwrap();
     counter.increment();
     assert_eq!(3, counter.count());
     counter.decrement();
@@ -134,8 +133,8 @@ fn handle_single_argument() {
     #[abstract_process]
     impl A {
         #[init]
-        fn init(_: ProcessRef<Self>, _: ()) -> A {
-            A
+        fn init(_: Config<Self>, _: ()) -> Result<A, ()> {
+            Ok(A)
         }
 
         #[handle_message]
@@ -149,7 +148,7 @@ fn handle_single_argument() {
         }
     }
 
-    let a = A::start_link((), None);
+    let a = A::link().start(()).unwrap();
     a.say_hello("Hello".to_owned());
     let greeting = a.say_hello_to(Name("Mark".to_owned()));
     assert_eq!("Hello Mark", greeting);
@@ -165,8 +164,8 @@ fn handle_multiple_arguments() {
     #[abstract_process]
     impl A {
         #[init]
-        fn init(_: ProcessRef<Self>, _: ()) -> A {
-            A
+        fn init(_: Config<Self>, _: ()) -> Result<A, ()> {
+            Ok(A)
         }
 
         #[handle_message]
@@ -182,7 +181,7 @@ fn handle_multiple_arguments() {
         }
     }
 
-    let a = A::start_link((), None);
+    let a = A::link().start(()).unwrap();
     a.say_hello("Hello".to_owned(), false, Num(666));
     let greeting = a.say_hello_to("Mark".to_owned(), true, Num(777));
     assert_eq!("Mark true 777", greeting);
@@ -195,8 +194,8 @@ fn handle_mut_types() {
     #[abstract_process]
     impl A {
         #[init]
-        fn init(_: ProcessRef<Self>, _: ()) -> A {
-            A
+        fn init(_: Config<Self>, _: ()) -> Result<A, ()> {
+            Ok(A)
         }
 
         #[handle_message]
@@ -206,7 +205,7 @@ fn handle_mut_types() {
         fn two_mut_arg(&self, mut _a: String, _b: bool) -> () {}
     }
 
-    let a = A::start_link((), None);
+    let a = A::link().start(()).unwrap();
     a.one_mut_arg("Hello".to_owned());
     a.two_mut_arg("Hello".to_owned(), true);
 }
@@ -224,8 +223,8 @@ fn handle_destructuring() {
     #[abstract_process]
     impl A {
         #[init]
-        fn init(_: ProcessRef<Self>, _: ()) -> A {
-            A
+        fn init(_: Config<Self>, _: ()) -> Result<A, ()> {
+            Ok(A)
         }
 
         #[handle_message]
@@ -251,7 +250,7 @@ fn handle_destructuring() {
         }
     }
 
-    let a = A::start_link((), None);
+    let a = A::link().start(()).unwrap();
     a.unpack_tuples((5, (false, 'a')));
     a.unpack_slice([0, 1, 2]);
     a.unpack_struct(Person {
@@ -271,8 +270,8 @@ fn handle_comments() {
     impl Counter {
         /// Some comments on the init method.
         #[init]
-        fn init(_process: ProcessRef<Self>, count: u32) -> Self {
-            Self { count }
+        fn init(_config: Config<Self>, count: u32) -> Result<Self, ()> {
+            Ok(Self { count })
         }
 
         /// Some comments on the terminate method.
@@ -280,7 +279,7 @@ fn handle_comments() {
         fn terminate(self) {}
 
         /// Some comments on the handle_link_trapped method.
-        #[handle_link_trapped]
+        #[handle_link_death]
         fn handle_link_trapped(&mut self, _tag: Tag) {}
 
         /// Some comments on the increment method.
@@ -296,7 +295,7 @@ fn handle_comments() {
         }
     }
 
-    let counter = Counter::start_link(2, None);
+    let counter = Counter::link().start(2).unwrap();
     counter.increment();
     assert_eq!(3, counter.count());
 }
@@ -312,8 +311,8 @@ fn handle_differing_names() {
     impl Counter {
         /// Some comments on the init method.
         #[init]
-        fn initialize(_process: ProcessRef<Self>, count: u32) -> Self {
-            Self { count }
+        fn initialize(_config: Config<Self>, count: u32) -> Result<Self, ()> {
+            Ok(Self { count })
         }
 
         /// Some comments on the terminate method.
@@ -321,7 +320,7 @@ fn handle_differing_names() {
         fn terminator(self) {}
 
         /// Some comments on the handle_link_trapped method.
-        #[handle_link_trapped]
+        #[handle_link_death]
         fn link_trapped(&mut self, _tag: Tag) {}
 
         /// Some comments on the increment method.
@@ -337,7 +336,7 @@ fn handle_differing_names() {
         }
     }
 
-    let counter = Counter::start_link(2, None);
+    let counter = Counter::link().start(2).unwrap();
     counter.increment();
     assert_eq!(3, counter.count());
 }
@@ -352,8 +351,8 @@ fn reply_types() {
     #[abstract_process]
     impl A {
         #[init]
-        fn init(_: ProcessRef<Self>, _: ()) -> A {
-            A
+        fn init(_: Config<Self>, _: ()) -> Result<A, ()> {
+            Ok(A)
         }
 
         #[handle_request]
@@ -375,7 +374,7 @@ fn reply_types() {
         }
     }
 
-    let a = A::start_link((), None);
+    let a = A::link().start(()).unwrap();
     assert_eq!(a.empty_struct(), ());
     assert_eq!(a.builtin_type(), true);
     assert_eq!(a.nested_types(), (true, 9));
@@ -383,7 +382,7 @@ fn reply_types() {
 }
 
 #[test]
-fn send_after() {
+fn send_with_delay() {
     struct Counter {
         count: u32,
     }
@@ -391,8 +390,8 @@ fn send_after() {
     #[abstract_process]
     impl Counter {
         #[init]
-        fn init(_process: ProcessRef<Self>, count: u32) -> Self {
-            Self { count }
+        fn init(_config: Config<Self>, count: u32) -> Result<Self, ()> {
+            Ok(Self { count })
         }
 
         #[handle_message]
@@ -406,8 +405,8 @@ fn send_after() {
         }
     }
 
-    let counter = Counter::start_link(2, None);
-    counter.after(Duration::from_millis(10)).increment();
+    let counter = Counter::link().start(2).unwrap();
+    counter.with_delay(Duration::from_millis(10)).increment();
     assert_eq!(2, counter.count());
     sleep(Duration::from_millis(15));
     assert_eq!(3, counter.count());
@@ -420,8 +419,8 @@ fn request_timeout() {
     #[abstract_process]
     impl A {
         #[init]
-        fn init(_process: ProcessRef<Self>, _: ()) -> Self {
-            Self
+        fn init(_config: Config<Self>, _: ()) -> Result<Self, ()> {
+            Ok(Self)
         }
 
         #[handle_request]
@@ -437,15 +436,15 @@ fn request_timeout() {
         }
     }
 
-    let counter = A::start_link((), None);
+    let counter = A::link().start(()).unwrap();
     assert!(counter
         .with_timeout(Duration::from_millis(10))
         .respond_fast()
-        .is_message());
+        .is_ok());
     assert!(counter
         .with_timeout(Duration::from_millis(10))
         .respond_slow()
-        .is_timed_out());
+        .is_err());
 }
 
 #[test]
@@ -460,8 +459,8 @@ fn visibility() {
         #[abstract_process(visibility = pub)]
         impl Counter {
             #[init]
-            fn init(_process: ProcessRef<Self>, count: u32) -> Self {
-                Self { count }
+            fn init(_config: Config<Self>, count: u32) -> Result<Self, ()> {
+                Ok(Self { count })
             }
 
             #[handle_message]
@@ -476,9 +475,9 @@ fn visibility() {
         }
     }
 
-    use m::{Counter, CounterHandler};
-    let counter = Counter::start_link(2, None);
-    counter.after(Duration::from_millis(10)).increment();
+    use m::{Counter, CounterMessages, CounterRequests};
+    let counter = Counter::link().start(2).unwrap();
+    counter.with_delay(Duration::from_millis(10)).increment();
     assert_eq!(2, counter.count());
     sleep(Duration::from_millis(15));
     assert_eq!(3, counter.count());
@@ -490,11 +489,13 @@ fn wrapper_rename() {
         count: u32,
     }
 
-    #[abstract_process(trait_name = "CounterExt", visibility = pub)]
+    #[abstract_process(message_trait_name = "CounterMsgExt",
+                       request_trait_name = "CounterReqExt",
+                       visibility = pub)]
     impl Counter {
         #[init]
-        fn init(_process: ProcessRef<Self>, count: u32) -> Self {
-            Self { count }
+        fn init(_config: Config<Self>, count: u32) -> Result<Self, ()> {
+            Ok(Self { count })
         }
 
         #[handle_message]
@@ -508,8 +509,8 @@ fn wrapper_rename() {
         }
     }
 
-    let counter = Counter::start_link(2, None);
-    counter.after(Duration::from_millis(10)).increment();
+    let counter = Counter::link().start(2).unwrap();
+    counter.with_delay(Duration::from_millis(10)).increment();
     assert_eq!(2, counter.count());
     sleep(Duration::from_millis(15));
     assert_eq!(3, counter.count());
@@ -529,13 +530,13 @@ fn generics() {
     #[abstract_process]
     impl<T> GenAdder<T>
     where
-        T: Add + AddAssign + Default + Clone + Serialize + for<'de> Deserialize<'de>,
+        T: Add + AddAssign + Default + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
     {
         #[init]
-        fn init(_: ProcessRef<Self>, _: ()) -> Self {
-            Self {
+        fn init(_: Config<Self>, _: ()) -> Result<Self, ()> {
+            Ok(Self {
                 count: T::default(),
-            }
+            })
         }
 
         #[handle_message]
@@ -549,11 +550,11 @@ fn generics() {
         }
     }
 
-    let counter = GenAdder::<f32>::start_link((), None);
+    let counter = GenAdder::<f32>::link().start(()).unwrap();
     assert_eq!(0f32, counter.sum());
     counter.add(PI);
     assert_eq!(PI, counter.sum());
-    counter.after(Duration::from_millis(10)).add(PI);
+    counter.with_delay(Duration::from_millis(10)).add(PI);
     sleep(Duration::from_millis(15));
     let s = counter
         .with_timeout(Duration::from_millis(10))

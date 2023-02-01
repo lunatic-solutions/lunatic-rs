@@ -1,11 +1,12 @@
+use std::iter::repeat;
+
 use convert_case::{Case, Casing};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
-use syn::Token;
+use syn::{PathArguments, Token, Type, FnArg};
 
-/// AbstractProcess macro.
 pub struct AbstractProcess {
     /// Arguments passed to the `#[abstract_process(...)]` macro.
     args: Args,
@@ -13,22 +14,22 @@ pub struct AbstractProcess {
     item_impl: syn::ItemImpl,
     /// Arg type in abstract process implementation.
     arg_ty: syn::Type,
-    /// Init method.
+    /// `init` method.
     init: syn::ImplItemMethod,
     /// Terminate method.
     terminate: Option<syn::ImplItemMethod>,
-    /// Handle link trapped method.
-    handle_link_trapped: Option<syn::ImplItemMethod>,
+    /// Handle link died method.
+    handle_link_death: Option<syn::ImplItemMethod>,
     /// Message handler methods.
     message_handlers: Vec<syn::ImplItemMethod>,
     /// Request handler methods.
     request_handlers: Vec<syn::ImplItemMethod>,
-    /// Ident of the message builder struct.
-    message_builder_ident: syn::Ident,
-    /// Ident of the request builder struct.
-    request_builder_ident: syn::Ident,
-    /// Ident of the handler trait.
-    handler_trait_ident: syn::Ident,
+    /// Deferred request handler methods.
+    deferred_request_handlers: Vec<syn::ImplItemMethod>,
+    /// Name of trait wrapping messages
+    message_trait_name: syn::Ident,
+    /// Name of trait wrapping requests
+    request_trait_name: syn::Ident,
 }
 
 impl AbstractProcess {
@@ -53,7 +54,14 @@ impl AbstractProcess {
                 ))
             }
         };
-        let (init, terminate, handle_link_trapped, message_handlers, request_handlers) = item_impl
+        let (
+            init,
+            terminate,
+            handle_link_death,
+            message_handlers,
+            request_handlers,
+            deferred_request_handlers,
+        ) = item_impl
             .items
             .clone()
             .into_iter()
@@ -85,14 +93,15 @@ impl AbstractProcess {
                 Some((item_attr, impl_item_method))
             })
             .fold(
-                Ok((None, None, None, Vec::new(), Vec::new())),
+                Ok((None, None, None, Vec::new(), Vec::new(), Vec::new())),
                 |acc, (item_attr, impl_item_method)| {
                     let (
                         mut init,
                         mut terminate,
-                        mut handle_link_trapped,
+                        mut handle_link_death,
                         mut message_handlers,
                         mut request_handlers,
+                        mut deferred_request_handlers,
                     ) = acc?;
 
                     match item_attr {
@@ -117,14 +126,14 @@ impl AbstractProcess {
                             terminate = Some(impl_item_method);
                         }
                         ItemAttr::HandleLinkTrapped => {
-                            if handle_link_trapped.is_some() {
+                            if handle_link_death.is_some() {
                                 return Err(syn::Error::new(
                                     impl_item_method.sig.ident.span(),
-                                    "handle_link_trapped method already defined",
+                                    "handle_link_death method already defined",
                                 ));
                             }
 
-                            handle_link_trapped = Some(impl_item_method);
+                            handle_link_death = Some(impl_item_method);
                         }
                         ItemAttr::HandleMessage => {
                             message_handlers.push(impl_item_method);
@@ -132,14 +141,18 @@ impl AbstractProcess {
                         ItemAttr::HandleRequest => {
                             request_handlers.push(impl_item_method);
                         }
+                        ItemAttr::HandleDeferredRequest => {
+                            deferred_request_handlers.push(impl_item_method);
+                        }
                     }
 
                     Ok((
                         init,
                         terminate,
-                        handle_link_trapped,
+                        handle_link_death,
                         message_handlers,
                         request_handlers,
+                        deferred_request_handlers,
                     ))
                 },
             )?;
@@ -158,13 +171,16 @@ impl AbstractProcess {
             syn::FnArg::Typed(typed_arg) => *typed_arg.ty.clone(),
         };
 
-        let message_builder_ident = format_ident!("{}MsgBuilder", self_ident);
-        let request_builder_ident = format_ident!("{}ReqBuilder", self_ident);
-        let handler_trait_ident = args
-            .trait_name
+        let message_trait_name = args
+            .message_trait_name
             .as_ref()
-            .map(|trait_name| format_ident!("{}", trait_name.value()))
-            .unwrap_or_else(|| format_ident!("{}Handler", self_ident));
+            .map(|message_trait_name| format_ident!("{}", message_trait_name.value()))
+            .unwrap_or_else(|| format_ident!("{}Messages", self_ident));
+        let request_trait_name = args
+            .request_trait_name
+            .as_ref()
+            .map(|request_trait_name| format_ident!("{}", request_trait_name.value()))
+            .unwrap_or_else(|| format_ident!("{}Requests", self_ident));
 
         Ok(AbstractProcess {
             args,
@@ -172,12 +188,12 @@ impl AbstractProcess {
             arg_ty,
             init,
             terminate,
-            handle_link_trapped,
+            handle_link_death,
             message_handlers,
             request_handlers,
-            message_builder_ident,
-            request_builder_ident,
-            handler_trait_ident,
+            deferred_request_handlers,
+            message_trait_name,
+            request_trait_name,
         })
     }
 
@@ -188,9 +204,9 @@ impl AbstractProcess {
         let impl_abstract_process = self.expand_impl_abstract_process();
         let message_handler_impls = self.expand_message_handler_impls();
         let request_handler_impls = self.expand_request_handler_impls();
+        let deferred_request_handler_impls = self.expand_deferred_request_handler_impls();
         let handler_trait = self.expand_handler_trait();
         let impl_handler_trait = self.expand_impl_handler_trait();
-        let message_builders = self.expand_builders();
 
         quote! {
             #handler_wrappers
@@ -198,9 +214,9 @@ impl AbstractProcess {
             #impl_abstract_process
             #message_handler_impls
             #request_handler_impls
+            #deferred_request_handler_impls
             #handler_trait
             #impl_handler_trait
-            #message_builders
         }
     }
 
@@ -215,10 +231,14 @@ impl AbstractProcess {
             .message_handlers
             .iter()
             .chain(self.request_handlers.iter())
-            .map(|impl_item_method| self.expand_handler_wrapper(impl_item_method));
+            .map(|impl_item_method| self.expand_handler_wrapper(impl_item_method, false));
 
+        // Exclude last element that is a `DeferredResponse`
+        let dr_wrappers = self.deferred_request_handlers.iter()
+            .map(|impl_item_method| self.expand_handler_wrapper(impl_item_method, true));
         quote! {
             #( #wrappers )*
+            #( #dr_wrappers )*
         }
     }
 
@@ -227,11 +247,21 @@ impl AbstractProcess {
     /// ```ignore
     /// __MsgWrap(Param1, Param2);
     /// ```
-    fn expand_handler_wrapper(&self, impl_item_method: &syn::ImplItemMethod) -> TokenStream {
+    fn expand_handler_wrapper(&self, impl_item_method: &syn::ImplItemMethod, exclude_last: bool) -> TokenStream {
+        let vis = &self.args.visibility;
         let ident = Self::handler_wrapper_ident(&impl_item_method.sig.ident);
         let (_, ty_generics, _) = &self.item_impl.generics.split_for_impl();
         let phantom_generics = &self.item_impl.generics.params;
-        let fields = filter_typed_args(impl_item_method.sig.inputs.iter()).map(|field| &*field.ty);
+        let inputs = match exclude_last {
+            true => {
+                // Exclude last element.
+                let mut a: Vec<FnArg> = impl_item_method.sig.inputs.clone().into_iter().collect();
+                a.pop();
+                a
+            },
+            false => impl_item_method.sig.inputs.clone().into_iter().collect(),
+        };
+        let fields = filter_typed_args(inputs.iter()).map(|field| &*field.ty);
         let phantom_field = if !self.item_impl.generics.params.is_empty() {
             Some(quote! { std::marker::PhantomData <(#phantom_generics)>, })
         } else {
@@ -240,7 +270,7 @@ impl AbstractProcess {
 
         quote! {
             #[derive(serde::Serialize, serde::Deserialize)]
-            struct #ident #ty_generics (
+            #vis struct #ident #ty_generics (
                 #phantom_field
                 #( #fields ),*
             );
@@ -277,33 +307,90 @@ impl AbstractProcess {
 
         let (impl_generics, _ty_generics, where_clause) = generics.split_for_impl();
         let arg_ty = &self.arg_ty;
+        let serializer = match &self.args.serializer {
+            Some(serializer) => quote!(#serializer),
+            None => quote!(lunatic::serializer::Bincode),
+        };
+        let handlers = self.expand_type_handlers();
 
-        let init_impl = self.expand_init_impl();
+        let (init_impl, startup_error) = self.expand_init_impl();
         let terminate_impl = self.expand_terminate_impl();
-        let handle_link_trapped_impl = self.expand_handle_link_trapped_impl();
+        let handle_link_death_impl = self.expand_handle_link_death_impl();
 
         quote! {
-            impl #impl_generics lunatic::process::AbstractProcess for #self_ty #where_clause {
+            impl #impl_generics lunatic::ap::AbstractProcess for #self_ty #where_clause {
                 type State = #self_ty;
                 type Arg = #arg_ty;
+                type Serializer = #serializer;
+                type Handlers = (#handlers);
+                type StartupError = #startup_error;
 
                 #init_impl
                 #terminate_impl
-                #handle_link_trapped_impl
+                #handle_link_death_impl
             }
         }
     }
 
+    /// Collects all wrapper types and adds them to the `AP::Handlers` tuple.
+    fn expand_type_handlers(&self) -> TokenStream {
+        let message_wrappers = self.message_handlers.iter().map(|impl_item_method| {
+            let ident = Self::handler_wrapper_ident(&impl_item_method.sig.ident);
+            let (_, generics, _) = &self.item_impl.generics.split_for_impl();
+            quote! { lunatic::ap::handlers::Message<#ident #generics>, }
+        });
+        let request_wrappers = self.request_handlers.iter().map(|impl_item_method| {
+            let ident = Self::handler_wrapper_ident(&impl_item_method.sig.ident);
+            let (_, generics, _) = &self.item_impl.generics.split_for_impl();
+            quote! { lunatic::ap::handlers::Request<#ident #generics>, }
+        });
+        let deferred_request_wrappers =
+            self.deferred_request_handlers
+                .iter()
+                .map(|impl_item_method| {
+                    let ident = Self::handler_wrapper_ident(&impl_item_method.sig.ident);
+                    let (_, generics, _) = &self.item_impl.generics.split_for_impl();
+                    quote! { lunatic::ap::handlers::DeferredRequest<#ident #generics>, }
+                });
+
+        message_wrappers
+            .chain(request_wrappers)
+            .chain(deferred_request_wrappers)
+            .collect()
+    }
+
     /// Expands the `init` method in the abstract process implementation.
-    fn expand_init_impl(&self) -> TokenStream {
+    fn expand_init_impl(&self) -> (TokenStream, TokenStream) {
         let ident = &self.init.sig.ident;
         let arg_ty = &self.arg_ty;
 
-        quote! {
-            fn init(this: ProcessRef<Self>, arg: #arg_ty) -> Self::State {
-                Self::#ident(this, arg)
+        let init = quote! {
+            fn init(config: lunatic::ap::Config<Self>, arg: #arg_ty) -> Result<Self::State, Self::StartupError> {
+                Self::#ident(config, arg)
             }
-        }
+        };
+
+        // Extract startup error type from `Result<T, Error>`.
+        let startup_error = match &self.init.sig.output {
+            syn::ReturnType::Type(_, ret_type) => {
+                match ret_type.as_ref() {
+                    Type::Path(ret_type) => match ret_type.path.segments.last() {
+                        Some(ret_type_segments) => match &ret_type_segments.arguments {
+                            PathArguments::AngleBracketed(generics) => {
+                                // Error is the last argument in `Result<T, Error>`.
+                                let last = generics.args.last();
+                                quote! { #last }
+                            }
+                            _ => quote! { () },
+                        },
+                        _ => quote! { () },
+                    },
+                    _ => quote! { () },
+                }
+            }
+            _ => quote! { () },
+        };
+        (init, startup_error)
     }
 
     /// Expands the `terminate` method in the abstract process implementation.
@@ -322,16 +409,16 @@ impl AbstractProcess {
             .unwrap_or_default()
     }
 
-    /// Expands the `handle_link_trapped` method in the abstract process
+    /// Expands the `handle_link_death` method in the abstract process
     /// implementation.
-    fn expand_handle_link_trapped_impl(&self) -> TokenStream {
-        self.handle_link_trapped
+    fn expand_handle_link_death_impl(&self) -> TokenStream {
+        self.handle_link_death
             .as_ref()
-            .map(|handle_link_trapped| {
-                let ident = &handle_link_trapped.sig.ident;
+            .map(|handle_link_death| {
+                let ident = &handle_link_death.sig.ident;
 
                 quote! {
-                    fn handle_link_trapped(state: &mut Self::State, tag: lunatic::Tag) {
+                    fn handle_link_death(mut state: lunatic::ap::State<Self>, tag: lunatic::Tag) {
                         state.#ident(tag);
                     }
                 }
@@ -339,7 +426,7 @@ impl AbstractProcess {
             .unwrap_or_default()
     }
 
-    /// Expands the `MessageHandler` implementations for the message hander
+    /// Expands the `MessageHandler` implementations for the message handler
     /// wrapper types.
     fn expand_message_handler_impls(&self) -> TokenStream {
         let message_handler_impls = self.message_handlers.iter().map(|message_handler| {
@@ -353,7 +440,7 @@ impl AbstractProcess {
             let fn_ident = &sig.ident;
             let (impl_generics, ty_generics, where_clause) = self.item_impl.generics.split_for_impl();
             let args = filter_typed_args(sig.inputs.iter());
-            let offset = if self.item_impl.generics.params.is_empty() { 0 } else { 1 };
+            let offset = usize::from(!self.item_impl.generics.params.is_empty());
             let message_fields = (offset..args.count() + offset).map(|i| {
                 let i = proc_macro2::Literal::usize_unsuffixed(i);
                 quote! { message. #i }
@@ -361,8 +448,8 @@ impl AbstractProcess {
 
             quote! {
                 #( #attrs )*
-                impl #impl_generics lunatic::process::MessageHandler<#message_type #ty_generics> for #self_ty #where_clause {
-                    fn handle(state: &mut Self::State, message: #message_type #ty_generics) {
+                impl #impl_generics lunatic::ap::MessageHandler<#message_type #ty_generics> for #self_ty #where_clause {
+                    fn handle(mut state: lunatic::ap::State<Self>, message: #message_type #ty_generics) {
                         state.#fn_ident(#( #message_fields ),*)
                     }
                 }
@@ -374,7 +461,7 @@ impl AbstractProcess {
         }
     }
 
-    /// Expands the `RequestHandler` implementations for the request hander
+    /// Expands the `RequestHandler` implementations for the request handler
     /// wrapper types.
     fn expand_request_handler_impls(&self) -> TokenStream {
         let request_handler_impls = self.request_handlers.iter().map(|request_handler| {
@@ -394,7 +481,7 @@ impl AbstractProcess {
             let fn_ident = &sig.ident;
             let (impl_generics, ty_generics, where_clause) = self.item_impl.generics.split_for_impl();
             let args = filter_typed_args(sig.inputs.iter());
-            let offset = if self.item_impl.generics.params.is_empty() { 0 } else { 1 };
+            let offset = usize::from(!self.item_impl.generics.params.is_empty());
             let request_fields = (offset..args.count() + offset).map(|i| {
                 let i = proc_macro2::Literal::usize_unsuffixed(i);
                 quote! { request. #i }
@@ -402,11 +489,69 @@ impl AbstractProcess {
 
             quote! {
                 #( #attrs )*
-                impl #impl_generics lunatic::process::RequestHandler<#request_type #ty_generics> for #self_ty #where_clause {
+                impl #impl_generics lunatic::ap::RequestHandler<#request_type #ty_generics> for #self_ty #where_clause {
                     type Response = #response_type;
 
-                    fn handle(state: &mut Self::State, request: #request_type #ty_generics) -> Self::Response {
+                    fn handle(mut state: lunatic::ap::State<Self>, request: #request_type #ty_generics) -> Self::Response {
                         state.#fn_ident(#( #request_fields ),*)
+                    }
+                }
+            }
+        });
+
+        quote! {
+            #( #request_handler_impls )*
+        }
+    }
+
+    /// Expands the `DeferredRequestHandler` implementations for the deferred
+    /// request handler wrapper types.
+    fn expand_deferred_request_handler_impls(&self) -> TokenStream {
+        let request_handler_impls = self.deferred_request_handlers.iter().map(|request_handler| {
+            let syn::ImplItemMethod {
+                attrs,
+                sig,
+                ..
+            } = request_handler;
+            let self_ty = &self.item_impl.self_ty;
+            let request_type = Self::handler_wrapper_ident(&sig.ident);
+            // Get the first generic of the last argument `DeferredRequest<THIS, _>`.
+            let response_type = match &sig.inputs.last() {
+                Some(FnArg::Typed(path)) => match &*path.ty {
+                        Type::Path(path) => {
+                            let last = path.path.segments.last().unwrap();
+                            match &last.arguments {
+                                PathArguments::AngleBracketed(generics) => {
+                                    let response_type = generics.args.first().unwrap();
+                                    quote!{ #response_type }
+                                },
+                                _ => quote!{()},
+                            }
+                        },
+                        _ => quote!{()},
+                },
+                _ => quote!{()},
+            };
+            let fn_ident = &sig.ident;
+            let (impl_generics, ty_generics, where_clause) = self.item_impl.generics.split_for_impl();
+            let args = filter_typed_args(sig.inputs.iter());
+            let offset = usize::from(!self.item_impl.generics.params.is_empty());
+            // Exclude last argument
+            let request_fields = (offset..args.count() - 1 + offset).map(|i| {
+                let i = proc_macro2::Literal::usize_unsuffixed(i);
+                quote! { request. #i }
+            });
+
+            quote! {
+                #( #attrs )*
+                impl #impl_generics lunatic::ap::DeferredRequestHandler<#request_type #ty_generics> for #self_ty #where_clause {
+                    type Response = #response_type;
+
+                    fn handle(
+                        mut state: lunatic::ap::State<Self>,
+                        request: #request_type #ty_generics,
+                        deferred_response: lunatic::ap::DeferredResponse<Self::Response, Self>) {                        
+                            state.#fn_ident(#( #request_fields, )* deferred_response);
                     }
                 }
             }
@@ -424,9 +569,9 @@ impl AbstractProcess {
             item_impl,
             message_handlers,
             request_handlers,
-            message_builder_ident,
-            request_builder_ident,
-            handler_trait_ident,
+            deferred_request_handlers,
+            message_trait_name,
+            request_trait_name,
             ..
         } = self;
         let vis = &args.visibility;
@@ -434,6 +579,7 @@ impl AbstractProcess {
 
         let message_handler_defs = message_handlers
             .iter()
+            .zip(repeat(false)) // is_deferred = false
             .map(HandlerStructure::from_handler)
             .map(|handler| {
                 let HandlerStructure {
@@ -444,14 +590,18 @@ impl AbstractProcess {
                     ..
                 } = handler;
 
+                let return_ty_type = format_ident!("ReturnTy_{}", ident);
                 quote! {
+                    #[allow(non_camel_case_types)]
+                    type #return_ty_type;
                     #( #attrs )*
-                    fn #ident #generics (&self #(, #args )*);
+                    fn #ident #generics (&self #(, #args )*) -> Self::#return_ty_type;
                 }
             });
 
         let request_handler_defs = request_handlers
             .iter()
+            .zip(repeat(false)) // is_deferred = false
             .map(HandlerStructure::from_handler)
             .map(|handler| {
                 let HandlerStructure {
@@ -459,26 +609,50 @@ impl AbstractProcess {
                     ident,
                     generics,
                     args,
-                    return_ty,
                     ..
                 } = handler;
 
+                let return_ty_type = format_ident!("ReturnTy_{}", ident);
                 quote! {
+                    #[allow(non_camel_case_types)]
+                    type #return_ty_type;
                     #( #attrs )*
-                    fn #ident #generics (&self #(, #args )*) -> #return_ty;
+                    fn #ident #generics (&self #(, #args )*) -> Self::#return_ty_type;
+                }
+            });
+        
+        let deferred_request_handler_defs = deferred_request_handlers
+            .iter()
+            .zip(repeat(true)) // is_deferred = true
+            .map(HandlerStructure::from_handler)
+            .map(|handler| {
+                let HandlerStructure {
+                    attrs,
+                    ident,
+                    generics,
+                    mut args,
+                    ..
+                } = handler;
+
+                // Remove last argument from input.
+                args.pop();
+                let return_ty_type = format_ident!("ReturnTy_{}", ident);
+                quote! {
+                    #[allow(non_camel_case_types)]
+                    type #return_ty_type;
+                    #( #attrs )*
+                    fn #ident #generics (&self #(, #args )*) -> Self::#return_ty_type;
                 }
             });
 
         quote! {
-            #vis trait #handler_trait_ident #ty_generics #where_clause {
+            #vis trait #message_trait_name #ty_generics #where_clause {
                 #( #message_handler_defs )*
+            }
+
+            #vis trait #request_trait_name #ty_generics #where_clause {
                 #( #request_handler_defs )*
-
-                /// Set a delay before sending the message.
-                fn after(&self, duration: std::time::Duration) -> #message_builder_ident #ty_generics;
-
-                /// Set a timeout for the request.
-                fn with_timeout(&self, duration: std::time::Duration) -> #request_builder_ident #ty_generics;
+                #( #deferred_request_handler_defs )*
             }
         }
     }
@@ -489,9 +663,9 @@ impl AbstractProcess {
             item_impl,
             message_handlers,
             request_handlers,
-            message_builder_ident,
-            request_builder_ident,
-            handler_trait_ident,
+            deferred_request_handlers,
+            message_trait_name,
+            request_trait_name,
             ..
         } = self;
         let self_ty = &item_impl.self_ty;
@@ -504,6 +678,7 @@ impl AbstractProcess {
 
         let message_handler_impls = message_handlers
             .iter()
+            .zip(repeat(false)) // is_deferred = false
             .map(HandlerStructure::from_handler)
             .map(|handler| {
                 let HandlerStructure {
@@ -516,18 +691,46 @@ impl AbstractProcess {
                     ..
                 } = handler;
 
+                let return_ty_type = format_ident!("ReturnTy_{}", ident);
                 quote! {
+                    type #return_ty_type = ();
                     #( #attrs )*
                     fn #ident #generics (&self #(, #args )*) {
-                        use lunatic::process::Message;
                         let msg = #message_type(#arg_phantom #( #handler_args ),*);
                         self.send(msg);
                     }
                 }
             });
 
+        let message_delay_handler_impls = message_handlers
+            .iter()
+            .zip(repeat(false)) // is_deferred = false
+            .map(HandlerStructure::from_handler)
+            .map(|handler| {
+                let HandlerStructure {
+                    attrs,
+                    ident,
+                    generics,
+                    args,
+                    message_type,
+                    handler_args,
+                    ..
+                } = handler;
+
+                let return_ty_type = format_ident!("ReturnTy_{}", ident);
+                quote! {
+                    type #return_ty_type = lunatic::time::TimerRef;
+                    #( #attrs )*
+                    fn #ident #generics (&self #(, #args )*) -> lunatic::time::TimerRef {
+                        let msg = #message_type(#arg_phantom #( #handler_args ),*);
+                        self.send(msg)
+                    }
+                }
+            });
+
         let request_handler_impls = request_handlers
             .iter()
+            .zip(repeat(false)) // is_deferred = false
             .map(HandlerStructure::from_handler)
             .map(|handler| {
                 let HandlerStructure {
@@ -540,135 +743,126 @@ impl AbstractProcess {
                     handler_args,
                 } = handler;
 
+                let return_ty_type = format_ident!("ReturnTy_{}", ident);
                 quote! {
+                    type #return_ty_type = #return_ty;
                     #( #attrs )*
-                    fn #ident #generics (&self #(, #args )*) -> #return_ty {
-                        use lunatic::process::Request;
+                    fn #ident #generics (&self #(, #args )*) -> Self::#return_ty_type {
                         let req = #message_type(#arg_phantom #( #handler_args ),*);
                         self.request(req)
                     }
                 }
             });
 
-        quote! {
-            impl #impl_generics #handler_trait_ident #ty_generics for lunatic::process::ProcessRef<#self_ty> #where_clause {
-                #( #message_handler_impls )*
-                #( #request_handler_impls )*
-
-                fn after(&self, duration: std::time::Duration) -> #message_builder_ident #ty_generics {
-                    #message_builder_ident::new(duration, self.clone())
-                }
-
-                fn with_timeout(&self, duration: std::time::Duration) -> #request_builder_ident #ty_generics {
-                    #request_builder_ident::new(duration, self.clone())
-                }
-            }
-        }
-    }
-
-    /// Expands the builder types.
-    fn expand_builders(&self) -> TokenStream {
-        let Self {
-            args,
-            item_impl,
-            message_handlers,
-            request_handlers,
-            message_builder_ident,
-            request_builder_ident,
-            ..
-        } = self;
-        let vis = &args.visibility;
-        let (impl_generics, ty_generics, where_clause) = item_impl.generics.split_for_impl();
-        let self_ty = &item_impl.self_ty;
-        let arg_phantom = if !item_impl.generics.params.is_empty() {
-            Some(quote! { std::marker::PhantomData, })
-        } else {
-            None
-        };
-
-        let message_builder_methods = message_handlers
+        let request_timeout_handler_impls = request_handlers
             .iter()
+            .zip(repeat(false)) // is_deferred = false
             .map(HandlerStructure::from_handler)
             .map(|handler| {
                 let HandlerStructure {
                     attrs,
                     ident,
-                    args,
-                    message_type,
-                    handler_args,
-                    ..
-                } = handler;
-
-                quote! {
-                    #( #attrs )*
-                    #vis fn #ident(&self #(, #args )*) {
-                        use lunatic::process::Message;
-                        let msg = #message_type(#arg_phantom #( #handler_args ),*);
-                        self.process_ref.send_after(msg, self.duration);
-                    }
-                }
-            });
-
-        let request_builder_methods = request_handlers
-            .iter()
-            .map(HandlerStructure::from_handler)
-            .map(|handler| {
-                let HandlerStructure {
-                    attrs,
-                    ident,
+                    generics,
                     args,
                     return_ty,
                     message_type,
                     handler_args,
-                    ..
                 } = handler;
 
+                let return_ty_type = format_ident!("ReturnTy_{}", ident);
                 quote! {
+                    type #return_ty_type = Result<#return_ty, lunatic::time::Timeout>;
                     #( #attrs )*
-                    #vis fn #ident(&self #(, #args )*) -> lunatic::MailboxResult<#return_ty> {
-                        use lunatic::process::Request;
+                    fn #ident #generics (&self #(, #args )*) -> Self::#return_ty_type {
                         let req = #message_type(#arg_phantom #( #handler_args ),*);
-                        self.process_ref.request_timeout(req, self.duration)
+                        self.request(req)
                     }
                 }
             });
 
+        let deferred_request_handler_impls = deferred_request_handlers
+            .iter()
+            .zip(repeat(true)) // is_deferred = true
+            .map(HandlerStructure::from_handler)
+            .map(|handler| {
+                let HandlerStructure {
+                    attrs,
+                    ident,
+                    generics,
+                    mut args,
+                    return_ty,
+                    message_type,
+                    mut handler_args,
+                } = handler;
+
+                // Remove last argument from input.
+                args.pop();
+                handler_args.pop();
+                let return_ty_type = format_ident!("ReturnTy_{}", ident);
+                quote! {
+                    type #return_ty_type = #return_ty;
+                    #( #attrs )*
+                    fn #ident #generics (&self #(, #args )*) -> Self::#return_ty_type {
+                        let req = #message_type(#arg_phantom #( #handler_args ),*);
+                        self.deferred_request(req)
+                    }
+                }
+            });
+
+        let deferred_request_timeout_handler_impls = deferred_request_handlers
+            .iter()
+            .zip(repeat(true)) // is_deferred = true
+            .map(HandlerStructure::from_handler)
+            .map(|handler| {
+                let HandlerStructure {
+                    attrs,
+                    ident,
+                    generics,
+                    mut args,
+                    return_ty,
+                    message_type,
+                    mut handler_args,
+                } = handler;
+
+                // Remove last argument from input.
+                args.pop();
+                handler_args.pop();
+                let return_ty_type = format_ident!("ReturnTy_{}", ident);
+                quote! {
+                    type #return_ty_type = Result<#return_ty, lunatic::time::Timeout>;
+                    #( #attrs )*
+                    fn #ident #generics (&self #(, #args )*) -> Self::#return_ty_type {
+                        let req = #message_type(#arg_phantom #( #handler_args ),*);
+                        self.deferred_request(req)
+                    }
+                }
+            });
+
+
         quote! {
-            #vis struct #message_builder_ident #ty_generics #where_clause {
-                duration: std::time::Duration,
-                process_ref: lunatic::process::ProcessRef<#self_ty>,
+            impl #impl_generics #message_trait_name #ty_generics for lunatic::ap::ProcessRef<#self_ty> #where_clause {
+                #( #message_handler_impls )*
             }
 
-            impl #impl_generics #message_builder_ident #ty_generics #where_clause {
-                fn new(duration: std::time::Duration, process_ref: ProcessRef<#self_ty>) -> Self {
-                    Self {
-                        duration,
-                        process_ref,
-                    }
-                }
-
-                #( #message_builder_methods )*
+            impl #impl_generics #request_trait_name #ty_generics for lunatic::ap::ProcessRef<#self_ty> #where_clause {
+                #( #request_handler_impls )*
+                #( #deferred_request_handler_impls )*
             }
 
-            #vis struct #request_builder_ident #ty_generics #where_clause {
-                duration: std::time::Duration,
-                process_ref: lunatic::process::ProcessRef<#self_ty>,
+            impl #impl_generics #message_trait_name #ty_generics for
+                    lunatic::time::WithDelay<lunatic::ap::ProcessRef<#self_ty>> #where_clause {
+                #( #message_delay_handler_impls )*
             }
 
-            impl #impl_generics #request_builder_ident #ty_generics #where_clause {
-                fn new(duration: std::time::Duration, process_ref: ProcessRef<#self_ty>) -> Self {
-                    Self {
-                        duration,
-                        process_ref,
-                    }
-                }
-
-                #( #request_builder_methods )*
+            impl #impl_generics #request_trait_name #ty_generics for
+                    lunatic::time::WithTimeout<lunatic::ap::ProcessRef<#self_ty>> #where_clause {
+                #( #request_timeout_handler_impls )*
+                #( #deferred_request_timeout_handler_impls )*
             }
         }
     }
 
-    /// Creates an ident for a handler ident.
+    /// Create a wrapper name for the request and send
     fn handler_wrapper_ident(ident: impl ToString) -> syn::Ident {
         format_ident!("__MsgWrap{}", ident.to_string().to_case(Case::Pascal))
     }
@@ -676,8 +870,10 @@ impl AbstractProcess {
 
 #[derive(Default)]
 pub struct Args {
-    trait_name: Option<syn::LitStr>,
+    message_trait_name: Option<syn::LitStr>,
+    request_trait_name: Option<syn::LitStr>,
     visibility: Option<syn::Visibility>,
+    serializer: Option<syn::Type>,
 }
 
 impl Args {
@@ -688,15 +884,24 @@ impl Args {
 
         let ident: syn::Ident = input.parse()?;
         let _: syn::Token![=] = input.parse()?;
-        if ident == "trait_name" {
-            if self.trait_name.is_some() {
+        if ident == "message_trait_name" {
+            if self.message_trait_name.is_some() {
                 return Err(syn::Error::new(
                     ident.span(),
-                    "trait name already specified",
+                    "message trait name already specified",
                 ));
             }
 
-            self.trait_name = Some(input.parse()?);
+            self.message_trait_name = Some(input.parse()?);
+        } else if ident == "request_trait_name" {
+            if self.request_trait_name.is_some() {
+                return Err(syn::Error::new(
+                    ident.span(),
+                    "request trait name already specified",
+                ));
+            }
+
+            self.request_trait_name = Some(input.parse()?);
         } else if ident == "visibility" {
             if self.visibility.is_some() {
                 return Err(syn::Error::new(
@@ -706,6 +911,15 @@ impl Args {
             }
 
             self.visibility = Some(input.parse()?);
+        } else if ident == "serializer" {
+            if self.serializer.is_some() {
+                return Err(syn::Error::new(
+                    ident.span(),
+                    "serializer already specified",
+                ));
+            }
+
+            self.serializer = Some(input.parse()?);
         } else {
             return Err(syn::Error::new(ident.span(), "unknown argument"));
         }
@@ -731,6 +945,7 @@ enum ItemAttr {
     HandleLinkTrapped,
     HandleMessage,
     HandleRequest,
+    HandleDeferredRequest,
 }
 
 impl ItemAttr {
@@ -738,9 +953,10 @@ impl ItemAttr {
         match s {
             "init" => Some(ItemAttr::Init),
             "terminate" => Some(ItemAttr::Terminate),
-            "handle_link_trapped" => Some(ItemAttr::HandleLinkTrapped),
+            "handle_link_death" => Some(ItemAttr::HandleLinkTrapped),
             "handle_message" => Some(ItemAttr::HandleMessage),
             "handle_request" => Some(ItemAttr::HandleRequest),
+            "handle_deferred_request" => Some(ItemAttr::HandleDeferredRequest),
             _ => None,
         }
     }
@@ -771,13 +987,13 @@ struct HandlerStructure<'a> {
     ident: &'a syn::Ident,
     generics: &'a syn::Generics,
     args: Vec<TokenStream>,
-    return_ty: syn::Type,
+    return_ty: TokenStream,
     message_type: syn::Ident,
     handler_args: Vec<syn::Ident>,
 }
 
 impl<'a> HandlerStructure<'a> {
-    fn from_handler(handler: &'a syn::ImplItemMethod) -> Self {
+    fn from_handler((handler, is_deferred): (&'a syn::ImplItemMethod, bool)) -> Self {
         let syn::ImplItemMethod { attrs, sig, .. } = handler;
         let syn::Signature {
             ident,
@@ -789,9 +1005,28 @@ impl<'a> HandlerStructure<'a> {
         let args = filter_typed_arg_names(inputs.iter())
             .map(|(ident, ty)| quote! { #ident: #ty })
             .collect();
-        let return_ty = match output {
-            syn::ReturnType::Default => syn::parse_quote! { () },
-            syn::ReturnType::Type(_, ty) => *ty.clone(),
+        let return_ty = if is_deferred {
+             match &inputs.last() {
+                Some(FnArg::Typed(path)) => match &*path.ty {
+                        Type::Path(path) => {
+                            let last = path.path.segments.last().unwrap();
+                            match &last.arguments {
+                                PathArguments::AngleBracketed(generics) => {
+                                    let response_type = generics.args.first().unwrap();
+                                    quote!{ #response_type }
+                                },
+                                _ => quote!{()},
+                            }
+                        },
+                        _ => quote!{()},
+                },
+                _ => quote!{()},
+            }
+        } else {
+            match output {
+                syn::ReturnType::Default =>  quote!{()},
+                syn::ReturnType::Type(_, ty) =>  quote!{#ty},
+            }
         };
         let message_type = AbstractProcess::handler_wrapper_ident(ident);
         let handler_args = filter_typed_arg_names(inputs.iter())

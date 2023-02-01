@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::LunaticError;
 use crate::host::api::distributed::node_id;
 use crate::host::{self};
-use crate::serializer::Serializer;
+use crate::serializer::CanSerialize;
 use crate::{Process, ProcessConfig, Tag};
 
 /// A compiled instance of a WebAssembly module.
@@ -95,7 +95,7 @@ impl WasmModule {
         params: &[Param],
     ) -> Result<Process<M, S>, LunaticError>
     where
-        S: Serializer<M>,
+        S: CanSerialize<M>,
     {
         self.spawn_(function, params, None, None)
     }
@@ -110,7 +110,7 @@ impl WasmModule {
         config: &ProcessConfig,
     ) -> Result<Process<M, S>, LunaticError>
     where
-        S: Serializer<M>,
+        S: CanSerialize<M>,
     {
         self.spawn_(function, params, None, Some(config))
     }
@@ -123,7 +123,7 @@ impl WasmModule {
         tag: Tag,
     ) -> Result<Process<M, S>, LunaticError>
     where
-        S: Serializer<M>,
+        S: CanSerialize<M>,
     {
         self.spawn_(function, params, Some(tag), None)
     }
@@ -138,7 +138,7 @@ impl WasmModule {
         tag: Tag,
     ) -> Result<Process<M, S>, LunaticError>
     where
-        S: Serializer<M>,
+        S: CanSerialize<M>,
     {
         self.spawn_(function, params, Some(tag), Some(config))
     }
@@ -151,7 +151,7 @@ impl WasmModule {
         config: Option<&ProcessConfig>,
     ) -> Result<Process<M, S>, LunaticError>
     where
-        S: Serializer<M>,
+        S: CanSerialize<M>,
     {
         let link = match link {
             Some(tag) => tag.id(),

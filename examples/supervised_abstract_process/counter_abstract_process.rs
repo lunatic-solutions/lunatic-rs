@@ -1,4 +1,4 @@
-use lunatic::process::ProcessRef;
+use lunatic::ap::Config;
 use lunatic::{abstract_process, Tag};
 
 pub struct Counter(u32);
@@ -8,8 +8,8 @@ pub struct Counter(u32);
 #[abstract_process(visibility = pub)]
 impl Counter {
     #[init]
-    fn init(_: ProcessRef<Self>, start: u32) -> Self {
-        Self(start)
+    fn init(_: Config<Self>, start: u32) -> Result<Self, ()> {
+        Ok(Self(start))
     }
 
     #[terminate]
@@ -17,7 +17,7 @@ impl Counter {
         println!("Shutdown process");
     }
 
-    #[handle_link_trapped]
+    #[handle_link_death]
     fn handle_link_trapped(&self, _tag: Tag) {
         println!("Link trapped");
     }

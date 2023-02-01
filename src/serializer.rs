@@ -47,12 +47,14 @@ pub enum DecodeError {
     Custom(String),
 }
 
-/// The `Serializer` defines the format that messages are encoded to or decoded
-/// from when they cross process boundaries.
+/// The `CanSerialize` trait is implemented for serializers that can encode and
+/// decode the type `M`.
 ///
-/// Lunatic already ships with support for a few well known serialization
-/// formats like json, message pack, protocol buffers and bincode, that can be
-/// enabled with feature flags. You can add others by implementing this trait.
+/// This trait is used across the whole lunatic API to allow us to switch out
+/// serializers when sending messages between processes. Lunatic already ships
+/// with support for a few well known serialization formats like json, message
+/// pack, protocol buffers and bincode, that can be enabled with feature flags.
+/// You can add others by implementing this trait.
 ///
 /// The generic parameter `M` can be used to express trait dependencies on
 /// messages for each concrete serializer type. Let's say we want to use
@@ -73,10 +75,10 @@ pub enum DecodeError {
 ///
 /// Serializers that can work with the [`Read`](std::io::Read) &
 /// [`Write`](std::io::Write) traits are generally better suited for lunatic's
-/// ffi, that works on a streaming basis and can avoid unnecessary copies.
+/// FFI, that works on a streaming basis and can avoid unnecessary copies.
 /// Serializer that require raw access to chunks of mutable memories (e.g.
-/// Prost) require additional copies between guest and host memories.
-pub trait Serializer<M> {
+/// `Prost`) require additional copies between guest and host memories.
+pub trait CanSerialize<M> {
     fn encode(message: &M) -> Result<(), EncodeError>;
     fn decode() -> Result<M, DecodeError>;
 }
@@ -95,7 +97,7 @@ pub trait Serializer<M> {
 #[derive(Hash, Debug)]
 pub struct Bincode {}
 
-impl<M> Serializer<M> for Bincode
+impl<M> CanSerialize<M> for Bincode
 where
     M: serde::Serialize + serde::de::DeserializeOwned,
 {
@@ -123,7 +125,7 @@ pub struct MessagePack {}
 
 #[cfg(feature = "msgpack_serializer")]
 #[cfg_attr(docsrs, doc(cfg(feature = "msgpack_serializer")))]
-impl<M> Serializer<M> for MessagePack
+impl<M> CanSerialize<M> for MessagePack
 where
     M: serde::Serialize + serde::de::DeserializeOwned,
 {
@@ -153,7 +155,7 @@ pub struct Json {}
 
 #[cfg(feature = "json_serializer")]
 #[cfg_attr(docsrs, doc(cfg(feature = "json_serializer")))]
-impl<M> Serializer<M> for Json
+impl<M> CanSerialize<M> for Json
 where
     M: serde::Serialize + serde::de::DeserializeOwned,
 {
@@ -177,7 +179,7 @@ pub struct ProtocolBuffers {}
 
 #[cfg(feature = "protobuf_serializer")]
 #[cfg_attr(docsrs, doc(cfg(feature = "protobuf_serializer")))]
-impl<M> Serializer<M> for ProtocolBuffers
+impl<M> CanSerialize<M> for ProtocolBuffers
 where
     M: protobuf::Message,
 {

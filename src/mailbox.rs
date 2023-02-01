@@ -5,11 +5,11 @@ use std::time::Duration;
 use crate::function::process::{IntoProcess, NoLink};
 use crate::host::api::message;
 use crate::host::{self};
-use crate::serializer::{Bincode, DecodeError, Serializer};
+use crate::serializer::{Bincode, CanSerialize, DecodeError};
 use crate::{Process, ProcessConfig, Tag};
 
-const LINK_DIED: u32 = 1;
-const TIMEOUT: u32 = 9027;
+pub const LINK_DIED: u32 = 1;
+pub const TIMEOUT: u32 = 9027;
 
 /// Marker type indicating that the [`Mailbox`] **IS** catching deaths of linked
 /// processes.
@@ -45,14 +45,14 @@ pub struct Catching;
 /// the process was spawned ([`spawn_link_tag`](Process::spawn_link_tag)).
 pub struct Mailbox<M, S = Bincode, L = ()>
 where
-    S: Serializer<M>,
+    S: CanSerialize<M>,
 {
     phantom: PhantomData<(M, S, L)>,
 }
 
 impl<M, S> Mailbox<M, S, ()>
 where
-    S: Serializer<M>,
+    S: CanSerialize<M>,
 {
     /// Gets next message from process' mailbox.
     ///
@@ -99,7 +99,7 @@ where
 /// A mailbox that is catching dead links.
 impl<M, S> Mailbox<M, S, Catching>
 where
-    S: Serializer<M>,
+    S: CanSerialize<M>,
 {
     /// Gets next message from process' mailbox.
     ///
@@ -130,7 +130,7 @@ where
 
 impl<M, S, L> Mailbox<M, S, L>
 where
-    S: Serializer<M>,
+    S: CanSerialize<M>,
 {
     /// Returns a reference to the currently running process
     pub fn this(&self) -> Process<M, S> {
@@ -191,7 +191,7 @@ where
 
 impl<M, S, L> Clone for Mailbox<M, S, L>
 where
-    S: Serializer<M>,
+    S: CanSerialize<M>,
 {
     fn clone(&self) -> Self {
         Self {
@@ -200,11 +200,11 @@ where
     }
 }
 
-impl<M, S, L> Copy for Mailbox<M, S, L> where S: Serializer<M> {}
+impl<M, S, L> Copy for Mailbox<M, S, L> where S: CanSerialize<M> {}
 
 impl<M, S, L> fmt::Debug for Mailbox<M, S, L>
 where
-    S: Serializer<M>,
+    S: CanSerialize<M>,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Mailbox")
@@ -251,11 +251,11 @@ impl<T> MailboxResult<T> {
     }
 }
 
-impl<M, S> NoLink for Mailbox<M, S> where S: Serializer<M> {}
+impl<M, S> NoLink for Mailbox<M, S> where S: CanSerialize<M> {}
 
 impl<M, S> IntoProcess<M, S> for Mailbox<M, S>
 where
-    S: Serializer<M>,
+    S: CanSerialize<M>,
 {
     type Process = Process<M, S>;
 
@@ -267,7 +267,7 @@ where
         node: Option<u64>,
     ) -> Self::Process
     where
-        S: Serializer<C> + Serializer<M>,
+        S: CanSerialize<C> + CanSerialize<M>,
     {
         let entry = entry as usize as i32;
         let node_id = node.unwrap_or_else(host::node_id);
@@ -300,7 +300,7 @@ where
 /// process.
 fn type_helper_wrapper<C, M, S>(function: i32)
 where
-    S: Serializer<C> + Serializer<M>,
+    S: CanSerialize<C> + CanSerialize<M>,
 {
     // If the captured variable is of size 0, don't wait on it.
     let captured = if std::mem::size_of::<C>() == 0 {

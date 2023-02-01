@@ -1,7 +1,12 @@
 use std::marker::PhantomData;
 
-use crate::process::{AbstractProcess, ProcessRef, StartFailableProcess, Subscriber};
-use crate::{host, MailboxResult, Tag};
+use crate::ap::handlers::{DeferredRequest, Request};
+use crate::ap::{
+    AbstractProcess, Config, DeferredRequestHandler, DeferredResponse, ProcessRef, RequestHandler,
+    State,
+};
+use crate::serializer::Bincode;
+use crate::{host, Tag};
 
 /// A `Supervisor` can detect failures (panics) inside
 /// [`AbstractProcesses`](AbstractProcess) and restart them.
@@ -61,32 +66,97 @@ where
 {
     type Arg = T::Arg;
     type State = SupervisorConfig<T>;
+    type Serializer = Bincode;
+    type Handlers = (Request<GetChildren>, DeferredRequest<ShutdownSubscribe>);
+    type StartupError = ();
 
-    fn init(_: ProcessRef<Self>, arg: T::Arg) -> Self::State {
+    fn init(config: Config<Self>, arg: T::Arg) -> Result<Self::State, ()> {
         // Supervisor shouldn't die if the children die
-        unsafe { host::api::process::die_when_link_dies(0) };
+        config.die_if_link_dies(false);
 
-        let mut config = SupervisorConfig::default();
-        <T as Supervisor>::init(&mut config, arg);
+        let mut sup_config = SupervisorConfig::default();
+        <T as Supervisor>::init(&mut sup_config, arg);
 
         // Check if children arguments are configured inside of supervisor's `init`
         // call.
-        if config.children_args.is_none() {
+        if sup_config.children_args.is_none() {
             panic!(
                 "SupervisorConfig<{0}>::children_args not set inside `{0}:init` function.",
                 std::any::type_name::<T>()
             );
         }
 
-        config
+        Ok(sup_config)
     }
 
     fn terminate(config: SupervisorConfig<T>) {
         config.terminate();
     }
 
-    fn handle_link_trapped(config: &mut SupervisorConfig<T>, tag: Tag) {
-        T::Children::handle_failure(config, tag);
+    fn handle_link_death(mut sup_config: State<Self>, tag: Tag) {
+        T::Children::handle_failure(&mut sup_config, tag);
+    }
+}
+
+impl<T> ProcessRef<T>
+where
+    T: Supervisor,
+    T: AbstractProcess<State = SupervisorConfig<T>, Serializer = Bincode>,
+{
+    /// Blocks until the Supervisor shuts down.
+    ///
+    /// This function will not request a shutdown, just wait until someone else
+    /// shuts the supervisor down.
+    ///
+    /// A tagged message will be sent to the supervisor process as a request
+    /// and the subscription will be registered. When the supervisor process
+    /// shuts down, the subscribers will be each notified by a response
+    /// message and therefore be unblocked after having received the awaited
+    /// message.
+    pub fn wait_on_shutdown(&self) {
+        self.deferred_request(ShutdownSubscribe);
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct ShutdownSubscribe;
+impl<T> DeferredRequestHandler<ShutdownSubscribe> for T
+where
+    T: Supervisor,
+    T: AbstractProcess<State = SupervisorConfig<T>, Serializer = Bincode>,
+{
+    type Response = ();
+
+    fn handle(
+        mut state: State<Self>,
+        _: ShutdownSubscribe,
+        subscriber: DeferredResponse<(), Self>,
+    ) {
+        state.subscribe_shutdown(subscriber)
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct GetChildren;
+impl<T> RequestHandler<GetChildren> for T
+where
+    T: Supervisor,
+    T: AbstractProcess<State = SupervisorConfig<T>, Serializer = Bincode>,
+{
+    type Response = <<T as Supervisor>::Children as Supervisable<T>>::Processes;
+
+    fn handle(state: State<Self>, _: GetChildren) -> Self::Response {
+        state.get_children()
+    }
+}
+
+impl<T> ProcessRef<T>
+where
+    T: Supervisor,
+    T: AbstractProcess<State = SupervisorConfig<T>, Serializer = Bincode>,
+{
+    pub fn children(&self) -> <<T as Supervisor>::Children as Supervisable<T>>::Processes {
+        self.request(GetChildren)
     }
 }
 
@@ -104,7 +174,7 @@ where
     children: Option<<<T as Supervisor>::Children as Supervisable<T>>::Processes>,
     children_args: Option<<<T as Supervisor>::Children as Supervisable<T>>::Args>,
     children_tags: Option<<<T as Supervisor>::Children as Supervisable<T>>::Tags>,
-    terminate_subscribers: Vec<Subscriber>,
+    terminate_subscribers: Vec<DeferredResponse<(), T>>,
     phantom: PhantomData<T>,
 }
 
@@ -126,14 +196,14 @@ where
         self.children.as_ref().unwrap().clone()
     }
 
-    fn terminate(self) {
+    fn terminate(mut self) {
         self.terminate_subscribers
-            .iter()
-            .for_each(|sub| sub.notify());
+            .drain(..)
+            .for_each(|sub| sub.send_response(()));
         T::Children::terminate(self);
     }
 
-    pub(crate) fn subscribe_shutdown(&mut self, subscriber: Subscriber) {
+    pub(crate) fn subscribe_shutdown(&mut self, subscriber: DeferredResponse<(), T>) {
         self.terminate_subscribers.push(subscriber);
     }
 }
@@ -167,61 +237,9 @@ where
     fn handle_failure(config: &mut SupervisorConfig<T>, tag: Tag);
 }
 
-impl<T1, K> Supervisable<K> for T1
-where
-    K: Supervisor<Children = Self>,
-    T1: AbstractProcess,
-    T1::Arg: Clone,
-{
-    type Processes = ProcessRef<T1>;
-    type Args = (T1::Arg, Option<String>);
-    type Tags = Tag;
-
-    fn start_links(config: &mut SupervisorConfig<K>, args: Self::Args) {
-        config.children_args = Some(args.clone());
-        let (proc, tag) = match T1::start_link_or_fail(args.0, args.1.as_deref()) {
-            MailboxResult::Message(result) => result,
-            MailboxResult::LinkDied(_) => panic!(
-                "Supervisor failed to start child `{}`",
-                std::any::type_name::<T1>()
-            ),
-            _ => unreachable!(),
-        };
-        config.children = Some(proc);
-        config.children_tags = Some(tag);
-    }
-
-    fn terminate(config: SupervisorConfig<K>) {
-        config.children.unwrap().shutdown();
-    }
-
-    fn handle_failure(config: &mut SupervisorConfig<K>, tag: Tag) {
-        // Since there is only one children process, the behavior is the same for all
-        // strategies -- after a failure, restart the child process
-        if tag == config.children_tags.unwrap() {
-            let (proc, tag) = match T1::start_link_or_fail(
-                config.children_args.as_ref().unwrap().0.clone(),
-                config.children_args.as_ref().unwrap().1.as_deref(),
-            ) {
-                MailboxResult::Message(result) => result,
-                MailboxResult::LinkDied(_) => panic!(
-                    "Supervisor failed to start child `{}`",
-                    std::any::type_name::<T1>()
-                ),
-                _ => unreachable!(),
-            };
-            *config.children.as_mut().unwrap() = proc;
-            *config.children_tags.as_mut().unwrap() = tag;
-        } else {
-            panic!(
-                "Supervisor {} received kill signal",
-                std::any::type_name::<K>()
-            );
-        }
-    }
-}
-
-// Auto-implement Supervisable for up to 12 children.
+// Implement Supervisable for tuples with up to 12 children.
+macros::impl_supervisable!();
+macros::impl_supervisable!(T0 0);
 macros::impl_supervisable!(T0 0, T1 1);
 macros::impl_supervisable!(T0 0, T1 1, T2 2);
 macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3);
@@ -238,7 +256,7 @@ macros::impl_supervisable!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8,
 mod macros {
     // Replace any identifier with `Tag`
     macro_rules! tag {
-        ($args:ident) => {
+        ($t:ident) => {
             Tag
         };
     }
@@ -270,42 +288,43 @@ mod macros {
     }
 
     macro_rules! impl_supervisable {
-        ($($args:ident $i:tt),*) => {
-            impl<$($args),*, K> Supervisable<K> for ($($args),*)
+        ($($t:ident $i:tt),*) => {
+            impl<$($t,)* K> Supervisable<K> for ($($t,)*)
             where
                 K: Supervisor<Children = Self>,
                 $(
-                    $args : AbstractProcess,
-                    $args ::Arg : Clone,
+                    $t : AbstractProcess,
+                    $t ::Arg : Clone,
                 )*
             {
-                type Processes = ($(ProcessRef<$args>,)*);
-                type Args = ($(($args ::Arg, Option<String>)),*);
-                type Tags = ($(macros::tag!($args)),*);
+                type Processes = ($(ProcessRef<$t>,)*);
+                type Args = ($(($t ::Arg, Option<String>),)*);
+                type Tags = ($(macros::tag!($t),)*);
 
                 fn start_links(config: &mut SupervisorConfig<K>, args: Self::Args) {
                     config.children_args = Some(args.clone());
 
                     $(
-                        let (paste::paste!([<proc$i>]),paste::paste!([<tag$i>]))
-                                = match $args ::start_link_or_fail(args.$i.0, args.$i.1.as_deref()) {
-                            MailboxResult::Message(result) => result,
-                            MailboxResult::LinkDied(_) => panic!(
-                                "Supervisor failed to start child `{}`",
-                                std::any::type_name::<T1>()
-                            ),
-                            _ => unreachable!(),
+                        let paste::paste!([<tag$i>]) = Tag::new();
+                        let result = match args.$i.1 {
+                            Some(name) => $t::link_with(paste::paste!([<tag$i>])).start_as(name, args.$i.0),
+                            None => $t::link_with(paste::paste!([<tag$i>])).start(args.$i.0),
+                        };
+                        let paste::paste!([<proc$i>]) = match result {
+                            Ok(proc) => proc,
+                            Err(err) => panic!("Supervisor failed to start child `{:?}`", err),
                         };
                     )*
-
-                    config.children = Some(($(paste::paste!([<proc$i>])),*));
-                    config.children_tags = Some(($(paste::paste!([<tag$i>])),*));
+                    config.children = Some(($(paste::paste!([<proc$i>]),)*));
+                    config.children_tags = Some(($(paste::paste!([<tag$i>]),)*));
                 }
 
+                #[allow(unused_variables)]
                 fn terminate(config: SupervisorConfig<K>) {
                     macros::reverse_shutdown!(config, [ $($i)* ]);
                 }
 
+                #[allow(unused_variables)]
                 fn handle_failure(config: &mut SupervisorConfig<K>, tag: Tag) {
                     match config.strategy {
                         // After a failure, just restart the same process.
@@ -314,26 +333,33 @@ mod macros {
                             $(
 
                                 if tag == config.children_tags.unwrap().$i {
-                                    let (proc, tag) = match $args::start_link_or_fail(
+                                    let args = (
                                         config.children_args.as_ref().unwrap().$i.0.clone(),
                                         config.children_args.as_ref().unwrap().$i.1.as_deref(),
-                                    ) {
-                                        MailboxResult::Message(result) => result,
-                                        MailboxResult::LinkDied(_) => panic!(
-                                            "Supervisor failed to start child `{}`",
-                                            std::any::type_name::<T1>()
-                                        ),
-                                        _ => unreachable!(),
+                                    );
+                                    let link_tag = Tag::new();
+                                    let result = match args.1 {
+                                        Some(name) => {
+                                            // Remove first the previous registration
+                                            let remove = format!("{} + ProcessRef + {}", name, std::any::type_name::<$t>());
+                                            unsafe { host::api::registry::remove(remove.as_ptr(), remove.len()) };
+                                            $t::link().start_as(name, args.0)
+                                        },
+                                        None => $t::link_with(link_tag).start(args.0),
                                     };
-                                    (*config.children.as_mut().unwrap()).$i = proc;
-                                    (*config.children_tags.as_mut().unwrap()).$i = tag;
+                                    let proc = match result {
+                                        Ok(proc) => proc,
+                                        Err(err) => panic!("Supervisor failed to start child `{:?}`", err),
+                                    };
+                                    config.children.as_mut().unwrap().$i = proc;
+                                    config.children_tags.as_mut().unwrap().$i = link_tag;
                                 } else
 
                             )*
 
                             {
                                 panic!(
-                                    "Supervisor {} received kill signal from a died link",
+                                    "Supervisor {} received link death signal not belonging to a child",
                                     std::any::type_name::<K>()
                                 );
                             }
@@ -346,7 +372,7 @@ mod macros {
                             )*
                             {
                                 panic!(
-                                    "Supervisor {} received kill signal from a died link",
+                                    "Supervisor {} received link death signal not belonging to a child",
                                     std::any::type_name::<K>()
                                 );
                             }
@@ -357,19 +383,26 @@ mod macros {
                             // restart all
                             $(
 
-                                let (proc, tag) = match $args::start_link_or_fail(
+                                let args = (
                                     config.children_args.as_ref().unwrap().$i.0.clone(),
                                     config.children_args.as_ref().unwrap().$i.1.as_deref(),
-                                ) {
-                                    MailboxResult::Message(result) => result,
-                                    MailboxResult::LinkDied(_) => panic!(
-                                        "Supervisor failed to start child `{}`",
-                                        std::any::type_name::<T1>()
-                                    ),
-                                    _ => unreachable!(),
+                                );
+                                let link_tag = Tag::new();
+                                let result = match args.1 {
+                                    Some(name) => {
+                                        // Remove first the previous registration
+                                        let remove = format!("{} + ProcessRef + {}", name, std::any::type_name::<$t>());
+                                        unsafe { host::api::registry::remove(remove.as_ptr(), remove.len()) };
+                                        $t::link().start_as(name, args.0)
+                                    },
+                                    None => $t::link_with(link_tag).start(args.0),
                                 };
-                                (*config.children.as_mut().unwrap()).$i = proc;
-                                (*config.children_tags.as_mut().unwrap()).$i = tag;
+                                let proc = match result {
+                                    Ok(proc) => proc,
+                                    Err(err) => panic!("Supervisor failed to start child `{:?}`", err),
+                                };
+                                config.children.as_mut().unwrap().$i = proc;
+                                config.children_tags.as_mut().unwrap().$i = link_tag;
 
                             )*
                         }
@@ -384,7 +417,7 @@ mod macros {
                             )*
                             {
                                 panic!(
-                                    "Supervisor {} received kill signal from a died link",
+                                    "Supervisor {} received link death signal not belonging to a child",
                                     std::any::type_name::<K>()
                                 );
                             }
@@ -393,8 +426,7 @@ mod macros {
                             macros::reverse_shutdown!(config, after tag, [ $($i)* ]);
 
                             // restart children starting at the tag
-                            // silence false positive warnings on seen_tag
-                            #[allow(unused_assignments)]
+                            #[allow(unused_assignments, unused_variables, unreachable_code)]
                             {
                                 let mut seen_tag = false;
                                 $(
@@ -402,19 +434,27 @@ mod macros {
                                     if seen_tag == true || tag == config.children_tags.unwrap().$i {
                                         seen_tag = true;
 
-                                        let (proc, tag) = match $args::start_link_or_fail(
+                                        let args = (
                                             config.children_args.as_ref().unwrap().$i.0.clone(),
                                             config.children_args.as_ref().unwrap().$i.1.as_deref(),
-                                        ) {
-                                            MailboxResult::Message(result) => result,
-                                            MailboxResult::LinkDied(_) => panic!(
-                                                "Supervisor failed to start child `{}`",
-                                                std::any::type_name::<T1>()
-                                            ),
-                                            _ => unreachable!(),
+                                        );
+                                        let link_tag = Tag::new();
+                                        let result = match args.1 {
+                                            Some(name) => {
+                                                // Remove first the previous registration
+                                                let remove = format!("{} + ProcessRef + {}", name, std::any::type_name::<$t>());
+                                                unsafe { host::api::registry::remove(remove.as_ptr(), remove.len()) };
+                                                $t::link().start_as(name, args.0)
+                                            },
+                                            None => $t::link_with(link_tag).start(args.0),
                                         };
-                                        (*config.children.as_mut().unwrap()).$i = proc;
-                                        (*config.children_tags.as_mut().unwrap()).$i = tag;
+                                        let proc = match result {
+                                            Ok(proc) => proc,
+                                            Err(err) => panic!("Supervisor failed to start child `{:?}`", err),
+                                        };
+                                        config.children.as_mut().unwrap().$i = proc;
+                                        config.children_tags.as_mut().unwrap().$i = link_tag;
+
                                     }
 
                                 )*
@@ -431,22 +471,23 @@ mod macros {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use lunatic_test::test;
 
     use super::{Supervisor, SupervisorConfig};
-    use crate::process::{AbstractProcess, ProcessRef, StartProcess};
-    use crate::sleep;
+    use crate::ap::{AbstractProcess, Config};
+    use crate::serializer::Bincode;
 
     struct SimpleServer;
 
     impl AbstractProcess for SimpleServer {
         type Arg = ();
         type State = Self;
+        type Serializer = Bincode;
+        type Handlers = ();
+        type StartupError = ();
 
-        fn init(_: ProcessRef<Self>, _arg: ()) -> Self::State {
-            SimpleServer
+        fn init(_: Config<Self>, _arg: ()) -> Result<Self, ()> {
+            Ok(SimpleServer)
         }
     }
 
@@ -454,16 +495,15 @@ mod tests {
 
     impl Supervisor for SimpleSup {
         type Arg = ();
-        type Children = SimpleServer;
+        type Children = (SimpleServer,);
 
         fn init(config: &mut SupervisorConfig<Self>, _: ()) {
-            config.children_args(((), None));
+            config.children_args((((), None),));
         }
     }
 
     #[test]
     fn supervisor_test() {
-        SimpleSup::start_link((), None);
-        sleep(Duration::from_millis(100));
+        SimpleSup::link().start(()).unwrap();
     }
 }
