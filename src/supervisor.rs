@@ -5,6 +5,7 @@ use crate::ap::{
     AbstractProcess, Config, DeferredRequestHandler, DeferredResponse, ProcessRef, RequestHandler,
     State,
 };
+use crate::function::process::{process_name, ProcessType};
 use crate::serializer::Bincode;
 use crate::{host, Tag};
 
@@ -341,7 +342,7 @@ mod macros {
                                     let result = match args.1 {
                                         Some(name) => {
                                             // Remove first the previous registration
-                                            let remove = format!("{} + ProcessRef + {}", name, std::any::type_name::<$t>());
+                                            let remove = process_name::<$t, $t::Serializer>(ProcessType::ProcessRef, name);
                                             unsafe { host::api::registry::remove(remove.as_ptr(), remove.len()) };
                                             $t::link().start_as(name, args.0)
                                         },
@@ -391,7 +392,7 @@ mod macros {
                                 let result = match args.1 {
                                     Some(name) => {
                                         // Remove first the previous registration
-                                        let remove = format!("{} + ProcessRef + {}", name, std::any::type_name::<$t>());
+                                        let remove = process_name::<$t, $t::Serializer>(ProcessType::ProcessRef, name);
                                         unsafe { host::api::registry::remove(remove.as_ptr(), remove.len()) };
                                         $t::link().start_as(name, args.0)
                                     },
@@ -442,7 +443,7 @@ mod macros {
                                         let result = match args.1 {
                                             Some(name) => {
                                                 // Remove first the previous registration
-                                                let remove = format!("{} + ProcessRef + {}", name, std::any::type_name::<$t>());
+                                                let remove = process_name::<$t, $t::Serializer>(ProcessType::ProcessRef, name);
                                                 unsafe { host::api::registry::remove(remove.as_ptr(), remove.len()) };
                                                 $t::link().start_as(name, args.0)
                                             },

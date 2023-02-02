@@ -18,6 +18,7 @@ use self::builder::AbstractProcessBuilder;
 use self::handlers::{DeferredRequest, Handlers, Message, Request};
 use self::messages::{RequestMessage, ReturnAddress, ShutdownMessage, SHUTDOWN_HANDLER};
 use self::tag::AbstractProcessTag;
+use crate::function::process::{process_name, ProcessType};
 use crate::protocol::ProtocolCapture;
 use crate::serializer::CanSerialize;
 use crate::time::{Timeout, TimerRef, WithDelay, WithTimeout};
@@ -392,7 +393,7 @@ where
     /// matches.
     pub fn lookup<S: AsRef<str>>(name: S) -> Option<Self> {
         let name: &str = name.as_ref();
-        let name = format!("{} + ProcessRef + {}", name, std::any::type_name::<T>());
+        let name = process_name::<T, T::Serializer>(ProcessType::ProcessRef, name);
         let mut id = 0;
         let mut node_id = 0;
         let result =
@@ -407,7 +408,7 @@ where
     /// Registers process under `name`.
     pub fn register<S: AsRef<str>>(&self, name: S) {
         let name: &str = name.as_ref();
-        let name = format!("{} + ProcessRef + {}", name, std::any::type_name::<T>());
+        let name = process_name::<T, T::Serializer>(ProcessType::ProcessRef, name);
         unsafe { host::api::registry::put(name.as_ptr(), name.len(), self.node_id(), self.id()) };
     }
 
