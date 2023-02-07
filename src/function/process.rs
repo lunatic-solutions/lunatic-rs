@@ -276,23 +276,13 @@ impl<M, S> Process<M, S> {
     /// Register process under a name.
     pub fn register(&self, name: &str) {
         // Encode type information in name
-        let name = format!(
-            "{} + Process + {}/{}",
-            name,
-            std::any::type_name::<M>(),
-            std::any::type_name::<S>()
-        );
+        let name = process_name::<M, S>(ProcessType::Process, name);
         unsafe { host::api::registry::put(name.as_ptr(), name.len(), self.node_id, self.id) };
     }
 
     /// Look up a process.
     pub fn lookup(name: &str) -> Option<Self> {
-        let name = format!(
-            "{} + Process + {}/{}",
-            name,
-            std::any::type_name::<M>(),
-            std::any::type_name::<S>()
-        );
+        let name = process_name::<M, S>(ProcessType::Process, name);
         let mut id = 0;
         let mut node_id = 0;
         let result =
@@ -461,3 +451,26 @@ impl<M, S> Clone for Process<M, S> {
 }
 
 impl<M, S> Copy for Process<M, S> {}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum ProcessType {
+    Process,
+    ProcessRef,
+}
+
+impl std::fmt::Display for ProcessType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProcessType::Process => write!(f, "Process"),
+            ProcessType::ProcessRef => write!(f, "ProcessRef"),
+        }
+    }
+}
+
+pub(crate) fn process_name<M, S>(pt: ProcessType, name: &str) -> String {
+    format!(
+        "{}/{}/{pt}/{name}",
+        std::any::type_name::<M>(),
+        std::any::type_name::<S>(),
+    )
+}
