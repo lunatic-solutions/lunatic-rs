@@ -119,6 +119,9 @@ pub mod supervisor;
 pub mod test;
 pub mod time;
 
+#[cfg(feature = "sqlite")]
+pub mod sqlite;
+
 pub use ap::AbstractProcess;
 pub use config::ProcessConfig;
 pub use error::LunaticError;
@@ -130,6 +133,7 @@ pub use module::{Param, WasmModule};
 #[doc(hidden)]
 pub use process_local::statik::Key as __StaticProcessLocalInner;
 pub use process_local::ProcessLocal;
+use serde::Deserialize;
 pub use tag::Tag;
 
 /// Implemented for all resources held by the VM.
@@ -148,4 +152,22 @@ pub trait Resource {
 /// Suspends the current process for `duration` of time.
 pub fn sleep(duration: std::time::Duration) {
     unsafe { host::api::process::sleep_ms(duration.as_millis() as u64) };
+}
+
+#[export_name = "lunatic_alloc"]
+extern "C" fn lunatic_alloc(len: u32) -> *mut u8 {
+    let buf = Vec::with_capacity(len as usize);
+    let mut buf = std::mem::ManuallyDrop::new(buf);
+    buf.as_mut_ptr()
+}
+
+pub fn call_host_alloc<T>(f: impl Fn(*mut u32) -> u32) -> bincode::Result<T>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    let mut len = 0_u32;
+    let len_ptr = &mut len as *mut u32;
+    let ptr = f(len_ptr);
+    let data_vec = unsafe { Vec::from_raw_parts(ptr as *mut u8, len as usize, len as usize) };
+    bincode::deserialize(&data_vec)
 }
