@@ -2,4 +2,4 @@
 target = "wasm32-wasi"
 
 [target.wasm32-wasi]
-runner = "../../lunatic-solutions/lunatic/target/release/lunatic run"
+runner = "lunatic run"
