@@ -435,6 +435,20 @@ impl Default for SqliteError {
     }
 }
 
+impl std::fmt::Display for SqliteError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.code, f)?;
+
+        if let Some(msg) = &self.message {
+            write!(f, ": {msg}")?;
+        }
+
+        Ok(())
+    }
+}
+
+impl std::error::Error for SqliteError {}
+
 impl SqliteCode {
     pub(super) fn from_code(code: u32) -> Option<Self> {
         match code {
@@ -544,6 +558,118 @@ impl SqliteCode {
             8202 => Some(SqliteCode::IoerrData),
             8458 => Some(SqliteCode::IoerrCorruptfs),
             _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for SqliteCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SqliteCode::Ok => write!(f, "SQLITE_OK"),
+            SqliteCode::Error => write!(f, "SQLITE_ERROR"),
+            SqliteCode::Internal => write!(f, "SQLITE_INTERNAL"),
+            SqliteCode::Perm => write!(f, "SQLITE_PERM"),
+            SqliteCode::Abort => write!(f, "SQLITE_ABORT"),
+            SqliteCode::Busy => write!(f, "SQLITE_BUSY"),
+            SqliteCode::Locked => write!(f, "SQLITE_LOCKED"),
+            SqliteCode::Nomem => write!(f, "SQLITE_NOMEM"),
+            SqliteCode::Readonly => write!(f, "SQLITE_READONLY"),
+            SqliteCode::Interrupt => write!(f, "SQLITE_INTERRUPT"),
+            SqliteCode::Ioerr => write!(f, "SQLITE_IOERR"),
+            SqliteCode::Corrupt => write!(f, "SQLITE_CORRUPT"),
+            SqliteCode::Notfound => write!(f, "SQLITE_NOTFOUND"),
+            SqliteCode::Full => write!(f, "SQLITE_FULL"),
+            SqliteCode::Cantopen => write!(f, "SQLITE_CANTOPEN"),
+            SqliteCode::Protocol => write!(f, "SQLITE_PROTOCOL"),
+            SqliteCode::Empty => write!(f, "SQLITE_EMPTY"),
+            SqliteCode::Schema => write!(f, "SQLITE_SCHEMA"),
+            SqliteCode::Toobig => write!(f, "SQLITE_TOOBIG"),
+            SqliteCode::Constraint => write!(f, "SQLITE_CONSTRAINT"),
+            SqliteCode::Mismatch => write!(f, "SQLITE_MISMATCH"),
+            SqliteCode::Misuse => write!(f, "SQLITE_MISUSE"),
+            SqliteCode::Nolfs => write!(f, "SQLITE_NOLFS"),
+            SqliteCode::Auth => write!(f, "SQLITE_AUTH"),
+            SqliteCode::Format => write!(f, "SQLITE_FORMAT"),
+            SqliteCode::Range => write!(f, "SQLITE_RANGE"),
+            SqliteCode::Notadb => write!(f, "SQLITE_NOTADB"),
+            SqliteCode::Notice => write!(f, "SQLITE_NOTICE"),
+            SqliteCode::Warning => write!(f, "SQLITE_WARNING"),
+            SqliteCode::Row => write!(f, "SQLITE_ROW"),
+            SqliteCode::Done => write!(f, "SQLITE_DONE"),
+            SqliteCode::OkLoadPermanently => write!(f, "SQLITE_OK_LOAD_PERMANENTLY"),
+            SqliteCode::ErrorMissingCollseq => write!(f, "SQLITE_ERROR_MISSING_COLLSEQ"),
+            SqliteCode::BusyRecovery => write!(f, "SQLITE_BUSY_RECOVERY"),
+            SqliteCode::LockedSharedcache => write!(f, "SQLITE_LOCKED_SHAREDCACHE"),
+            SqliteCode::ReadonlyRecovery => write!(f, "SQLITE_READONLY_RECOVERY"),
+            SqliteCode::IoerrRead => write!(f, "SQLITE_IOERR_READ"),
+            SqliteCode::CorruptVtab => write!(f, "SQLITE_CORRUPT_VTAB"),
+            SqliteCode::CantopenNotempdir => write!(f, "SQLITE_CANTOPEN_NOTEMPDIR"),
+            SqliteCode::ConstraintCheck => write!(f, "SQLITE_CONSTRAINT_CHECK"),
+            SqliteCode::AuthUser => write!(f, "SQLITE_AUTH_USER"),
+            SqliteCode::NoticeRecoverWal => write!(f, "SQLITE_NOTICE_RECOVER_WAL"),
+            SqliteCode::WarningAutoindex => write!(f, "SQLITE_WARNING_AUTOINDEX"),
+            SqliteCode::ErrorRetry => write!(f, "SQLITE_ERROR_RETRY"),
+            SqliteCode::AbortRollback => write!(f, "SQLITE_ABORT_ROLLBACK"),
+            SqliteCode::BusySnapshot => write!(f, "SQLITE_BUSY_SNAPSHOT"),
+            SqliteCode::LockedVtab => write!(f, "SQLITE_LOCKED_VTAB"),
+            SqliteCode::ReadonlyCantlock => write!(f, "SQLITE_READONLY_CANTLOCK"),
+            SqliteCode::IoerrShortRead => write!(f, "SQLITE_IOERR_SHORT_READ"),
+            SqliteCode::CorruptSequence => write!(f, "SQLITE_CORRUPT_SEQUENCE"),
+            SqliteCode::CantopenIsdir => write!(f, "SQLITE_CANTOPEN_ISDIR"),
+            SqliteCode::ConstraintCommithook => write!(f, "SQLITE_CONSTRAINT_COMMITHOOK"),
+            SqliteCode::NoticeRecoverRollback => write!(f, "SQLITE_NOTICE_RECOVER_ROLLBACK"),
+            SqliteCode::ErrorSnapshot => write!(f, "SQLITE_ERROR_SNAPSHOT"),
+            SqliteCode::BusyTimeout => write!(f, "SQLITE_BUSY_TIMEOUT"),
+            SqliteCode::ReadonlyRollback => write!(f, "SQLITE_READONLY_ROLLBACK"),
+            SqliteCode::IoerrWrite => write!(f, "SQLITE_IOERR_WRITE"),
+            SqliteCode::CorruptIndex => write!(f, "SQLITE_CORRUPT_INDEX"),
+            SqliteCode::CantopenFullpath => write!(f, "SQLITE_CANTOPEN_FULLPATH"),
+            SqliteCode::ConstraintForeignkey => write!(f, "SQLITE_CONSTRAINT_FOREIGNKEY"),
+            SqliteCode::ReadonlyDbmoved => write!(f, "SQLITE_READONLY_DBMOVED"),
+            SqliteCode::IoerrFsync => write!(f, "SQLITE_IOERR_FSYNC"),
+            SqliteCode::CantopenConvpath => write!(f, "SQLITE_CANTOPEN_CONVPATH"),
+            SqliteCode::ConstraintFunction => write!(f, "SQLITE_CONSTRAINT_FUNCTION"),
+            SqliteCode::ReadonlyCantinit => write!(f, "SQLITE_READONLY_CANTINIT"),
+            SqliteCode::IoerrDirFsync => write!(f, "SQLITE_IOERR_DIR_FSYNC"),
+            SqliteCode::CantopenDirtywal => write!(f, "SQLITE_CANTOPEN_DIRTYWAL"),
+            SqliteCode::ConstraintNotnull => write!(f, "SQLITE_CONSTRAINT_NOTNULL"),
+            SqliteCode::ReadonlyDirectory => write!(f, "SQLITE_READONLY_DIRECTORY"),
+            SqliteCode::IoerrTruncate => write!(f, "SQLITE_IOERR_TRUNCATE"),
+            SqliteCode::CantopenSymlink => write!(f, "SQLITE_CANTOPEN_SYMLINK"),
+            SqliteCode::ConstraintPrimarykey => write!(f, "SQLITE_CONSTRAINT_PRIMARYKEY"),
+            SqliteCode::IoerrFstat => write!(f, "SQLITE_IOERR_FSTAT"),
+            SqliteCode::ConstraintTrigger => write!(f, "SQLITE_CONSTRAINT_TRIGGER"),
+            SqliteCode::IoerrUnlock => write!(f, "SQLITE_IOERR_UNLOCK"),
+            SqliteCode::ConstraintUnique => write!(f, "SQLITE_CONSTRAINT_UNIQUE"),
+            SqliteCode::IoerrRdlock => write!(f, "SQLITE_IOERR_RDLOCK"),
+            SqliteCode::ConstraintVtab => write!(f, "SQLITE_CONSTRAINT_VTAB"),
+            SqliteCode::IoerrDelete => write!(f, "SQLITE_IOERR_DELETE"),
+            SqliteCode::ConstraintRowid => write!(f, "SQLITE_CONSTRAINT_ROWID"),
+            SqliteCode::IoerrBlocked => write!(f, "SQLITE_IOERR_BLOCKED"),
+            SqliteCode::ConstraintPinned => write!(f, "SQLITE_CONSTRAINT_PINNED"),
+            SqliteCode::IoerrNomem => write!(f, "SQLITE_IOERR_NOMEM"),
+            SqliteCode::ConstraintDatatype => write!(f, "SQLITE_CONSTRAINT_DATATYPE"),
+            SqliteCode::IoerrAccess => write!(f, "SQLITE_IOERR_ACCESS"),
+            SqliteCode::IoerrCheckreservedlock => write!(f, "SQLITE_IOERR_CHECKRESERVEDLOCK"),
+            SqliteCode::IoerrLock => write!(f, "SQLITE_IOERR_LOCK"),
+            SqliteCode::IoerrClose => write!(f, "SQLITE_IOERR_CLOSE"),
+            SqliteCode::IoerrDirClose => write!(f, "SQLITE_IOERR_DIR_CLOSE"),
+            SqliteCode::IoerrShmopen => write!(f, "SQLITE_IOERR_SHMOPEN"),
+            SqliteCode::IoerrShmsize => write!(f, "SQLITE_IOERR_SHMSIZE"),
+            SqliteCode::IoerrShmlock => write!(f, "SQLITE_IOERR_SHMLOCK"),
+            SqliteCode::IoerrShmmap => write!(f, "SQLITE_IOERR_SHMMAP"),
+            SqliteCode::IoerrSeek => write!(f, "SQLITE_IOERR_SEEK"),
+            SqliteCode::IoerrDeleteNoent => write!(f, "SQLITE_IOERR_DELETE_NOENT"),
+            SqliteCode::IoerrMmap => write!(f, "SQLITE_IOERR_MMAP"),
+            SqliteCode::IoerrGettemppath => write!(f, "SQLITE_IOERR_GETTEMPPATH"),
+            SqliteCode::IoerrConvpath => write!(f, "SQLITE_IOERR_CONVPATH"),
+            SqliteCode::IoerrVnode => write!(f, "SQLITE_IOERR_VNODE"),
+            SqliteCode::IoerrAuth => write!(f, "SQLITE_IOERR_AUTH"),
+            SqliteCode::IoerrBeginAtomic => write!(f, "SQLITE_IOERR_BEGIN_ATOMIC"),
+            SqliteCode::IoerrCommitAtomic => write!(f, "SQLITE_IOERR_COMMIT_ATOMIC"),
+            SqliteCode::IoerrRollbackAtomic => write!(f, "SQLITE_IOERR_ROLLBACK_ATOMIC"),
+            SqliteCode::IoerrData => write!(f, "SQLITE_IOERR_DATA"),
+            SqliteCode::IoerrCorruptfs => write!(f, "SQLITE_IOERR_CORRUPTFS"),
         }
     }
 }
