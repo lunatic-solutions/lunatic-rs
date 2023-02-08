@@ -1,6 +1,7 @@
 use super::error::SqliteError;
 
 /// Sqlite client witn an existing connection.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SqliteClient {
     conn: u64,
 }
