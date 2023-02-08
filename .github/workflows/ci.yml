@@ -8,9 +8,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: 'Check out repository'
+      - name: "Check out repository"
         uses: actions/checkout@v1
-      - name: 'Install lunatic'
+      - name: "Install lunatic"
         run: cargo install --git https://github.com/lunatic-solutions/lunatic
       - name: Install rust
         uses: actions-rs/toolchain@v1
@@ -19,9 +19,9 @@ jobs:
           target: wasm32-wasi
           override: true
           components: rustfmt, clippy
-      - name: 'Run tests'
+      - name: "Run tests"
         run: cargo test --workspace --features json_serializer,msgpack_serializer,protobuf_serializer,sqlite
-      - name: 'Run clippy'
+      - name: "Run clippy"
         run: cargo clippy --features json_serializer,msgpack_serializer,protobuf_serializer,sqlite -- -D warnings
-      - name: 'Check formatting'
+      - name: "Check formatting"
         run: cargo fmt -- --check
