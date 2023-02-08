@@ -28,6 +28,7 @@ protobuf = { version = "3.1", optional = true }
 lunatic-sqlite-api = { version = "0.13", optional = true }
 lunatic-macros = { version = "0.13", path = "./lunatic-macros" }
 lunatic-test = { version = "0.13", path = "./lunatic-test" }
+lunatic-sys = { version = "0.13", path = "./lunatic-sys" }
 
 [dev-dependencies]
 criterion = { version = "0.4", default-features = false }
@@ -48,7 +49,7 @@ path = "tests/sqlite.rs"
 required-features = ["sqlite"]
 
 [workspace]
-members = ["lunatic-macros", "lunatic-test"]
+members = ["lunatic-macros", "lunatic-test", "lunatic-sys"]
 
 [package.metadata.docs.rs]
 targets = ["wasm32-wasi"]

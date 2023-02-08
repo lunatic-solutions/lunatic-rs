@@ -127,6 +127,7 @@ pub use config::ProcessConfig;
 pub use error::LunaticError;
 pub use function::process::Process;
 pub use lunatic_macros::{abstract_process, main};
+pub use lunatic_sys::*;
 pub use lunatic_test::test;
 pub use mailbox::{Mailbox, MailboxResult};
 pub use module::{Param, WasmModule};
@@ -154,13 +155,19 @@ pub fn sleep(duration: std::time::Duration) {
     unsafe { host::api::process::sleep_ms(duration.as_millis() as u64) };
 }
 
-#[export_name = "lunatic_alloc"]
-extern "C" fn lunatic_alloc(len: u32) -> *mut u8 {
-    let buf = Vec::with_capacity(len as usize);
-    let mut buf = std::mem::ManuallyDrop::new(buf);
-    buf.as_mut_ptr()
-}
-
+/// Utility for calling an allocating host function which is deserialized into
+/// `T`.
+///
+/// # Example
+///
+/// ```no_run
+/// struct Foo { a: String }
+///
+/// let foo = call_host_alloc::<Foo>(|len_ptr| unsafe {
+///     lunatic::host::some_allocating_fn(len_ptr)
+/// }).unwrap();
+/// ```
+#[doc(hidden)]
 pub fn call_host_alloc<T>(f: impl Fn(*mut u32) -> u32) -> bincode::Result<T>
 where
     T: for<'de> Deserialize<'de>,
