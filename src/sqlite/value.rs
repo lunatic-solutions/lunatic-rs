@@ -13,19 +13,33 @@ pub enum Value {
 }
 
 macro_rules! impl_into_value {
-    ($f: ident, Null, $t: ty) => {
+    ($into_fn: ident, $as_fn: ident, Null, $t: ty) => {
         impl Value {
-            pub fn $f(self) -> Option<$t> {
+            pub fn $into_fn(self) -> Option<$t> {
                 match self {
                     Value::Null => Some(()),
                     _ => None,
                 }
             }
+
+            pub fn $as_fn(&self) -> Option<&$t> {
+                match self {
+                    Value::Null => Some(&()),
+                    _ => None,
+                }
+            }
         }
     };
-    ($f: ident, $v: ident, $t: ty) => {
+    ($into_fn: ident, $as_fn: ident, $v: ident, $t: ty) => {
         impl Value {
-            pub fn $f(self) -> Option<$t> {
+            pub fn $into_fn(self) -> Option<$t> {
+                match self {
+                    Value::$v(v) => Some(v),
+                    _ => None,
+                }
+            }
+
+            pub fn $as_fn(&self) -> Option<&$t> {
                 match self {
                     Value::$v(v) => Some(v),
                     _ => None,
@@ -35,12 +49,22 @@ macro_rules! impl_into_value {
     };
 }
 
-impl_into_value!(into_null, Null, ());
-impl_into_value!(into_blob, Blob, Vec<u8>);
-impl_into_value!(into_text, Text, String);
-impl_into_value!(into_double, Double, f64);
-impl_into_value!(into_int, Int, i32);
-impl_into_value!(into_int64, Int64, i64);
+impl_into_value!(into_null, as_null, Null, ());
+impl_into_value!(into_blob, as_blob, Blob, Vec<u8>);
+impl_into_value!(into_text, as_text, Text, String);
+impl_into_value!(into_double, as_double, Double, f64);
+impl_into_value!(into_int, as_int, Int, i32);
+impl_into_value!(into_int64, as_int64, Int64, i64);
+
+impl Value {
+    pub fn as_int_any(&self) -> Option<i64> {
+        match self {
+            Value::Int(v) => Some(*v as i64),
+            Value::Int64(v) => Some(*v),
+            _ => None,
+        }
+    }
+}
 
 macro_rules! impl_from_type {
     ($t: ty, $v: ident) => {
@@ -85,6 +109,15 @@ impl From<&String> for Value {
 impl From<f32> for Value {
     fn from(value: f32) -> Self {
         Value::Double(value as f64)
+    }
+}
+
+impl<T> From<Option<T>> for Value
+where
+    T: Into<Value>,
+{
+    fn from(value: Option<T>) -> Self {
+        value.map(|v| v.into()).unwrap_or(Value::Null)
     }
 }
 
