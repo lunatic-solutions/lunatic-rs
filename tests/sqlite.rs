@@ -5,9 +5,8 @@ use lunatic_test::test;
 fn query() {
     let client = SqliteClient::connect("").unwrap();
 
-    let mut rows = client.query("select \"Hello\"");
-    assert_eq!(rows.next(), Some(vec![Value::Text("Hello".to_string())]));
-    assert_eq!(rows.next(), None);
+    let rows = client.query("select \"Hello\"");
+    assert_eq!(rows, vec![vec![Value::Text("Hello".to_string())]]);
 }
 
 #[test]
@@ -16,9 +15,8 @@ fn prepared_query() {
 
     let mut stmt = client.prepare_query("select ?");
     stmt = stmt.bind("Foo!");
-    let mut rows = stmt.execute();
-    assert_eq!(rows.next(), Some(vec![Value::Text("Foo!".to_string())]));
-    assert_eq!(rows.next(), None);
+    let rows = stmt.execute();
+    assert_eq!(rows, vec![vec![Value::Text("Foo!".to_string())]]);
 }
 
 #[test]

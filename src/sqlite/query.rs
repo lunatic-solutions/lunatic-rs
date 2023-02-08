@@ -9,7 +9,7 @@ use crate::call_host_alloc;
 /// Trait for querying data and executing queries.
 pub trait Query {
     /// Executes a query with no bindings.
-    fn query(&self, query: &str) -> QueryResult;
+    fn query(&self, query: &str) -> Vec<Vec<Value>>;
     /// Prepares a query with bindings.
     fn prepare_query(&self, query: &str) -> Statement;
     /// Executes a query, ignoring any results.
@@ -17,7 +17,7 @@ pub trait Query {
 }
 
 impl Query for SqliteClient {
-    fn query(&self, query: &str) -> QueryResult {
+    fn query(&self, query: &str) -> Vec<Vec<Value>> {
         self.prepare_query(query).execute()
     }
 
@@ -75,12 +75,19 @@ impl Statement {
         self
     }
 
+    /// Executes the query returning all rows collected as a `Vec`.
+    pub fn execute(self) -> Vec<Vec<Value>> {
+        self.execute_iter().collect()
+    }
+
     /// Executes the query returning an iterator over rows.
-    pub fn execute(self) -> QueryResult {
+    ///
+    /// The query will not be executed until the iter is iterated upon.
+    pub fn execute_iter(self) -> QueryIter {
         let encoded = bincode::serialize(&self.bindings).unwrap();
         unsafe { bindings::bind_value(self.id, encoded.as_ptr() as u32, encoded.len() as u32) };
 
-        QueryResult { statement: self }
+        QueryIter { statement: self }
     }
 }
 
@@ -93,11 +100,11 @@ impl Drop for Statement {
 }
 
 /// Iterator for iterating query result rows.
-pub struct QueryResult {
+pub struct QueryIter {
     statement: Statement,
 }
 
-impl Iterator for QueryResult {
+impl Iterator for QueryIter {
     type Item = Vec<Value>;
 
     fn next(&mut self) -> Option<Self::Item> {
