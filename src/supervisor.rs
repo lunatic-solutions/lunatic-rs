@@ -290,151 +290,50 @@ mod macros {
 
     macro_rules! impl_supervisable {
         ($($t:ident $i:tt),*) => {
-            impl<$($t,)* K> Supervisable<K> for ($($t,)*)
-            where
-                K: Supervisor<Children = Self>,
-                $(
-                    $t : AbstractProcess,
-                    $t ::Arg : Clone,
-                )*
-            {
-                type Processes = ($(ProcessRef<$t>,)*);
-                type Args = ($(($t ::Arg, Option<String>),)*);
-                type Tags = ($(macros::tag!($t),)*);
-
-                fn start_links(config: &mut SupervisorConfig<K>, args: Self::Args) {
-                    config.children_args = Some(args.clone());
-
+            paste::paste! {
+                impl<$($t,)* K> Supervisable<K> for ($($t,)*)
+                where
+                    K: Supervisor<Children = Self>,
                     $(
-                        let paste::paste!([<tag$i>]) = Tag::new();
-                        let result = match args.$i.1 {
-                            Some(name) => $t::link_with(paste::paste!([<tag$i>])).start_as(name, args.$i.0),
-                            None => $t::link_with(paste::paste!([<tag$i>])).start(args.$i.0),
-                        };
-                        let paste::paste!([<proc$i>]) = match result {
-                            Ok(proc) => proc,
-                            Err(err) => panic!("Supervisor failed to start child `{:?}`", err),
-                        };
+                        $t : AbstractProcess,
+                        $t ::Arg : Clone,
                     )*
-                    config.children = Some(($(paste::paste!([<proc$i>]),)*));
-                    config.children_tags = Some(($(paste::paste!([<tag$i>]),)*));
-                }
+                {
+                    type Processes = ($(ProcessRef<$t>,)*);
+                    type Args = ($(($t ::Arg, Option<String>),)*);
+                    type Tags = ($(macros::tag!($t),)*);
 
-                #[allow(unused_variables)]
-                fn terminate(config: SupervisorConfig<K>) {
-                    macros::reverse_shutdown!(config, [ $($i)* ]);
-                }
+                    fn start_links(config: &mut SupervisorConfig<K>, args: Self::Args) {
+                        config.children_args = Some(args.clone());
 
-                #[allow(unused_variables)]
-                fn handle_failure(config: &mut SupervisorConfig<K>, tag: Tag) {
-                    match config.strategy {
-                        // After a failure, just restart the same process.
-                        SupervisorStrategy::OneForOne => {
+                        $(
+                            let [<tag$i>] = Tag::new();
+                            let result = match args.$i.1 {
+                                Some(name) => $t::link_with([<tag$i>]).start_as(&name, args.$i.0),
+                                None => $t::link_with([<tag$i>]).start(args.$i.0),
+                            };
+                            let [<proc$i>] = match result {
+                                Ok(proc) => proc,
+                                Err(err) => panic!("Supervisor failed to start child `{:?}`", err),
+                            };
+                        )*
+                        config.children = Some(($([<proc$i>],)*));
+                        config.children_tags = Some(($([<tag$i>],)*));
+                    }
 
-                            $(
+                    #[allow(unused_variables)]
+                    fn terminate(config: SupervisorConfig<K>) {
+                        macros::reverse_shutdown!(config, [ $($i)* ]);
+                    }
 
-                                if tag == config.children_tags.unwrap().$i {
-                                    let args = (
-                                        config.children_args.as_ref().unwrap().$i.0.clone(),
-                                        config.children_args.as_ref().unwrap().$i.1.as_deref(),
-                                    );
-                                    let link_tag = Tag::new();
-                                    let result = match args.1 {
-                                        Some(name) => {
-                                            // Remove first the previous registration
-                                            let remove = process_name::<$t, $t::Serializer>(ProcessType::ProcessRef, name);
-                                            unsafe { host::api::registry::remove(remove.as_ptr(), remove.len()) };
-                                            $t::link().start_as(name, args.0)
-                                        },
-                                        None => $t::link_with(link_tag).start(args.0),
-                                    };
-                                    let proc = match result {
-                                        Ok(proc) => proc,
-                                        Err(err) => panic!("Supervisor failed to start child `{:?}`", err),
-                                    };
-                                    config.children.as_mut().unwrap().$i = proc;
-                                    config.children_tags.as_mut().unwrap().$i = link_tag;
-                                } else
-
-                            )*
-
-                            {
-                                panic!(
-                                    "Supervisor {} received link death signal not belonging to a child",
-                                    std::any::type_name::<K>()
-                                );
-                            }
-                        }
-                        // After a failure, restart all children
-                        SupervisorStrategy::OneForAll => {
-                            // check if the tag belongs to one of the children
-                            $(
-                                if tag == config.children_tags.unwrap().$i { } else
-                            )*
-                            {
-                                panic!(
-                                    "Supervisor {} received link death signal not belonging to a child",
-                                    std::any::type_name::<K>()
-                                );
-                            }
-
-                            // shutdown children in reversed start order
-                            macros::reverse_shutdown!(config, skip tag, [ $($i)* ]);
-
-                            // restart all
-                            $(
-
-                                let args = (
-                                    config.children_args.as_ref().unwrap().$i.0.clone(),
-                                    config.children_args.as_ref().unwrap().$i.1.as_deref(),
-                                );
-                                let link_tag = Tag::new();
-                                let result = match args.1 {
-                                    Some(name) => {
-                                        // Remove first the previous registration
-                                        let remove = process_name::<$t, $t::Serializer>(ProcessType::ProcessRef, name);
-                                        unsafe { host::api::registry::remove(remove.as_ptr(), remove.len()) };
-                                        $t::link().start_as(name, args.0)
-                                    },
-                                    None => $t::link_with(link_tag).start(args.0),
-                                };
-                                let proc = match result {
-                                    Ok(proc) => proc,
-                                    Err(err) => panic!("Supervisor failed to start child `{:?}`", err),
-                                };
-                                config.children.as_mut().unwrap().$i = proc;
-                                config.children_tags.as_mut().unwrap().$i = link_tag;
-
-                            )*
-                        }
-                        // If a child process terminates, the rest of the child processes (that is,
-                        // the child processes after the terminated process in start order)
-                        // are terminated. Then the terminated child process and the rest of the
-                        // child processes are restarted.
-                        SupervisorStrategy::RestForOne => {
-                            // check if the tag belongs to one of the children
-                            $(
-                                if tag == config.children_tags.unwrap().$i { } else
-                            )*
-                            {
-                                panic!(
-                                    "Supervisor {} received link death signal not belonging to a child",
-                                    std::any::type_name::<K>()
-                                );
-                            }
-
-                            // shutdown children after the tag in reversed start order
-                            macros::reverse_shutdown!(config, after tag, [ $($i)* ]);
-
-                            // restart children starting at the tag
-                            #[allow(unused_assignments, unused_variables, unreachable_code)]
-                            {
-                                let mut seen_tag = false;
+                    #[allow(unused_variables)]
+                    fn handle_failure(config: &mut SupervisorConfig<K>, tag: Tag) {
+                        match config.strategy {
+                            // After a failure, just restart the same process.
+                            SupervisorStrategy::OneForOne => {
                                 $(
 
-                                    if seen_tag == true || tag == config.children_tags.unwrap().$i {
-                                        seen_tag = true;
-
+                                    if tag == config.children_tags.unwrap().$i {
                                         let args = (
                                             config.children_args.as_ref().unwrap().$i.0.clone(),
                                             config.children_args.as_ref().unwrap().$i.1.as_deref(),
@@ -445,7 +344,7 @@ mod macros {
                                                 // Remove first the previous registration
                                                 let remove = process_name::<$t, $t::Serializer>(ProcessType::ProcessRef, name);
                                                 unsafe { host::api::registry::remove(remove.as_ptr(), remove.len()) };
-                                                $t::link().start_as(name, args.0)
+                                                $t::link().start_as(&name, args.0)
                                             },
                                             None => $t::link_with(link_tag).start(args.0),
                                         };
@@ -455,10 +354,112 @@ mod macros {
                                         };
                                         config.children.as_mut().unwrap().$i = proc;
                                         config.children_tags.as_mut().unwrap().$i = link_tag;
-
-                                    }
+                                    } else
 
                                 )*
+
+                                {
+                                    panic!(
+                                        "Supervisor {} received link death signal not belonging to a child",
+                                        std::any::type_name::<K>()
+                                    );
+                                }
+                            }
+                            // After a failure, restart all children
+                            SupervisorStrategy::OneForAll => {
+                                // check if the tag belongs to one of the children
+                                $(
+                                    if tag == config.children_tags.unwrap().$i { } else
+                                )*
+                                {
+                                    panic!(
+                                        "Supervisor {} received link death signal not belonging to a child",
+                                        std::any::type_name::<K>()
+                                    );
+                                }
+
+                                // shutdown children in reversed start order
+                                macros::reverse_shutdown!(config, skip tag, [ $($i)* ]);
+
+                                // restart all
+                                $(
+
+                                    let args = (
+                                        config.children_args.as_ref().unwrap().$i.0.clone(),
+                                        config.children_args.as_ref().unwrap().$i.1.as_deref(),
+                                    );
+                                    let link_tag = Tag::new();
+                                    let result = match args.1 {
+                                        Some(name) => {
+                                            // Remove first the previous registration
+                                            let remove = process_name::<$t, $t::Serializer>(ProcessType::ProcessRef, name);
+                                            unsafe { host::api::registry::remove(remove.as_ptr(), remove.len()) };
+                                            $t::link().start_as(&name, args.0)
+                                        },
+                                        None => $t::link_with(link_tag).start(args.0),
+                                    };
+                                    let proc = match result {
+                                        Ok(proc) => proc,
+                                        Err(err) => panic!("Supervisor failed to start child `{:?}`", err),
+                                    };
+                                    config.children.as_mut().unwrap().$i = proc;
+                                    config.children_tags.as_mut().unwrap().$i = link_tag;
+
+                                )*
+                            }
+                            // If a child process terminates, the rest of the child processes (that is,
+                            // the child processes after the terminated process in start order)
+                            // are terminated. Then the terminated child process and the rest of the
+                            // child processes are restarted.
+                            SupervisorStrategy::RestForOne => {
+                                // check if the tag belongs to one of the children
+                                $(
+                                    if tag == config.children_tags.unwrap().$i { } else
+                                )*
+                                {
+                                    panic!(
+                                        "Supervisor {} received link death signal not belonging to a child",
+                                        std::any::type_name::<K>()
+                                    );
+                                }
+
+                                // shutdown children after the tag in reversed start order
+                                macros::reverse_shutdown!(config, after tag, [ $($i)* ]);
+
+                                // restart children starting at the tag
+                                #[allow(unused_assignments, unused_variables, unreachable_code)]
+                                {
+                                    let mut seen_tag = false;
+                                    $(
+
+                                        if seen_tag == true || tag == config.children_tags.unwrap().$i {
+                                            seen_tag = true;
+
+                                            let args = (
+                                                config.children_args.as_ref().unwrap().$i.0.clone(),
+                                                config.children_args.as_ref().unwrap().$i.1.as_deref(),
+                                            );
+                                            let link_tag = Tag::new();
+                                            let result = match args.1 {
+                                                Some(name) => {
+                                                    // Remove first the previous registration
+                                                    let remove = process_name::<$t, $t::Serializer>(ProcessType::ProcessRef, name);
+                                                    unsafe { host::api::registry::remove(remove.as_ptr(), remove.len()) };
+                                                    $t::link().start_as(&name, args.0)
+                                                },
+                                                None => $t::link_with(link_tag).start(args.0),
+                                            };
+                                            let proc = match result {
+                                                Ok(proc) => proc,
+                                                Err(err) => panic!("Supervisor failed to start child `{:?}`", err),
+                                            };
+                                            config.children.as_mut().unwrap().$i = proc;
+                                            config.children_tags.as_mut().unwrap().$i = link_tag;
+
+                                        }
+
+                                    )*
+                                }
                             }
                         }
                     }

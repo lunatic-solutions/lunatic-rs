@@ -1,7 +1,10 @@
 use std::marker::PhantomData;
 
 use super::{lifecycles, AbstractProcess, ProcessRef, StartupError};
-use crate::function::process::{process_name, ProcessType};
+use crate::{
+    function::process::{process_name, ProcessType},
+    ProcessName,
+};
 use crate::{host, Mailbox, Process, ProcessConfig, Tag};
 
 trait IntoAbstractProcessBuilder<T> {}
@@ -108,13 +111,12 @@ where
     /// name registration will be performed on the local node and not the remote
     /// one.
     #[track_caller]
-    pub fn start_as<S: AsRef<str>>(
+    pub fn start_as<N: ProcessName>(
         &self,
-        name: S,
+        name: &N,
         arg: T::Arg,
     ) -> Result<ProcessRef<T>, StartupError<T>> {
-        let name: &str = name.as_ref();
-        let name = process_name::<T, T::Serializer>(ProcessType::ProcessRef, name);
+        let name = process_name::<T, T::Serializer>(ProcessType::ProcessRef, name.process_name());
         let mut node_id: u64 = 0;
         let mut process_id: u64 = 0;
         unsafe {

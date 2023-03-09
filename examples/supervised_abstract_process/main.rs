@@ -26,7 +26,7 @@ fn main(_: Mailbox<()>) {
     Sup::start(()).unwrap();
 
     // Get reference to named child.
-    let hello = ProcessRef::<Counter>::lookup("hello").unwrap();
+    let hello = ProcessRef::<Counter>::lookup(&"hello").unwrap();
 
     // Accessible `increment` method.
     hello.increment();
