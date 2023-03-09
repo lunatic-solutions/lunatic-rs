@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::client::SqliteClient;
-use crate::call_host_alloc;
+use crate::host::call_host_alloc;
 
 /// An Sqlite error with a code and optional message.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -4,7 +4,7 @@ use lunatic_sqlite_api::wire_format::{BindKey, BindList, BindPair, SqliteRow};
 use super::client::SqliteClient;
 use super::error::{SqliteCode, SqliteError, SqliteErrorExt};
 use super::value::Value;
-use crate::call_host_alloc;
+use crate::host::call_host_alloc;
 
 /// Trait for querying data and executing queries.
 pub trait Query {
