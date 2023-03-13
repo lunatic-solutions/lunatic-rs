@@ -47,10 +47,20 @@ impl<P: 'static, S, Z: 'static> Drop for Protocol<P, S, Z> {
 }
 
 impl<P, S, Z> Protocol<P, S, Z> {
-    /// Turn a process into a protocol
-    fn from_process<M, S2>(process: Process<M, S2>, tag: Tag) -> Self {
-        // The transformation shouldn't drop the process resource.
-        let process = ManuallyDrop::new(process);
+    /// Returns the process ID for the local node.
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
+    /// Returns the node ID.
+    pub fn node_id(&self) -> u64 {
+        self.node_id
+    }
+
+    /// Returns the protocol tag.
+    pub fn tag(&self) -> Tag {
+        self.tag
+    }
         Self {
             id: process.id(),
             node_id: process.node_id(),
