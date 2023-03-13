@@ -26,6 +26,10 @@ pub struct ProtocolCapture<C> {
 /// It uses session types to check during compile time that all messages
 /// exchanged between two processes are in the correct order and of the correct
 /// type.
+///
+/// Only `Protocol<End>` or `Protocol<TaskEnd>` can be dropped.
+/// All other protocols will panic if dropped without reaching
+/// `Protocol<End>` or `Protocol<TaskEnd>.
 #[derive(Hash)]
 pub struct Protocol<P: 'static, S = Bincode, Z: 'static = ()> {
     id: u64,
@@ -61,6 +65,16 @@ impl<P, S, Z> Protocol<P, S, Z> {
     pub fn tag(&self) -> Tag {
         self.tag
     }
+
+    /// Turn a process into a protocol.
+    ///
+    /// This implicityly creates a new tag.
+    pub fn from_process<M, S2>(process: Process<M, S2>) -> Self {
+        Self::from_process_with_tag(process, Tag::new())
+    }
+
+    /// Turn a process into a protocol using a given `Tag`.
+    pub fn from_process_with_tag<M, S2>(process: Process<M, S2>, tag: Tag) -> Self {
         Self {
             id: process.id(),
             node_id: process.node_id(),
@@ -95,7 +109,7 @@ where
         // Temporarily cast to right process type.
         let process: Process<A, S> = Process::new(self_.node_id, self_.id);
         process.tag_send(self_.tag, message);
-        Protocol::from_process(process, self_.tag)
+        Protocol::from_process_with_tag(process, self_.tag)
     }
 }
 
@@ -152,7 +166,7 @@ where
         // Temporarily cast to right process type.
         let process: Process<bool, S> = Process::new(self_.node_id, self_.id);
         process.tag_send(self_.tag, true);
-        Protocol::from_process(process, self_.tag)
+        Protocol::from_process_with_tag(process, self_.tag)
     }
 
     /// Perform an active choice, selecting protocol `Q`.
@@ -163,7 +177,7 @@ where
         // Temporarily cast to right process type.
         let process: Process<bool, S> = Process::new(self_.node_id, self_.id);
         process.tag_send(self_.tag, false);
-        Protocol::from_process(process, self_.tag)
+        Protocol::from_process_with_tag(process, self_.tag)
     }
 }
 
@@ -219,6 +233,12 @@ impl<P, S, Z> fmt::Debug for Protocol<P, S, Z> {
             .field("serializer", &any::type_name::<S>())
             .field("Z", &any::type_name::<Z>())
             .finish()
+    }
+}
+
+impl<P, M, S, S2> From<Process<M, S>> for Protocol<P, S2> {
+    fn from(process: Process<M, S>) -> Self {
+        Protocol::from_process(process)
     }
 }
 
@@ -344,7 +364,7 @@ where
                 let child = Process::<ProtocolCapture<C>, S>::new(node_id, id);
 
                 child.send(capture);
-                Protocol::from_process(child, tag)
+                Protocol::from_process_with_tag(child, tag)
             }
             Err(err) => panic!("Failed to spawn a process: {}", err),
         }
@@ -361,7 +381,7 @@ where
 {
     let p_capture = unsafe { Mailbox::<ProtocolCapture<C>, S>::new() }.receive();
     let capture = p_capture.capture;
-    let protocol = Protocol::from_process(p_capture.process, p_capture.tag);
+    let protocol = Protocol::from_process_with_tag(p_capture.process, p_capture.tag);
     let function: fn(C, Protocol<P, S, Z>) = unsafe { std::mem::transmute(function as usize) };
     function(capture, protocol);
 }
