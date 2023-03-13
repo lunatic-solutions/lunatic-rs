@@ -1,7 +1,7 @@
-use std::any::TypeId;
-use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
 use std::time::Duration;
+use std::{any, marker::PhantomData};
+use std::{any::TypeId, fmt};
 
 use crate::function::process::IntoProcess;
 use crate::serializer::{Bincode, CanSerialize};
@@ -26,7 +26,7 @@ pub struct ProtocolCapture<C> {
 /// It uses session types to check during compile time that all messages
 /// exchanged between two processes are in the correct order and of the correct
 /// type.
-#[derive(Debug, Hash)]
+#[derive(Hash)]
 pub struct Protocol<P: 'static, S = Bincode, Z: 'static = ()> {
     id: u64,
     node_id: u64,
@@ -196,6 +196,19 @@ impl<P2, S, Z> Protocol<Pop, S, Protocol<P2, S, Z>> {
 impl<P, S, Z> From<Protocol<Rec<P>, S, Z>> for Protocol<P, S, Z> {
     fn from(p: Protocol<Rec<P>, S, Z>) -> Self {
         p.cast()
+    }
+}
+
+impl<P, S, Z> fmt::Debug for Protocol<P, S, Z> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Protocol")
+            .field("id", &self.id)
+            .field("node_id", &self.node_id)
+            .field("tag", &self.tag)
+            .field("protocol", &any::type_name::<P>())
+            .field("serializer", &any::type_name::<S>())
+            .field("Z", &any::type_name::<Z>())
+            .finish()
     }
 }
 
