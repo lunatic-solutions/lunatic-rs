@@ -10,7 +10,7 @@ license = "Apache-2.0/MIT"
 
 [dependencies]
 quote = "1"
-syn = { version = "1", features = ["full", "extra-traits"] }
+syn = { version = "2", features = ["full", "extra-traits"] }
 proc-macro2 = "1.0"
 convert_case = "0.6"
 
