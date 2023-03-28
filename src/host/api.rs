@@ -341,6 +341,21 @@ pub mod version {
 pub mod metrics {
     #[link(wasm_import_module = "lunatic::metrics")]
     extern "C" {
+        pub fn start_span(
+            parent_span: u64,
+            name: *const u8,
+            name_len: usize,
+            attributes: *const u8,
+            attributes_len: usize,
+        ) -> u64;
+        pub fn add_event(
+            span_id: u64,
+            name: *const u8,
+            name_len: usize,
+            attributes: *const u8,
+            attributes_len: usize,
+        );
+        pub fn drop_span(id: u64);
         pub fn counter(name: *const u8, name_len: usize, value: u64);
         pub fn increment_counter(name: *const u8, name_len: usize);
         pub fn gauge(name: *const u8, name_len: usize, value: f64);
