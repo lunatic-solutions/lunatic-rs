@@ -23,14 +23,21 @@ macro_rules! span {
     };
     (target: $target:expr, parent: $parent:expr, $lvl:expr, $name:expr, $($fields:tt)*) => {
         {
-            let attributes = $crate::attributes!(target: $target, $lvl, $($fields)*);
-            $crate::metrics::Span::new_with_parent($parent, $name, Some(&attributes))
+            $crate::metrics::Span::new_with_parent(
+                $parent,
+                $name,
+                Some(&$crate::valueset!(target: $target, $lvl, $($fields)*))
+            )
+                .expect("attributes should not fail to serialize")
         }
     };
     (target: $target:expr, $lvl:expr, $name:expr, $($fields:tt)*) => {
         {
-            let attributes = $crate::attributes!(target: $target, $lvl, $($fields)*);
-            $crate::metrics::Span::new($name, Some(&attributes))
+            $crate::metrics::Span::new(
+                $name,
+                Some(&$crate::valueset!(target: $target, $lvl, $($fields)*))
+            )
+                .expect("attributes should not fail to serialize")
         }
     };
     (target: $target:expr, parent: $parent:expr, $lvl:expr, $name:expr) => {
@@ -540,8 +547,8 @@ macro_rules! event {
             ":",
             line!()
         );
-        let attributes = $crate::attributes!(target: $target, $lvl, $($fields)*);
-        $parent.add_event(None, name, Some(&attributes));
+        $parent.add_event(name, Some(&$crate::valueset!(target: $target, $lvl, $($fields)*)))
+            .expect("attributes should not fail to serialize");
     });
 
     (target: $target:expr, parent: $parent:expr, $lvl:expr, { $($fields:tt)* }, $($arg:tt)+ ) => (
@@ -565,8 +572,8 @@ macro_rules! event {
             ":",
             line!()
         );
-        let attributes = $crate::attributes!(target: $target, $lvl, $($fields)*);
-        $crate::metrics::add_event(None, name, Some(&attributes));
+        $crate::metrics::add_event(None, name, Some(&$crate::valueset!(target: $target, $lvl, $($fields)*)))
+            .expect("attributes should not fail to serialize");
     });
     (target: $target:expr, $lvl:expr, { $($fields:tt)* }, $($arg:tt)+ ) => (
         $crate::event!(
@@ -1713,9 +1720,20 @@ macro_rules! error {
 macro_rules! valueset {
 
     // === base case ===
-    (@ { $(,)* $($val:expr),* $(,)* }, $message:ident, $next:expr $(,)*) => {
-        [ $($val),* ].into_iter().collect()
-    };
+    (@ { $(,)* $($val:expr),* $(,)* }, $target:expr, $lvl:expr, $message:ident, $next:expr $(,)*) => {{
+        // [ $($val),* ].into_iter().collect()
+        let attributes: std::collections::BTreeMap<&'static str, serde_json::Value> = [ $($val),* ].into_iter().collect();
+        $crate::metrics::Attributes::new(
+            $target,
+            $lvl,
+            format_args!(""),
+            file!(),
+            line!(),
+            column!(),
+            module_path!(),
+            attributes,
+        )
+    }};
 
     // === recursive case (more tts) ===
 
@@ -1725,103 +1743,127 @@ macro_rules! valueset {
     //     $crate::valueset!($message:ident, @ { $($out),*, (&$next, None) }, $message:ident, $next, $($rest)*)
     // };
     // foo = ?bar ...
-    (@ { $(,)* $($out:expr),* }, $message:ident, $next:expr, $($k:ident).+ = ?$val:expr, $($rest:tt)*) => {
+    (@ { $(,)* $($out:expr),* }, $target:expr, $lvl:expr, $message:ident, $next:expr, $($k:ident).+ = ?$val:expr, $($rest:tt)*) => {
         $crate::valueset!(
             @ { $($out),*, (stringify!($($k).+), format!("{:?}", $val).into()) },
+            $target,
+            $lvl,
             $message,
             $next,
             $($rest)*
         )
     };
     // foo = %bar ...
-    (@ { $(,)* $($out:expr),* }, $message:ident, $next:expr, $($k:ident).+ = %$val:expr, $($rest:tt)*) => {
+    (@ { $(,)* $($out:expr),* }, $target:expr, $lvl:expr, $message:ident, $next:expr, $($k:ident).+ = %$val:expr, $($rest:tt)*) => {
         $crate::valueset!(
             @ { $($out),*, (stringify!($($k).+), format!("{}", $val).into()) },
+            $target,
+            $lvl,
             $message,
             $next,
             $($rest)*
         )
     };
     // foo = bar ...
-    (@ { $(,)* $($out:expr),* }, $message:ident, $next:expr, $($k:ident).+ = $val:expr, $($rest:tt)*) => {
+    (@ { $(,)* $($out:expr),* }, $target:expr, $lvl:expr, $message:ident, $next:expr, $($k:ident).+ = $val:expr, $($rest:tt)*) => {
         $crate::valueset!(
             @ { $($out),*, (stringify!($($k).+), serde_json::to_value(&$val).unwrap()) },
+            $target,
+            $lvl,
             $message,
             $next,
             $($rest)*
         )
     };
     // foo ...
-    (@ { $(,)* $($out:expr),* }, $message:ident, $next:expr, $($k:ident).+, $($rest:tt)*) => {
+    (@ { $(,)* $($out:expr),* }, $target:expr, $lvl:expr, $message:ident, $next:expr, $($k:ident).+, $($rest:tt)*) => {
         $crate::valueset!(
             @ { $($out),*, (stringify!($($k).+), serde_json::to_value(&$($k).+).unwrap()) },
+            $target,
+            $lvl,
             $message,
             $next,
             $($rest)*
         )
     };
     // ?foo ...
-    (@ { $(,)* $($out:expr),* }, $message:ident, $next:expr, ?$($k:ident).+, $($rest:tt)*) => {
+    (@ { $(,)* $($out:expr),* }, $target:expr, $lvl:expr, $message:ident, $next:expr, ?$($k:ident).+, $($rest:tt)*) => {
         $crate::valueset!(
             @ { $($out),*, (stringify!($($k).+), format!("{:?}", $($k).+).into()) },
+            $target,
+            $lvl,
             $message,
             $next,
             $($rest)*
         )
     };
     // %foo ...
-    (@ { $(,)* $($out:expr),* }, $message:ident, $next:expr, %$($k:ident).+, $($rest:tt)*) => {
+    (@ { $(,)* $($out:expr),* }, $target:expr, $lvl:expr, $message:ident, $next:expr, %$($k:ident).+, $($rest:tt)*) => {
         $crate::valueset!(
             @ { $($out),*, (stringify!($($k).+), format!("{}", $($k).+).into()) },
+            $target,
+            $lvl,
             $message,
             $next,
             $($rest)*
         )
     };
     // foo = ?bar
-    (@ { $(,)* $($out:expr),* }, $message:ident, $next:expr, $($k:ident).+ = ?$val:expr) => {
+    (@ { $(,)* $($out:expr),* }, $target:expr, $lvl:expr, $message:ident, $next:expr, $($k:ident).+ = ?$val:expr) => {
         $crate::valueset!(
             @ { $($out),*, (stringify!($($k).+), format!("{:?}", $val).into()) },
+            $target,
+            $lvl,
             $message,
             $next,
         )
     };
     // foo = %bar
-    (@ { $(,)* $($out:expr),* }, $message:ident, $next:expr, $($k:ident).+ = %$val:expr) => {
+    (@ { $(,)* $($out:expr),* }, $target:expr, $lvl:expr, $message:ident, $next:expr, $($k:ident).+ = %$val:expr) => {
         $crate::valueset!(
             @ { $($out),*, (stringify!($($k).+), format!("{}", $val).into()) },
+            $target,
+            $lvl,
             $message,
             $next,
         )
     };
     // foo = bar
-    (@ { $(,)* $($out:expr),* }, $message:ident, $next:expr, $($k:ident).+ = $val:expr) => {
+    (@ { $(,)* $($out:expr),* }, $target:expr, $lvl:expr, $message:ident, $next:expr, $($k:ident).+ = $val:expr) => {
         $crate::valueset!(
             @ { $($out),*, (stringify!($($k).+), serde_json::to_value(&$val).unwrap()) },
+            $target,
+            $lvl,
             $message,
             $next,
         )
     };
     // foo
-    (@ { $(,)* $($out:expr),* }, $message:ident, $next:expr, $($k:ident).+) => {
+    (@ { $(,)* $($out:expr),* }, $target:expr, $lvl:expr, $message:ident, $next:expr, $($k:ident).+) => {
         $crate::valueset!(
             @ { $($out),*, (stringify!($($k).+), serde_json::to_value(&$($k).+).unwrap()) },
+            $target,
+            $lvl,
             $message,
             $next,
         )
     };
     // ?foo
-    (@ { $(,)* $($out:expr),* }, $message:ident, $next:expr, ?$($k:ident).+) => {
+    (@ { $(,)* $($out:expr),* }, $target:expr, $lvl:expr, $message:ident, $next:expr, ?$($k:ident).+) => {
         $crate::valueset!(
             @ { $($out),*, (stringify!($($k).+), format!("{:?}", $($k).+).into()) },
+            $target,
+            $lvl,
             $message,
             $next,
         )
     };
     // %foo
-    (@ { $(,)* $($out:expr),* }, $message:ident, $next:expr, %$($k:ident).+) => {
+    (@ { $(,)* $($out:expr),* }, $target:expr, $lvl:expr, $message:ident, $next:expr, %$($k:ident).+) => {
         $crate::valueset!(
             @ { $($out),*, (stringify!($($k).+), format!("{}", $($k).+).into()) },
+            $target,
+            $lvl,
             $message,
             $next,
         )
@@ -1829,101 +1871,151 @@ macro_rules! valueset {
 
     // Handle literal names
     // "foo" = ?bar ...
-    (@ { $(,)* $($out:expr),* }, $message:ident, $next:expr, $k:literal = ?$val:expr, $($rest:tt)*) => {
+    (@ { $(,)* $($out:expr),* }, $target:expr, $lvl:expr, $message:ident, $next:expr, $k:literal = ?$val:expr, $($rest:tt)*) => {
         $crate::valueset!(
             @ { $($out),*, ($k, format!("{:?}", $val).into()) },
+            $target,
+            $lvl,
             $message,
             $next,
             $($rest)*
         )
     };
     // "foo" = %bar ...
-    (@ { $(,)* $($out:expr),* }, $message:ident, $next:expr, $k:literal = %$val:expr, $($rest:tt)*) => {
+    (@ { $(,)* $($out:expr),* }, $target:expr, $lvl:expr, $message:ident, $next:expr, $k:literal = %$val:expr, $($rest:tt)*) => {
         $crate::valueset!(
             @ { $($out),*, ($k, format!("{}", $val).into()) },
+            $target,
+            $lvl,
             $message,
             $next,
             $($rest)*
         )
     };
     // "foo" = bar ...
-    (@ { $(,)* $($out:expr),* }, $message:ident, $next:expr, $k:literal = $val:expr, $($rest:tt)*) => {
+    (@ { $(,)* $($out:expr),* }, $target:expr, $lvl:expr, $message:ident, $next:expr, $k:literal = $val:expr, $($rest:tt)*) => {
         $crate::valueset!(
             @ { $($out),*, ($k, serde_json::to_value(&$val).unwrap()) },
+            $target,
+            $lvl,
             $message,
             $next,
             $($rest)*
         )
     };
     // "foo" = ?bar
-    (@ { $(,)* $($out:expr),* }, $message:ident, $next:expr, $k:literal = ?$val:expr) => {
+    (@ { $(,)* $($out:expr),* }, $target:expr, $lvl:expr, $message:ident, $next:expr, $k:literal = ?$val:expr) => {
         $crate::valueset!(
             @ { $($out),*, ($k, format!("{:?}", $val).into()) },
+            $target,
+            $lvl,
             $message,
             $next,
         )
     };
     // "foo" = %bar
-    (@ { $(,)* $($out:expr),* }, $message:ident, $next:expr, $k:literal = %$val:expr) => {
+    (@ { $(,)* $($out:expr),* }, $target:expr, $lvl:expr, $message:ident, $next:expr, $k:literal = %$val:expr) => {
         $crate::valueset!(
             @ { $($out),*, ($k, format!("{}", $val).into()) },
+            $target,
+            $lvl,
             $message,
             $next,
         )
     };
     // "foo" = bar
-    (@ { $(,)* $($out:expr),* }, $message:ident, $next:expr, $k:literal = $val:expr) => {
+    (@ { $(,)* $($out:expr),* }, $target:expr, $lvl:expr, $message:ident, $next:expr, $k:literal = $val:expr) => {
         $crate::valueset!(
             @ { $($out),*, ($k, serde_json::to_value(&$val).unwrap()) },
+            $target,
+            $lvl,
             $message,
             $next,
         )
     };
 
     // Remainder is unparseable, but exists --- must be format args!
-    (@ { $(,)* $($out:expr),* }, $message:ident, $next:expr, $($rest:tt)+) => {{
-        $message = format_args!($($rest)+);
-        $crate::valueset!(
-            @ { $($out),* },
-            $message,
-            $next,
-        )
-    }};
-
-    // === entry ===
-    (entry: $($kvs:tt)+) => {
-        {
-            let mut message = format_args!("");
-            let attributes: std::collections::BTreeMap<&'static str, serde_json::Value> = $crate::valueset!(
-                @ { },
-                message,
-                (),
-                $($kvs)+
-            );
-            (message, attributes)
-        }
-    };
-    (entry: ) => {
-        {
-            (None, std::collections::BTreeMap::<&'static str, serde_json::Value>::new())
-        }
-    };
-}
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! attributes {
-    (target: $target:expr, $lvl:expr, $($kvs:tt)*) => {{
-        let (message, attributes) = $crate::valueset!(entry: $($kvs)*);
+    (@ { $(,)* $($out:expr),* }, $target:expr, $lvl:expr, $message:ident, $next:expr, $($rest:tt)+) => {{
+        let attributes: std::collections::BTreeMap<&'static str, serde_json::Value> = [ $($out),* ].into_iter().collect();
         $crate::metrics::Attributes::new(
             $target,
             $lvl,
-            message,
+            format_args!($($rest)+),
             file!(),
             line!(),
             column!(),
             module_path!(),
             attributes,
         )
+        // $message = Some(format_args!($($rest)+));
+        // $crate::valueset!(
+        //     @ { $($out),* },
+        //     $message,
+        //     $next,
+        // )
     }};
+
+    // === entry ===
+    (target: $target:expr, $lvl:expr, $($kvs:tt)*) => {
+        {
+            // let mut message: Option<std::fmt::Arguments<'_>> = None;
+            // let attributes: std::collections::BTreeMap<&'static str, serde_json::Value> = $crate::valueset!(
+            //     @ { },
+            //     message,
+            //     (),
+            //     $($kvs)+
+            // );
+            // (message, attributes)
+            $crate::valueset!(
+                @ { },
+                $target,
+                $lvl,
+                message,
+                (),
+                $($kvs)*
+            )
+        }
+    };
+    // (entry: ) => {
+    //     {
+    //         (None, std::collections::BTreeMap::<&'static str, serde_json::Value>::new())
+    //     }
+    // };
+    // (target: $target:expr, $lvl:expr, $($kvs:tt)*) => {{
+    //     let mut message: Option<std::fmt::Arguments<'_>> = None;
+    //     let attributes: std::collections::BTreeMap<&'static str, serde_json::Value> = $crate::valueset!(
+    //         @ { },
+    //         message,
+    //         (),
+    //         $($kvs)*
+    //     );
+    //     $crate::metrics::Attributes::new(
+    //         $target,
+    //         $lvl,
+    //         message,
+    //         file!(),
+    //         line!(),
+    //         column!(),
+    //         module_path!(),
+    //         attributes,
+    //     )
+    // }};
 }
+
+// #[doc(hidden)]
+// #[macro_export]
+// macro_rules! attributes {
+//     (target: $target:expr, $lvl:expr, $($kvs:tt)*) => {{
+//         let (message, attributes) = $crate::valueset!(entry: $($kvs)*);
+//         $crate::metrics::Attributes::new(
+//             $target,
+//             $lvl,
+//             message,
+//             file!(),
+//             line!(),
+//             column!(),
+//             module_path!(),
+//             attributes,
+//         )
+//     }};
+// }

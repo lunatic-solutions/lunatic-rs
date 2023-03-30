@@ -26,8 +26,10 @@ impl fmt::Display for Person {
 
 #[lunatic::main]
 fn main(_: Mailbox<()>) {
-    // let span = info_span!("my_span");
+    // Start a span of work
+    let span = info_span!("my_span");
 
+    // Any type which implements Serialize can be used in the log macros
     let null = ();
     let bool_t = true;
     let bool_f = false;
@@ -38,23 +40,6 @@ fn main(_: Mailbox<()>) {
         name: "John Doe".to_string(),
         age: 23,
     };
-    // {
-    //     (|message: std::fmt::Arguments<'_>| {
-    //         let name = "event_:0";
-    //         let attrs = lunatic::metrics::Attributes::new(
-    //             ("module::path"),
-    //             (lunatic::metrics::Level::Info),
-    //             message,
-    //             "",
-    //             0,
-    //             0,
-    //             "module::path",
-    //             [].into_iter()
-    //                 .collect::<std::collections::BTreeMap<&'static str, serde_json::Value>>(),
-    //         );
-    //         lunatic::metrics::add_event(None, name, Some(&attrs));
-    //     })(format_args!("Hello {}!", bool_f))
-    // }
 
     info!(
         null,
@@ -64,33 +49,24 @@ fn main(_: Mailbox<()>) {
         string,
         array,
         object,
-        "Additional log message, with {}!",
-        "formatting"
+        "Additional log message, with {}!", // The last argument is a message, and is optional
+        "formatting"                        // It supports the same arguments as format_args!
     );
 
-    // {
-    //     let name = "event_:0";
-    //     let attributes = {
-    //         let (message, attributes) = {
-    //             let mut message: Option<std::fmt::Arguments<'_>> = None;
-    //             let attributes: std::collections::BTreeMap<&'static str, serde_json::Value> = {
-    //                 message = Some(format_args!("Hello, world"));
-    //                 [].into_iter().collect()
-    //             };
-    //             (message, attributes)
-    //         };
-    //         lunatic::metrics::Attributes::new(
-    //             ("module::path"),
-    //             (lunatic::metrics::Level::Info),
-    //             message,
-    //             "",
-    //             0,
-    //             "module::path",
-    //             attributes,
-    //         )
-    //     };
-    //     lunatic::metrics::add_event(None, name, &attributes);
-    // }
+    // The % prefix can be used to format a variable using its fmt::Display implementation
+    info!(%object, "formatted object");
+
+    // The ? prefix can be used to format a variable using its fmt::Debug implementation
+    info!(?object, "debug object");
+
+    // The name of an attribute can be defined with `name = value`
+    info!(person = object, "person object");
+
+    // The target can be set manually, but defaults to the module_path!
+    info!(target: "my_app", "a log from my_app");
+
+    // The parent span can also be set manually, but uses the last created span by default
+    info!(parent: span, "a log under my_span");
 
     // let span = Span::new("myspan", &()).unwrap();
     // let mut attributes = HashMap::new();
