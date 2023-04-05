@@ -23,21 +23,19 @@ macro_rules! span {
     };
     (target: $target:expr, parent: $parent:expr, $lvl:expr, $name:expr, $($fields:tt)*) => {
         {
-            $crate::metrics::Span::new_with_parent(
-                $parent,
-                $name,
-                Some(&$crate::valueset!(target: $target, $lvl, $($fields)*))
-            )
+            $crate::metrics::Span::builder($name)
+                .parent($parent)
+                .attributes(&$crate::valueset!(target: $target, $lvl, $($fields)*))
                 .expect("attributes should not fail to serialize")
+                .build()
         }
     };
     (target: $target:expr, $lvl:expr, $name:expr, $($fields:tt)*) => {
         {
-            $crate::metrics::Span::new(
-                $name,
-                Some(&$crate::valueset!(target: $target, $lvl, $($fields)*))
-            )
+            $crate::metrics::Span::builder($name)
+                .attributes(&$crate::valueset!(target: $target, $lvl, $($fields)*))
                 .expect("attributes should not fail to serialize")
+                .build()
         }
     };
     (target: $target:expr, parent: $parent:expr, $lvl:expr, $name:expr) => {
