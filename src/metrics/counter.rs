@@ -4,6 +4,7 @@ use crate::host;
 
 use super::{Meter, Span};
 
+/// Represents a Counter in the OpenTelemetry system.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Counter<'a> {
     meter: &'a Meter,
@@ -12,22 +13,29 @@ pub struct Counter<'a> {
 }
 
 impl<'a> Counter<'a> {
+    /// Add a value to the counter.
+    ///
+    /// If the counter type is accumulative, then the amount should not be negative.
     pub fn add(&self, amount: impl Into<f64>) -> CounterAddition<'_, 'a, 'static> {
         CounterAddition::new(self, amount)
     }
 
+    /// Get the meter associated with this counter.
     pub fn meter(&self) -> &Meter {
         self.meter
     }
 
+    /// Get the identifier for this counter.
     pub fn id(&self) -> u64 {
         self.id
     }
 
+    /// Get the counter type for this counter.
     pub fn counter_type(&self) -> CounterType {
         self.counter_type
     }
 
+    /// Create a counter from its parts.
     pub unsafe fn from_parts(meter: &Meter, id: u64, counter_type: CounterType) -> Counter<'_> {
         Counter {
             meter,
@@ -43,6 +51,7 @@ impl<'a> Drop for Counter<'a> {
     }
 }
 
+/// A builder for creating a counter.
 #[must_use]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CounterBuilder<'a, 'm> {
@@ -54,6 +63,7 @@ pub struct CounterBuilder<'a, 'm> {
 }
 
 impl<'a, 'm> CounterBuilder<'a, 'm> {
+    /// Create a new instance of `CounterBuilder` with the given meter and name.
     pub fn new(meter: &'m Meter, name: &'a str, counter_type: CounterType) -> Self {
         CounterBuilder {
             meter,
@@ -64,16 +74,19 @@ impl<'a, 'm> CounterBuilder<'a, 'm> {
         }
     }
 
+    /// Set the description for the counter.
     pub fn description(mut self, description: &'a str) -> Self {
         self.description = Some(description);
         self
     }
 
+    /// Set the unit for the counter.
     pub fn unit(mut self, unit: &'a str) -> Self {
         self.unit = Some(unit);
         self
     }
 
+    /// Build the counter instance.
     pub fn build(self) -> Counter<'m> {
         let description = self.description.unwrap_or("");
         let unit = self.unit.unwrap_or("");
@@ -84,6 +97,7 @@ impl<'a, 'm> CounterBuilder<'a, 'm> {
     }
 }
 
+/// An addition to a counter.
 #[must_use]
 #[derive(Debug, PartialEq)]
 pub struct CounterAddition<'c, 'm, 's> {
@@ -94,6 +108,7 @@ pub struct CounterAddition<'c, 'm, 's> {
 }
 
 impl<'c, 'm, 's> CounterAddition<'c, 'm, 's> {
+    /// Create a new instance of `CounterAddition` with the given counter and amount.
     pub fn new(
         counter: &'c Counter<'m>,
         amount: impl Into<f64>,
@@ -106,6 +121,7 @@ impl<'c, 'm, 's> CounterAddition<'c, 'm, 's> {
         }
     }
 
+    /// Set the parent span for the addition.
     pub fn parent<'a>(self, parent: &'a Span) -> CounterAddition<'c, 'm, 'a> {
         CounterAddition {
             counter: self.counter,
@@ -115,6 +131,7 @@ impl<'c, 'm, 's> CounterAddition<'c, 'm, 's> {
         }
     }
 
+    /// Set the attributes for this addition.
     pub fn attributes<T>(mut self, attributes: &T) -> Result<Self, serde_json::Error>
     where
         T: Serialize,
@@ -124,6 +141,7 @@ impl<'c, 'm, 's> CounterAddition<'c, 'm, 's> {
         Ok(self)
     }
 
+    /// Perform the addition.
     pub fn done(self) {
         let parent_id = self.parent.map(|span| span.id()).unwrap_or(u64::MAX);
         let attributes_bytes = self.attributes.unwrap_or(vec![]);
@@ -133,9 +151,12 @@ impl<'c, 'm, 's> CounterAddition<'c, 'm, 's> {
     }
 }
 
+/// Represents the type of a counter.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CounterType {
+    /// An accumulative counter.
     Accumulative,
+    /// An up-down counter.
     UpDown,
 }
 

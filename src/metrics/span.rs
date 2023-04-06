@@ -9,24 +9,32 @@ use serde::{ser::SerializeMap, Serialize};
 use super::Level;
 use crate::host;
 
+/// A Span is a unit of work in the OpenTelemetry metrics library.
 #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Span {
     id: u64,
 }
 
 impl Span {
+    /// Construct a new `SpanBuilder` with the given `name`.
     pub fn builder(name: &str) -> SpanBuilder<'_> {
         SpanBuilder::new(name)
     }
 
+    /// Get the unique identifier for this `Span`.
     pub fn id(&self) -> u64 {
         self.id
     }
 
+    /// Create a new `Span` from an existing `id`.
     pub unsafe fn from_id(id: u64) -> Self {
         Span { id }
     }
 
+    /// Add an event to this `Span`.
+    ///
+    /// `name` is the name of the event, and `attributes` are the attributes
+    /// associated with the event, serialized to JSON.
     pub fn add_event<T>(&self, name: &str, attributes: Option<&T>) -> Result<(), serde_json::Error>
     where
         T: Serialize + 'static,
@@ -43,6 +51,7 @@ impl Drop for Span {
     }
 }
 
+/// A `SpanBuilder` is used to construct a new `Span`.
 #[must_use]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SpanBuilder<'a> {
@@ -52,6 +61,7 @@ pub struct SpanBuilder<'a> {
 }
 
 impl<'a> SpanBuilder<'a> {
+    /// Construct a new `SpanBuilder` with the given `name`.
     pub fn new(name: &'a str) -> Self {
         SpanBuilder {
             name,
@@ -60,11 +70,13 @@ impl<'a> SpanBuilder<'a> {
         }
     }
 
+    /// Set the parent `Span` for this `SpanBuilder`.
     pub fn parent(mut self, parent: &'a Span) -> Self {
         self.parent = Some(parent);
         self
     }
 
+    /// Set the attributes for this `SpanBuilder`, serialized to JSON.
     pub fn attributes<T>(mut self, attributes: &T) -> Result<Self, serde_json::Error>
     where
         T: Serialize,
@@ -74,6 +86,7 @@ impl<'a> SpanBuilder<'a> {
         Ok(self)
     }
 
+    /// Build the `Span` from this `SpanBuilder`.
     pub fn build(self) -> Span {
         let parent_id = self.parent.map(|span| span.id).unwrap_or(u64::MAX);
         let attributes_bytes = self.attributes.unwrap_or(vec![]);
@@ -90,6 +103,7 @@ impl<'a> SpanBuilder<'a> {
     }
 }
 
+/// A set of attributes associated with a log entry.
 #[derive(Clone, Debug)]
 pub struct Attributes<'a> {
     target: &'static str,
@@ -104,6 +118,7 @@ pub struct Attributes<'a> {
 }
 
 impl<'a> Attributes<'a> {
+    /// Construct a new set of log entry attributes.
     #[inline]
     pub fn new(
         target: &'static str,
@@ -158,6 +173,10 @@ impl<'a> Serialize for Attributes<'a> {
     }
 }
 
+/// Add an event to the current span.
+///
+/// If the `span` parameter is `None`, the event will be added to the last created span.
+/// If `attributes` is provided, it will be serialized and added to the event as a JSON object.
 pub fn add_event<T>(
     span: Option<u64>,
     name: &str,

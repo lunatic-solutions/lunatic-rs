@@ -1,9 +1,10 @@
-//! Expose [metrics](https://crates.io/metrics) functions from lunatic's runtime
-//! Lunatic's runtime comes with metrics integration and can expose those metrics
-//! to prometheus if prometheus feature is enable at build time and using --prometheus
-//! flag to start the exporter
+//! Lunatic runtime comes with metrics integration with [OpenTelemetry](https://opentelemetry.io/).
 //!
-//! All this functions are similar to the macros defined in [metrics docs](https://docs.rs/metrics/latest/metrics/index.html#emission)
+//! Logging can be printed to the terminal, or collected via jaeger.
+//!
+//! Metrics are available for prometheus.
+//!
+//! The logging macros are modified from tracing, and the syntax is the same.
 
 pub use self::counter::*;
 pub use self::histogram::*;
