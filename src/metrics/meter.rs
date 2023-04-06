@@ -1,6 +1,6 @@
 use crate::host;
 
-use super::CounterBuilder;
+use super::{CounterBuilder, CounterType, HistogramBuilder};
 
 #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Meter {
@@ -22,14 +22,22 @@ impl Meter {
     }
 
     pub fn counter<'a, 'm>(&'m self, name: &'a str) -> CounterBuilder<'a, 'm> {
-        CounterBuilder::new(self, name)
+        CounterBuilder::new(self, name, CounterType::Accumulative)
+    }
+
+    pub fn up_down_counter<'a, 'm>(&'m self, name: &'a str) -> CounterBuilder<'a, 'm> {
+        CounterBuilder::new(self, name, CounterType::UpDown)
+    }
+
+    pub fn histogram<'a, 'm>(&'m self, name: &'a str) -> HistogramBuilder<'a, 'm> {
+        HistogramBuilder::new(self, name)
     }
 }
 
 impl Drop for Meter {
     fn drop(&mut self) {
         unsafe {
-            host::api::metrics::drop_meter(self.id);
+            host::api::metrics::meter_drop(self.id);
         }
     }
 }

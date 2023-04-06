@@ -1,23 +1,19 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::host;
 
 use super::{Meter, Span};
 
-#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Counter<'a> {
     meter: &'a Meter,
     id: u64,
+    counter_type: CounterType,
 }
 
 impl<'a> Counter<'a> {
     pub fn add(&self, amount: impl Into<f64>) -> CounterAddition<'_, 'a, 'static> {
-        CounterAddition {
-            counter: self,
-            amount: amount.into(),
-            parent: None,
-            attributes: None,
-        }
+        CounterAddition::new(self, amount)
     }
 
     pub fn meter(&self) -> &Meter {
@@ -28,16 +24,22 @@ impl<'a> Counter<'a> {
         self.id
     }
 
-    pub unsafe fn from_parts(meter: &Meter, id: u64) -> Counter<'_> {
-        Counter { meter, id }
+    pub fn counter_type(&self) -> CounterType {
+        self.counter_type
+    }
+
+    pub unsafe fn from_parts(meter: &Meter, id: u64, counter_type: CounterType) -> Counter<'_> {
+        Counter {
+            meter,
+            id,
+            counter_type,
+        }
     }
 }
 
 impl<'a> Drop for Counter<'a> {
     fn drop(&mut self) {
-        unsafe {
-            host::api::metrics::drop_counter(self.id);
-        }
+        self.counter_type.drop(self.id)
     }
 }
 
@@ -46,15 +48,17 @@ impl<'a> Drop for Counter<'a> {
 pub struct CounterBuilder<'a, 'm> {
     meter: &'m Meter,
     name: &'a str,
+    counter_type: CounterType,
     description: Option<&'a str>,
     unit: Option<&'a str>,
 }
 
 impl<'a, 'm> CounterBuilder<'a, 'm> {
-    pub fn new(meter: &'m Meter, name: &'a str) -> Self {
+    pub fn new(meter: &'m Meter, name: &'a str, counter_type: CounterType) -> Self {
         CounterBuilder {
             meter,
             name,
+            counter_type,
             description: None,
             unit: None,
         }
@@ -73,26 +77,15 @@ impl<'a, 'm> CounterBuilder<'a, 'm> {
     pub fn build(self) -> Counter<'m> {
         let description = self.description.unwrap_or("");
         let unit = self.unit.unwrap_or("");
-        let id = unsafe {
-            host::api::metrics::counter(
-                self.meter.id(),
-                self.name.as_ptr(),
-                self.name.len(),
-                description.as_ptr(),
-                description.len(),
-                unit.as_ptr(),
-                unit.len(),
-            )
-        };
-        Counter {
-            meter: self.meter,
-            id,
-        }
+        let id = self
+            .counter_type
+            .create(self.meter.id(), self.name, description, unit);
+        unsafe { Counter::from_parts(self.meter, id, self.counter_type) }
     }
 }
 
 #[must_use]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct CounterAddition<'c, 'm, 's> {
     counter: &'c Counter<'m>,
     amount: f64,
@@ -101,6 +94,18 @@ pub struct CounterAddition<'c, 'm, 's> {
 }
 
 impl<'c, 'm, 's> CounterAddition<'c, 'm, 's> {
+    pub fn new(
+        counter: &'c Counter<'m>,
+        amount: impl Into<f64>,
+    ) -> CounterAddition<'c, 'm, 'static> {
+        CounterAddition {
+            counter,
+            amount: amount.into(),
+            parent: None,
+            attributes: None,
+        }
+    }
+
     pub fn parent<'a>(self, parent: &'a Span) -> CounterAddition<'c, 'm, 'a> {
         CounterAddition {
             counter: self.counter,
@@ -122,14 +127,71 @@ impl<'c, 'm, 's> CounterAddition<'c, 'm, 's> {
     pub fn done(self) {
         let parent_id = self.parent.map(|span| span.id()).unwrap_or(u64::MAX);
         let attributes_bytes = self.attributes.unwrap_or(vec![]);
+        self.counter
+            .counter_type
+            .add(parent_id, self.counter.id, self.amount, &attributes_bytes);
+    }
+}
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CounterType {
+    Accumulative,
+    UpDown,
+}
+
+impl CounterType {
+    fn create(&self, meter: u64, name: &str, description: &str, unit: &str) -> u64 {
         unsafe {
-            host::api::metrics::increment_counter(
-                parent_id,
-                self.counter.id,
-                self.amount,
-                attributes_bytes.as_ptr(),
-                attributes_bytes.len(),
-            )
-        };
+            match self {
+                CounterType::Accumulative => host::api::metrics::counter(
+                    meter,
+                    name.as_ptr(),
+                    name.len(),
+                    description.as_ptr(),
+                    description.len(),
+                    unit.as_ptr(),
+                    unit.len(),
+                ),
+                CounterType::UpDown => host::api::metrics::up_down_counter(
+                    meter,
+                    name.as_ptr(),
+                    name.len(),
+                    description.as_ptr(),
+                    description.len(),
+                    unit.as_ptr(),
+                    unit.len(),
+                ),
+            }
+        }
+    }
+
+    fn add(&self, span: u64, counter: u64, amount: f64, attributes: &[u8]) {
+        unsafe {
+            match self {
+                CounterType::Accumulative => host::api::metrics::counter_add(
+                    span,
+                    counter,
+                    amount,
+                    attributes.as_ptr(),
+                    attributes.len(),
+                ),
+                CounterType::UpDown => host::api::metrics::up_down_counter_add(
+                    span,
+                    counter,
+                    amount,
+                    attributes.as_ptr(),
+                    attributes.len(),
+                ),
+            }
+        }
+    }
+
+    fn drop(&self, id: u64) {
+        unsafe {
+            match self {
+                CounterType::Accumulative => host::api::metrics::counter_drop(id),
+                CounterType::UpDown => host::api::metrics::up_down_counter_drop(id),
+            }
+        }
     }
 }

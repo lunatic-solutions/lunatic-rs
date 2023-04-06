@@ -60,7 +60,20 @@ fn main(_: Mailbox<()>) {
     // The parent span can also be set manually, but uses the last created span by default
     info!(parent: span, "a log under my_span");
 
+    // Meters are used to create counters and histograms
     let meter = Meter::new("my-meter");
-    let counter = meter.counter("newlines").build();
+
+    // Counters can only increment up, and should not be added with a negative value
+    let counter = meter.counter("my-counter").build();
     counter.add(5).done();
+
+    // Up-down counters can increment up and down
+    let up_down_counter = meter.up_down_counter("my-up-down-counter").build();
+    up_down_counter.add(5).done();
+    up_down_counter.add(-5).done();
+
+    // Histograms records a distribution of values
+    let histogram = meter.histogram("my-histogram").build();
+    histogram.record(5).done();
+    histogram.record(10).done();
 }

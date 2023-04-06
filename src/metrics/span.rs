@@ -38,7 +38,7 @@ impl Span {
 impl Drop for Span {
     fn drop(&mut self) {
         unsafe {
-            host::api::metrics::drop_span(self.id);
+            host::api::metrics::span_drop(self.id);
         }
     }
 }
@@ -78,7 +78,7 @@ impl<'a> SpanBuilder<'a> {
         let parent_id = self.parent.map(|span| span.id).unwrap_or(u64::MAX);
         let attributes_bytes = self.attributes.unwrap_or(vec![]);
         let id = unsafe {
-            host::api::metrics::start_span(
+            host::api::metrics::span_start(
                 parent_id,
                 self.name.as_ptr(),
                 self.name.len(),
@@ -171,7 +171,7 @@ where
         None => vec![],
     };
     unsafe {
-        host::api::metrics::add_event(
+        host::api::metrics::event(
             span.unwrap_or(u64::MAX),
             name.as_ptr(),
             name.len(),
