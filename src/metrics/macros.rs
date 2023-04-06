@@ -9,10 +9,9 @@
 ///
 /// Creating a new span:
 /// ```
-/// # use tracing::{span, Level};
+/// # use lunatic::{span, metrics::Level};
 /// # fn main() {
 /// let span = span!(Level::Trace, "my span");
-/// let _enter = span.enter();
 /// // do work inside the span...
 /// # }
 /// ```
@@ -102,7 +101,7 @@ macro_rules! span {
 /// # Examples
 ///
 /// ```rust
-/// # use tracing::{trace_span, span, Level};
+/// # use lunatic::{trace_span, span, metrics::Level};
 /// # fn main() {
 /// trace_span!("my_span");
 /// // is equivalent to:
@@ -111,12 +110,10 @@ macro_rules! span {
 /// ```
 ///
 /// ```rust
-/// # use tracing::{trace_span, span, Level};
+/// # use lunatic::{trace_span, span, metrics::Level};
 /// # fn main() {
 /// let span = trace_span!("my span");
-/// span.in_scope(|| {
-///     // do work inside the span...
-/// });
+/// // do work inside the span...
 /// # }
 /// ```
 #[macro_export]
@@ -183,7 +180,7 @@ macro_rules! trace_span {
 /// # Examples
 ///
 /// ```rust
-/// # use tracing::{debug_span, span, Level};
+/// # use lunatic::{debug_span, span, metrics::Level};
 /// # fn main() {
 /// debug_span!("my_span");
 /// // is equivalent to:
@@ -192,12 +189,10 @@ macro_rules! trace_span {
 /// ```
 ///
 /// ```rust
-/// # use tracing::debug_span;
+/// # use lunatic::debug_span;
 /// # fn main() {
 /// let span = debug_span!("my span");
-/// span.in_scope(|| {
-///     // do work inside the span...
-/// });
+/// // do work inside the span...
 /// # }
 /// ```
 #[macro_export]
@@ -264,7 +259,7 @@ macro_rules! debug_span {
 /// # Examples
 ///
 /// ```rust
-/// # use tracing::{span, info_span, Level};
+/// # use lunatic::{span, info_span, Level};
 /// # fn main() {
 /// info_span!("my_span");
 /// // is equivalent to:
@@ -273,12 +268,10 @@ macro_rules! debug_span {
 /// ```
 ///
 /// ```rust
-/// # use tracing::info_span;
+/// # use lunatic::info_span;
 /// # fn main() {
 /// let span = info_span!("my span");
-/// span.in_scope(|| {
-///     // do work inside the span...
-/// });
+/// // do work inside the span...
 /// # }
 /// ```
 #[macro_export]
@@ -345,7 +338,7 @@ macro_rules! info_span {
 /// # Examples
 ///
 /// ```rust
-/// # use tracing::{warn_span, span, Level};
+/// # use lunatic::{warn_span, span, metrics::Level};
 /// # fn main() {
 /// warn_span!("my_span");
 /// // is equivalent to:
@@ -354,12 +347,10 @@ macro_rules! info_span {
 /// ```
 ///
 /// ```rust
-/// use tracing::warn_span;
+/// use lunatic::warn_span;
 /// # fn main() {
 /// let span = warn_span!("my span");
-/// span.in_scope(|| {
-///     // do work inside the span...
-/// });
+/// // do work inside the span...
 /// # }
 /// ```
 #[macro_export]
@@ -425,7 +416,7 @@ macro_rules! warn_span {
 /// # Examples
 ///
 /// ```rust
-/// # use tracing::{span, error_span, Level};
+/// # use lunatic::{span, error_span, metrics::Level};
 /// # fn main() {
 /// error_span!("my_span");
 /// // is equivalent to:
@@ -434,12 +425,10 @@ macro_rules! warn_span {
 /// ```
 ///
 /// ```rust
-/// # use tracing::error_span;
+/// # use lunatic::error_span;
 /// # fn main() {
 /// let span = error_span!("my span");
-/// span.in_scope(|| {
-///     // do work inside the span...
-/// });
+/// // do work inside the span...
 /// # }
 /// ```
 #[macro_export]
@@ -504,7 +493,7 @@ macro_rules! error_span {
 /// # Examples
 ///
 /// ```rust
-/// use tracing::{event, Level};
+/// use lunatic::{event, metrics::Level};
 ///
 /// # fn main() {
 /// let data = (42, "forty-two");
@@ -531,7 +520,7 @@ macro_rules! error_span {
 // ///
 // /// For example, the following does not compile:
 // /// ```rust,compile_fail
-// /// # use tracing::{Level, event};
+// /// # use lunatic::{metrics::Level, event};
 // /// # fn main() {
 // /// event!(Level::Info, foo = 5, bad_field, bar = "hello")
 // /// #}
@@ -706,7 +695,7 @@ macro_rules! event {
 /// # Examples
 ///
 /// ```rust
-/// use tracing::trace;
+/// use lunatic::trace;
 /// # #[derive(Debug, Copy, Clone)] struct Position { x: f32, y: f32 }
 /// # impl Position {
 /// # const ORIGIN: Self = Self { x: 0.0, y: 0.0 };
@@ -906,7 +895,7 @@ macro_rules! trace {
 /// # Examples
 ///
 /// ```rust
-/// use tracing::debug;
+/// use lunatic::debug;
 /// # fn main() {
 /// # #[derive(Debug)] struct Position { x: f32, y: f32 }
 ///
@@ -1107,14 +1096,13 @@ macro_rules! debug {
 /// # Examples
 ///
 /// ```rust
-/// use tracing::info;
+/// use lunatic::info;
 /// # // this is so the test will still work in no-std mode
 /// # #[derive(Debug)]
 /// # pub struct Ipv4Addr;
 /// # impl Ipv4Addr { fn new(o1: u8, o2: u8, o3: u8, o4: u8) -> Self { Self } }
 /// # fn main() {
 /// # struct Connection { port: u32, speed: f32 }
-/// use tracing::field;
 ///
 /// let addr = Ipv4Addr::new(127, 0, 0, 1);
 /// let conn = Connection { port: 40, speed: 3.20 };
@@ -1319,7 +1307,7 @@ macro_rules! info {
 /// # Examples
 ///
 /// ```rust
-/// use tracing::warn;
+/// use lunatic::warn;
 /// # fn main() {
 ///
 /// let warn_description = "Invalid Input";
@@ -1524,7 +1512,7 @@ macro_rules! warn {
 /// # Examples
 ///
 /// ```rust
-/// use tracing::error;
+/// use lunatic::error;
 /// # fn main() {
 ///
 /// let (err_info, port) = ("No connection", 22);
@@ -1945,25 +1933,11 @@ macro_rules! valueset {
             module_path!(),
             attributes,
         )
-        // $message = Some(format_args!($($rest)+));
-        // $crate::valueset!(
-        //     @ { $($out),* },
-        //     $message,
-        //     $next,
-        // )
     }};
 
     // === entry ===
     (target: $target:expr, $lvl:expr, $($kvs:tt)*) => {
         {
-            // let mut message: Option<std::fmt::Arguments<'_>> = None;
-            // let attributes: std::collections::BTreeMap<&'static str, serde_json::Value> = $crate::valueset!(
-            //     @ { },
-            //     message,
-            //     (),
-            //     $($kvs)+
-            // );
-            // (message, attributes)
             $crate::valueset!(
                 @ { },
                 $target,
@@ -1974,46 +1948,4 @@ macro_rules! valueset {
             )
         }
     };
-    // (entry: ) => {
-    //     {
-    //         (None, std::collections::BTreeMap::<&'static str, serde_json::Value>::new())
-    //     }
-    // };
-    // (target: $target:expr, $lvl:expr, $($kvs:tt)*) => {{
-    //     let mut message: Option<std::fmt::Arguments<'_>> = None;
-    //     let attributes: std::collections::BTreeMap<&'static str, serde_json::Value> = $crate::valueset!(
-    //         @ { },
-    //         message,
-    //         (),
-    //         $($kvs)*
-    //     );
-    //     $crate::metrics::Attributes::new(
-    //         $target,
-    //         $lvl,
-    //         message,
-    //         file!(),
-    //         line!(),
-    //         column!(),
-    //         module_path!(),
-    //         attributes,
-    //     )
-    // }};
 }
-
-// #[doc(hidden)]
-// #[macro_export]
-// macro_rules! attributes {
-//     (target: $target:expr, $lvl:expr, $($kvs:tt)*) => {{
-//         let (message, attributes) = $crate::valueset!(entry: $($kvs)*);
-//         $crate::metrics::Attributes::new(
-//             $target,
-//             $lvl,
-//             message,
-//             file!(),
-//             line!(),
-//             column!(),
-//             module_path!(),
-//             attributes,
-//         )
-//     }};
-// }
