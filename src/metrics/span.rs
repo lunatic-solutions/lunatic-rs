@@ -11,6 +11,7 @@ use crate::host;
 
 /// A Span is a unit of work in the OpenTelemetry metrics library.
 #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[must_use = "a span should be used, or it will drop immediately"]
 pub struct Span {
     id: u64,
 }
@@ -19,6 +20,36 @@ impl Span {
     /// Construct a new `SpanBuilder` with the given `name`.
     pub fn builder(name: &str) -> SpanBuilder<'_> {
         SpanBuilder::new(name)
+    }
+
+    /// Executes the given function in the context of this span.
+    ///
+    /// Returns the result of evaluating `f`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let span = info_span!("some_work");
+    /// span.in_scope(|| {
+    ///     trace!("I'm in the span!");
+    /// });
+    /// ```
+    ///
+    /// Calling a function and returning a result:
+    ///
+    /// ```
+    /// fn hello_world() -> String {
+    ///     "Hello, world!".to_string()
+    /// }
+    ///
+    /// let span = info_span!("some_work");
+    /// let greeting = span.in_scope(hello_world);
+    /// ```
+    pub fn in_scope<F, T>(self, f: F) -> T
+    where
+        F: FnOnce() -> T,
+    {
+        f()
     }
 
     /// Get the unique identifier for this `Span`.
