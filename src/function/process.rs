@@ -127,7 +127,8 @@ pub struct Process<M, S = Bincode> {
 }
 
 impl<M, S> Process<M, S> {
-    pub(crate) fn new(node_id: u64, process_id: u64) -> Self {
+    /// Creates a new process reference from a node_id and process_id.
+    pub unsafe fn new(node_id: u64, process_id: u64) -> Self {
         Self {
             node_id,
             id: process_id,
@@ -136,7 +137,7 @@ impl<M, S> Process<M, S> {
     }
 
     /// Return reference to self.
-    pub(crate) fn this() -> Self {
+    pub unsafe fn this() -> Self {
         Self::new(node_id(), process_id())
     }
 
