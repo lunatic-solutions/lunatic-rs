@@ -83,7 +83,7 @@ where
         // Don't drop the session yet.
         let self_ = ManuallyDrop::new(self);
         // Temporarily cast to right process type.
-        let process: Process<A, S> = Process::new(self_.node_id, self_.id);
+        let process: Process<A, S> = unsafe { Process::new(self_.node_id, self_.id) };
         process.tag_send(self_.tag, message);
         Protocol::from_process(process, self_.tag)
     }
@@ -140,7 +140,7 @@ where
         // Don't drop the session yet.
         let self_ = ManuallyDrop::new(self);
         // Temporarily cast to right process type.
-        let process: Process<bool, S> = Process::new(self_.node_id, self_.id);
+        let process: Process<bool, S> = unsafe { Process::new(self_.node_id, self_.id) };
         process.tag_send(self_.tag, true);
         Protocol::from_process(process, self_.tag)
     }
@@ -151,7 +151,7 @@ where
         // Don't drop the session yet.
         let self_ = ManuallyDrop::new(self);
         // Temporarily cast to right process type.
-        let process: Process<bool, S> = Process::new(self_.node_id, self_.id);
+        let process: Process<bool, S> = unsafe { Process::new(self_.node_id, self_.id) };
         process.tag_send(self_.tag, false);
         Protocol::from_process(process, self_.tag)
     }
@@ -312,13 +312,13 @@ where
                 // Use unique tag so that protocol messages are separated from regular messages.
                 let tag = Tag::new();
                 // Create reference to self
-                let this = Process::<()>::new(host::node_id(), host::process_id());
+                let this = unsafe { Process::<()>::new(host::node_id(), host::process_id()) };
                 let capture = ProtocolCapture {
                     process: this,
                     tag,
                     capture,
                 };
-                let child = Process::<ProtocolCapture<C>, S>::new(node_id, id);
+                let child = unsafe { Process::<ProtocolCapture<C>, S>::new(node_id, id) };
 
                 child.send(capture);
                 Protocol::from_process(child, tag)

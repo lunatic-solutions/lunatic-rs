@@ -4,9 +4,8 @@ use std::time::Duration;
 
 use crate::function::process::{IntoProcess, NoLink};
 use crate::host::api::message;
-use crate::host::{self};
 use crate::serializer::{Bincode, CanSerialize, DecodeError};
-use crate::{Process, ProcessConfig, Tag};
+use crate::{host, Process, ProcessConfig, Tag};
 
 pub const LINK_DIED: u32 = 1;
 pub const TIMEOUT: u32 = 9027;
@@ -134,7 +133,7 @@ where
 {
     /// Returns a reference to the currently running process
     pub fn this(&self) -> Process<M, S> {
-        Process::new(host::node_id(), host::process_id())
+        unsafe { Process::new(host::node_id(), host::process_id()) }
     }
 
     /// Same as `receive`, but doesn't panic in case the deserialization fails.
@@ -281,9 +280,9 @@ where
                 // If the captured variable is of size 0, we don't need to send it to another
                 // process.
                 if std::mem::size_of::<C>() == 0 {
-                    Process::new(node_id, id)
+                    unsafe { Process::new(node_id, id) }
                 } else {
-                    let child = Process::<C, S>::new(node_id, id);
+                    let child = unsafe { Process::<C, S>::new(node_id, id) };
                     child.send(capture);
                     // Processes can only receive one type of message, but to pass in the captured
                     // variable we pretend for the first message that our process is receiving

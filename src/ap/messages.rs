@@ -14,7 +14,7 @@ where
     Serializer: CanSerialize<Response>,
 {
     pub(crate) fn from_self() -> Self {
-        let process = Process::this();
+        let process = unsafe { Process::this() };
         ReturnAddress { process }
     }
 

@@ -157,7 +157,7 @@ where
     /// on the result in both cases to avoid deadlocks with the registry.
     #[track_caller]
     fn start_without_wait_on_init(&self, arg: T::Arg, init_tag: Tag) -> Process<(), T::Serializer> {
-        let this = Process::<Result<(), StartupError<T>>, T::Serializer>::this();
+        let this = unsafe { Process::<Result<(), StartupError<T>>, T::Serializer>::this() };
         let entry_data = (this, init_tag, arg);
         match (self.link, &self.config, self.node) {
             (Some(_), _, Some(_node)) => {
