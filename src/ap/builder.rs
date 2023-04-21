@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use super::{lifecycles, AbstractProcess, ProcessRef, StartupError};
 use crate::function::process::{process_name, ProcessType};
-use crate::{host, Mailbox, Process, ProcessConfig, Tag};
+use crate::{LunaticError, Mailbox, Process, ProcessConfig, Tag};
 
 trait IntoAbstractProcessBuilder<T> {}
 
@@ -83,83 +83,9 @@ where
     #[track_caller]
     pub fn start(&self, arg: T::Arg) -> Result<ProcessRef<T>, StartupError<T>> {
         let init_tag = Tag::new();
-        let process = self.start_without_wait_on_init(arg, init_tag);
-
-        // Wait on `init()`
-        let mailbox: Mailbox<Result<(), StartupError<T>>, T::Serializer> =
-            unsafe { Mailbox::new() };
-        match mailbox.tag_receive(&[init_tag]) {
-            Ok(()) => Ok(ProcessRef { process }),
-            Err(err) => Err(err),
-        }
-    }
-
-    /// Starts the process and registers it under `name`. If another process is
-    /// already registered under the same name, it will return a
-    /// `Err(StartupError::NameAlreadyRegistered(proc))` with a reference to the
-    /// existing process.
-    ///
-    /// This call will block until the `init` function finishes. If the `init`
-    /// function returns an error, it will be returned as
-    /// `StartupError::Custom(error)`. If the `init` function panics during
-    /// execution, it will return [`StartupError::InitPanicked`].
-    ///
-    /// If used in combination with the [`on_node`](Self::on_node) option, the
-    /// name registration will be performed on the local node and not the remote
-    /// one.
-    #[track_caller]
-    pub fn start_as<S: AsRef<str>>(
-        &self,
-        name: S,
-        arg: T::Arg,
-    ) -> Result<ProcessRef<T>, StartupError<T>> {
-        let name: &str = name.as_ref();
-        let name = process_name::<T, T::Serializer>(ProcessType::ProcessRef, name);
-        let mut node_id: u64 = 0;
-        let mut process_id: u64 = 0;
-        unsafe {
-            match host::api::registry::get_or_put_later(
-                name.as_ptr(),
-                name.len(),
-                &mut node_id,
-                &mut process_id,
-            ) {
-                0 => Err(StartupError::NameAlreadyRegistered(ProcessRef::new(
-                    node_id, process_id,
-                ))),
-                _ => {
-                    let init_tag = Tag::new();
-                    let process = self.start_without_wait_on_init(arg, init_tag);
-                    // Register the name
-                    host::api::registry::put(
-                        name.as_ptr(),
-                        name.len(),
-                        process.node_id(),
-                        process.id(),
-                    );
-                    // Wait on `init()`
-                    let mailbox: Mailbox<Result<(), StartupError<T>>, T::Serializer> =
-                        Mailbox::new();
-                    match mailbox.tag_receive(&[init_tag]) {
-                        Ok(()) => Ok(ProcessRef { process }),
-                        Err(err) => {
-                            // In case of an error during `init`, unregister the process.
-                            host::api::registry::remove(name.as_ptr(), name.len());
-                            Err(err)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    /// The startup code is the same for `start` and `start_as`, but can't wait
-    /// on the result in both cases to avoid deadlocks with the registry.
-    #[track_caller]
-    fn start_without_wait_on_init(&self, arg: T::Arg, init_tag: Tag) -> Process<(), T::Serializer> {
         let this = unsafe { Process::<Result<(), StartupError<T>>, T::Serializer>::this() };
         let entry_data = (this, init_tag, arg);
-        match (self.link, &self.config, self.node) {
+        let process = match (self.link, &self.config, self.node) {
             (Some(_), _, Some(_node)) => {
                 unimplemented!("Linking across nodes is not supported yet");
             }
@@ -191,6 +117,103 @@ where
             (None, None, None) => {
                 Process::<(), T::Serializer>::spawn(entry_data, lifecycles::entry::<T>)
             }
+        };
+
+        // Wait on `init()`
+        let mailbox: Mailbox<Result<(), StartupError<T>>, T::Serializer> =
+            unsafe { Mailbox::new() };
+        match mailbox.tag_receive(&[init_tag]) {
+            Ok(()) => Ok(ProcessRef { process }),
+            Err(err) => Err(err),
+        }
+    }
+
+    /// Starts the process and registers it under `name`. If another process is
+    /// already registered under the same name, it will return a
+    /// `Err(StartupError::NameAlreadyRegistered(proc))` with a reference to the
+    /// existing process.
+    ///
+    /// This call will block until the `init` function finishes. If the `init`
+    /// function returns an error, it will be returned as
+    /// `StartupError::Custom(error)`. If the `init` function panics during
+    /// execution, it will return [`StartupError::InitPanicked`].
+    ///
+    /// If used in combination with the [`on_node`](Self::on_node) option, the
+    /// name registration will be performed on the local node and not the remote
+    /// one.
+    #[track_caller]
+    pub fn start_as<S: AsRef<str>>(
+        &self,
+        name: S,
+        arg: T::Arg,
+    ) -> Result<ProcessRef<T>, StartupError<T>> {
+        let name: &str = name.as_ref();
+        let name = process_name::<T, T::Serializer>(ProcessType::ProcessRef, name);
+        let init_tag = Tag::new();
+        let this = unsafe { Process::<Result<(), StartupError<T>>, T::Serializer>::this() };
+        let entry_data = (this, init_tag, arg);
+        let process = match (self.link, &self.config, self.node) {
+            (Some(_), _, Some(_node)) => {
+                unimplemented!("Linking across nodes is not supported yet");
+            }
+            (Some(tag), Some(config), None) => {
+                Process::<(), T::Serializer>::name_spawn_link_config_tag(
+                    &name,
+                    config,
+                    entry_data,
+                    tag,
+                    lifecycles::entry::<T>,
+                )
+            }
+            (Some(tag), None, None) => Process::<(), T::Serializer>::name_spawn_link_tag(
+                &name,
+                entry_data,
+                tag,
+                lifecycles::entry::<T>,
+            ),
+            (None, Some(config), Some(node)) => {
+                Process::<(), T::Serializer>::name_spawn_node_config(
+                    &name,
+                    node,
+                    config,
+                    entry_data,
+                    lifecycles::entry::<T>,
+                )
+            }
+            (None, None, Some(node)) => Process::<(), T::Serializer>::name_spawn_node(
+                &name,
+                node,
+                entry_data,
+                lifecycles::entry::<T>,
+            ),
+            (None, Some(config), None) => Process::<(), T::Serializer>::name_spawn_config(
+                &name,
+                config,
+                entry_data,
+                lifecycles::entry::<T>,
+            ),
+            (None, None, None) => {
+                Process::<(), T::Serializer>::name_spawn(&name, entry_data, lifecycles::entry::<T>)
+            }
+        };
+
+        let process = match process {
+            Ok(process) => process,
+            Err(LunaticError::NameAlreadyRegistered(node_id, process_id)) => {
+                // If a process under this name already exists, return it.
+                return Err(StartupError::NameAlreadyRegistered(ProcessRef {
+                    process: unsafe { Process::new(node_id, process_id) },
+                }));
+            }
+            _ => unreachable!(),
+        };
+
+        // Wait on `init()`
+        let mailbox: Mailbox<Result<(), StartupError<T>>, T::Serializer> =
+            unsafe { Mailbox::new() };
+        match mailbox.tag_receive(&[init_tag]) {
+            Ok(()) => Ok(ProcessRef { process }),
+            Err(err) => Err(err),
         }
     }
 }

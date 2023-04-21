@@ -19,6 +19,7 @@ use crate::{LunaticError, ProcessConfig, Tag};
 /// The function `entry` will be used as entry point into the process. It will
 /// be called with the argument `arg`.
 pub(crate) fn spawn(
+    name: Option<&str>,
     node: Option<u64>,
     config: Option<&ProcessConfig>,
     link: Option<Tag>,
@@ -28,6 +29,7 @@ pub(crate) fn spawn(
     let entry = entry as usize as i32;
     let params = params_to_vec(&[Param::I32(entry), Param::I32(arg)]);
     let mut id = 0;
+    let mut node_id = 0;
     let func = concat!("_lunatic_spawn_by_index_", env!("CARGO_PKG_VERSION"));
     let link = match link {
         Some(tag) => tag.id(),
@@ -46,6 +48,20 @@ pub(crate) fn spawn(
                 params.len(),
                 &mut id,
             )
+        } else if let Some(name) = name {
+            api::process::get_or_spawn(
+                name.as_ptr(),
+                name.len(),
+                link,
+                config_id,
+                WasmModule::inherit().id(),
+                func.as_ptr(),
+                func.len(),
+                params.as_ptr(),
+                params.len(),
+                &mut node_id,
+                &mut id,
+            )
         } else {
             api::process::spawn(
                 link,
@@ -62,8 +78,10 @@ pub(crate) fn spawn(
 
     if result == 0 {
         Ok(id)
+    } else if result == 2 {
+        Err(LunaticError::NameAlreadyRegistered(node_id, id))
     } else {
-        Err(LunaticError::from(id))
+        Err(LunaticError::Error(id))
     }
 }
 

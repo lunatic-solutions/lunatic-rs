@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use crate::function::process::IntoProcess;
 use crate::serializer::{Bincode, CanSerialize};
-use crate::{host, Mailbox, MailboxResult, Process, ProcessConfig, Tag};
+use crate::{host, LunaticError, Mailbox, MailboxResult, Process, ProcessConfig, Tag};
 
 /// A value that the protocol captures from the parent process.
 ///
@@ -293,10 +293,11 @@ where
     fn spawn<C>(
         capture: C,
         entry: fn(C, Protocol<P, S, Z>),
+        name: Option<&str>,
         link: Option<Tag>,
         config: Option<&ProcessConfig>,
         node: Option<u64>,
-    ) -> Self::Process
+    ) -> Result<Self::Process, LunaticError>
     where
         S: CanSerialize<ProtocolCapture<C>>,
     {
@@ -307,7 +308,14 @@ where
         // function with generic types C, P & S. We can only send pointer data
         // across processes and this is the only way the Rust compiler will let
         // us transfer this information into the new process.
-        match host::spawn(node, config, link, type_helper_wrapper::<C, P, S, Z>, entry) {
+        match host::spawn(
+            name,
+            node,
+            config,
+            link,
+            type_helper_wrapper::<C, P, S, Z>,
+            entry,
+        ) {
             Ok(id) => {
                 // Use unique tag so that protocol messages are separated from regular messages.
                 let tag = Tag::new();
@@ -321,9 +329,9 @@ where
                 let child = unsafe { Process::<ProtocolCapture<C>, S>::new(node_id, id) };
 
                 child.send(capture);
-                Protocol::from_process(child, tag)
+                Ok(Protocol::from_process(child, tag))
             }
-            Err(err) => panic!("Failed to spawn a process: {}", err),
+            Err(err) => Err(err),
         }
     }
 }

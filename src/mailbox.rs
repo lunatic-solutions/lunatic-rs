@@ -5,7 +5,7 @@ use std::time::Duration;
 use crate::function::process::{IntoProcess, NoLink};
 use crate::host::api::message;
 use crate::serializer::{Bincode, CanSerialize, DecodeError};
-use crate::{host, Process, ProcessConfig, Tag};
+use crate::{host, LunaticError, Process, ProcessConfig, Tag};
 
 pub const LINK_DIED: u32 = 1;
 pub const TIMEOUT: u32 = 9027;
@@ -261,10 +261,11 @@ where
     fn spawn<C>(
         capture: C,
         entry: fn(C, Self),
+        name: Option<&str>,
         link: Option<Tag>,
         config: Option<&ProcessConfig>,
         node: Option<u64>,
-    ) -> Self::Process
+    ) -> Result<Self::Process, LunaticError>
     where
         S: CanSerialize<C> + CanSerialize<M>,
     {
@@ -275,22 +276,29 @@ where
         // function with generic types C, M & S. We can only send pointer data across
         // processes and this is the only way the Rust compiler will let us transfer
         // this information into the new process.
-        match host::spawn(node, config, link, type_helper_wrapper::<C, M, S>, entry) {
+        match host::spawn(
+            name,
+            node,
+            config,
+            link,
+            type_helper_wrapper::<C, M, S>,
+            entry,
+        ) {
             Ok(id) => {
                 // If the captured variable is of size 0, we don't need to send it to another
                 // process.
                 if std::mem::size_of::<C>() == 0 {
-                    unsafe { Process::new(node_id, id) }
+                    Ok(unsafe { Process::new(node_id, id) })
                 } else {
                     let child = unsafe { Process::<C, S>::new(node_id, id) };
                     child.send(capture);
                     // Processes can only receive one type of message, but to pass in the captured
                     // variable we pretend for the first message that our process is receiving
                     // messages of type `C`.
-                    unsafe { std::mem::transmute(child) }
+                    Ok(unsafe { std::mem::transmute(child) })
                 }
             }
-            Err(err) => panic!("Failed to spawn a process: {}", err),
+            Err(err) => Err(err),
         }
     }
 }

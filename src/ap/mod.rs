@@ -687,7 +687,7 @@ where
     fn clone(&self) -> Self {
         match self {
             Self::InitPanicked => Self::InitPanicked,
-            Self::NameAlreadyRegistered(arg0) => Self::NameAlreadyRegistered(arg0.clone()),
+            Self::NameAlreadyRegistered(arg0) => Self::NameAlreadyRegistered(*arg0),
             Self::Custom(arg0) => Self::Custom(arg0.clone()),
         }
     }
