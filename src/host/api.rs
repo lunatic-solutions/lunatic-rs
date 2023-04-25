@@ -18,6 +18,7 @@ pub mod message {
         #[allow(dead_code)]
         pub fn seek_data(position: u64);
         pub fn get_tag() -> i64;
+        pub fn get_process_id() -> u64;
         #[allow(dead_code)]
         pub fn data_size() -> u64;
         pub fn push_module(module_id: u64) -> u64;
@@ -248,6 +249,8 @@ pub mod process {
         pub fn process_id() -> u64;
         pub fn link(tag: i64, process_id: u64);
         pub fn unlink(process_id: u64);
+        pub fn monitor(process_id: u64);
+        pub fn stop_monitoring(process_id: u64);
         pub fn kill(process_id: u64);
         pub fn exists(process_id: u64) -> i32;
     }

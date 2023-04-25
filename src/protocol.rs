@@ -4,8 +4,9 @@ use std::mem::ManuallyDrop;
 use std::time::Duration;
 
 use crate::function::process::IntoProcess;
+use crate::mailbox::MailboxError;
 use crate::serializer::{Bincode, CanSerialize};
-use crate::{host, Mailbox, MailboxResult, Process, ProcessConfig, Tag};
+use crate::{host, Mailbox, Process, ProcessConfig, Tag};
 
 /// A value that the protocol captures from the parent process.
 ///
@@ -121,7 +122,7 @@ where
 
     /// A task is a special case of a protocol spawned with the `spawn!(@task
     /// ...)` macro. It only returns one value.
-    pub fn result_timeout(self, duration: Duration) -> MailboxResult<A> {
+    pub fn result_timeout(self, duration: Duration) -> Result<A, MailboxError> {
         // Temporarily cast to right mailbox type.
         let mailbox: Mailbox<A, S> = unsafe { Mailbox::new() };
         let result = mailbox.tag_receive_timeout(&[self.tag], duration);

@@ -8,7 +8,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 use crate::host::{self, node_id, process_id};
-use crate::mailbox::TIMEOUT;
+use crate::mailbox::{MailboxError, MessageSignal, TIMEOUT};
 use crate::protocol::ProtocolCapture;
 use crate::serializer::{Bincode, CanSerialize};
 use crate::time::TimerRef;
@@ -404,10 +404,10 @@ where
         let result =
             host::send_receive_skip_search(self.node_id, self.id, receive_tag.id(), timeout_ms);
         if result == TIMEOUT {
-            MailboxResult::TimedOut
+            MailboxResult::Err(MailboxError::TimedOut)
         } else {
             match S::decode() {
-                Ok(msg) => MailboxResult::Message(msg),
+                Ok(msg) => MailboxResult::Ok(MessageSignal::Message(msg)),
                 Err(_) => panic!("Could not deserialize message: {}", type_name::<Response>()),
             }
         }
