@@ -5,6 +5,7 @@ use std::time::Duration;
 use std::{any, fmt};
 
 use crate::function::process::IntoProcess;
+use crate::mailbox::MailboxError;
 use crate::serializer::{Bincode, CanSerialize};
 use crate::{host, LunaticError, Mailbox, MailboxResult, Process, ProcessConfig, Tag};
 
@@ -146,7 +147,7 @@ where
 
     /// A task is a special case of a protocol spawned with the `spawn!(@task
     /// ...)` macro. It only returns one value.
-    pub fn result_timeout(self, duration: Duration) -> MailboxResult<A> {
+    pub fn result_timeout(self, duration: Duration) -> Result<A, MailboxError> {
         // Temporarily cast to right mailbox type.
         let mailbox: Mailbox<A, S> = unsafe { Mailbox::new() };
         let result = mailbox.tag_receive_timeout(&[self.tag], duration);

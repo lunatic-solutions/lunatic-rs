@@ -111,7 +111,7 @@ fn request_reply(mailbox: Mailbox<u64>) {
 #[test]
 fn timeout(mailbox: Mailbox<u64>) {
     let result = mailbox.receive_timeout(Duration::new(0, 10_000)); // 10 us
-    assert!(result.is_timed_out())
+    assert!(result.unwrap_err().is_timed_out())
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

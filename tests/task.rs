@@ -43,5 +43,5 @@ fn recursive_count_sub(n: i32) -> i32 {
 fn timeout_task() {
     let task = spawn_link!(@task || sleep(Duration::from_millis(25)));
     let result = task.result_timeout(Duration::from_millis(10));
-    assert!(result.is_timed_out());
+    assert!(result.unwrap_err().is_timed_out());
 }

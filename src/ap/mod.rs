@@ -18,14 +18,13 @@ use self::builder::AbstractProcessBuilder;
 use self::handlers::{DeferredRequest, Handlers, Message, Request};
 use self::messages::{RequestMessage, ReturnAddress, ShutdownMessage, SHUTDOWN_HANDLER};
 use self::tag::AbstractProcessTag;
+
+use crate::function::process::{process_name, ProcessType};
+use crate::mailbox::{MailboxError, MessageSignal};
 use crate::protocol::ProtocolCapture;
 use crate::serializer::CanSerialize;
 use crate::time::{Timeout, TimerRef, WithDelay, WithTimeout};
-use crate::{
-    function::process::{process_name, ProcessType},
-    ProcessName,
-};
-use crate::{host, Process, ProcessConfig, Tag};
+use crate::{host, MailboxResult, Process, ProcessConfig, Tag};
 
 /// Building block for processes that act as a server of a client-server
 /// relation.
@@ -479,8 +478,8 @@ where
             let process: Process<ShutdownMessage<T::Serializer>, T::Serializer> =
                 mem::transmute(self.process);
             match process.tag_send_receive(send_tag, receive_tag, message, timeout) {
-                crate::MailboxResult::Message(()) => Ok(()),
-                crate::MailboxResult::TimedOut => Err(Timeout),
+                MailboxResult::Ok(MessageSignal::Message(())) => Ok(()),
+                MailboxResult::Err(MailboxError::TimedOut) => Err(Timeout),
                 _ => unreachable!("send_receive should panic in case of other errors"),
             }
         }
@@ -550,8 +549,8 @@ where
             let process: Process<RequestMessage<R, T::Response, T::Serializer>, T::Serializer> =
                 mem::transmute(self.process);
             match process.tag_send_receive(send_tag, receive_tag, message, timeout) {
-                crate::MailboxResult::Message(message) => Ok(message),
-                crate::MailboxResult::TimedOut => Err(Timeout),
+                MailboxResult::Ok(MessageSignal::Message(message)) => Ok(message),
+                MailboxResult::Err(MailboxError::TimedOut) => Err(Timeout),
                 _ => unreachable!("send_receive should panic in case of other errors"),
             }
         }
@@ -595,8 +594,8 @@ where
             let process: Process<RequestMessage<R, T::Response, T::Serializer>, T::Serializer> =
                 mem::transmute(self.process);
             match process.tag_send_receive(send_tag, receive_tag, message, timeout) {
-                crate::MailboxResult::Message(message) => Ok(message),
-                crate::MailboxResult::TimedOut => Err(Timeout),
+                MailboxResult::Ok(MessageSignal::Message(message)) => Ok(message),
+                MailboxResult::Err(MailboxError::TimedOut) => Err(Timeout),
                 _ => unreachable!("send_receive should panic in case of other errors"),
             }
         }

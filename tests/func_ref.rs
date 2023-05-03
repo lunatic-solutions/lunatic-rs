@@ -1,16 +1,13 @@
 use std::time::Duration;
 
 use lunatic::function::FuncRef;
-use lunatic::MailboxResult;
 use lunatic_test::test;
 
 #[test]
 fn send_func_ref() {
     type Message = (i32, FuncRef<fn(i32) -> i32>);
     let p = lunatic::spawn_link!(|mailbox: Mailbox<Message>| {
-        while let MailboxResult::Message((expected_value, fn_ref)) =
-            mailbox.receive_timeout(Duration::from_millis(1))
-        {
+        while let Ok((expected_value, fn_ref)) = mailbox.receive_timeout(Duration::from_millis(1)) {
             let result = fn_ref(1);
             assert_eq!(expected_value, result);
         }
