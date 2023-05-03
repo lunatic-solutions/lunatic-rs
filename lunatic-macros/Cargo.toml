@@ -9,6 +9,9 @@ license = "Apache-2.0/MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+convert_case = "0.6"
+darling = "0.14"
+proc-macro2 = "1.0"
 quote = "1"
 syn = { version = "2", features = ["full", "extra-traits"] }
 proc-macro2 = "1.0"

@@ -7,12 +7,15 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use crate::host::{self, node_id, process_id};
 use crate::mailbox::TIMEOUT;
 use crate::protocol::ProtocolCapture;
 use crate::serializer::{Bincode, CanSerialize};
 use crate::time::TimerRef;
-use crate::{LunaticError, MailboxResult, ProcessConfig, Tag};
+use crate::{
+    host::{self, node_id, process_id},
+    ProcessName,
+};
+use crate::{MailboxResult, ProcessConfig, Tag};
 
 /// Decides what can be turned into a process.
 ///
@@ -383,15 +386,15 @@ impl<M, S> Process<M, S> {
     }
 
     /// Register process under a name.
-    pub fn register(&self, name: &str) {
+    pub fn register<N: ProcessName>(&self, name: &N) {
         // Encode type information in name
-        let name = process_name::<M, S>(ProcessType::Process, name);
+        let name = process_name::<M, S>(ProcessType::Process, name.process_name());
         unsafe { host::api::registry::put(name.as_ptr(), name.len(), self.node_id, self.id) };
     }
 
     /// Look up a process.
-    pub fn lookup(name: &str) -> Option<Self> {
-        let name = process_name::<M, S>(ProcessType::Process, name);
+    pub fn lookup<N: ProcessName>(name: &N) -> Option<Self> {
+        let name = process_name::<M, S>(ProcessType::Process, name.process_name());
         let mut id = 0;
         let mut node_id = 0;
         let result =

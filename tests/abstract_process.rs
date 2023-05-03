@@ -219,20 +219,20 @@ impl AbstractProcess for RegisteredAP {
 
     fn init(_: Config<Self>, _: Self::Arg) -> Result<(), ()> {
         // Doing a lookup in `init` should not deadlock.
-        let _ = ProcessRef::<InitOkAP>::lookup("_");
+        let _ = ProcessRef::<InitOkAP>::lookup(&"_");
         Ok(())
     }
 }
 
 #[test]
 fn lookup() {
-    let ap = RegisteredAP::start_as("AP", ()).unwrap();
-    let lookup = ProcessRef::<RegisteredAP>::lookup("AP").unwrap();
+    let ap = RegisteredAP::start_as(&"AP", ()).unwrap();
+    let lookup = ProcessRef::<RegisteredAP>::lookup(&"AP").unwrap();
     assert_eq!(ap, lookup);
-    let exists = RegisteredAP::start_as("AP", ());
+    let exists = RegisteredAP::start_as(&"AP", ());
     assert_eq!(exists, Err(StartupError::NameAlreadyRegistered(ap)));
     // Registering a different process type under the same name will work.
-    let doesnt_exist = InitOkAP::start_as("AP", ());
+    let doesnt_exist = InitOkAP::start_as(&"AP", ());
     assert!(doesnt_exist.is_ok());
 }
 
