@@ -95,7 +95,7 @@ fn resolve_timeout_(
         )
     };
     if result != 0 {
-        Err(LunaticError::from(dns_iter_or_error_id))
+        Err(LunaticError::Error(dns_iter_or_error_id))
     } else {
         Ok(SocketAddrIterator {
             id: dns_iter_or_error_id,

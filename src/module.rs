@@ -67,7 +67,7 @@ impl WasmModule {
         if result == -1 {
             Err(LunaticError::PermissionDenied)
         } else if result != 0 {
-            Err(LunaticError::from(module_or_error_id))
+            Err(LunaticError::Error(module_or_error_id))
         } else {
             Ok(WasmModule::Module(module_or_error_id))
         }
@@ -176,7 +176,7 @@ impl WasmModule {
         if result == 0 {
             Ok(unsafe { Process::new(node_id(), process_or_error_id) })
         } else {
-            Err(LunaticError::from(process_or_error_id))
+            Err(LunaticError::Error(process_or_error_id))
         }
     }
 }

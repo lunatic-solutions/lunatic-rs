@@ -158,7 +158,7 @@ impl TcpStream {
                 return Ok(TcpStream::from(id));
             }
         }
-        let lunatic_error = LunaticError::from(id);
+        let lunatic_error = LunaticError::Error(id);
         Err(Error::new(ErrorKind::Other, lunatic_error))
     }
 
@@ -173,7 +173,7 @@ impl TcpStream {
             let addr = dns_iter.next().expect("must contain one element");
             Ok(addr)
         } else {
-            let lunatic_error = LunaticError::from(dns_iter_or_error_id);
+            let lunatic_error = LunaticError::Error(dns_iter_or_error_id);
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
@@ -277,7 +277,7 @@ impl TcpStream {
         } else if result == TIMEOUT {
             Err(Error::new(ErrorKind::TimedOut, "TcpStream peek timed out"))
         } else {
-            let lunatic_error = LunaticError::from(nread_or_error_id);
+            let lunatic_error = LunaticError::Error(nread_or_error_id);
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
@@ -304,7 +304,7 @@ impl Write for TcpStream {
         } else if result == TIMEOUT {
             Err(Error::new(ErrorKind::TimedOut, "TcpStream write timed out"))
         } else {
-            let lunatic_error = LunaticError::from(nwritten_or_error_id);
+            let lunatic_error = LunaticError::Error(nwritten_or_error_id);
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
@@ -314,7 +314,7 @@ impl Write for TcpStream {
         match unsafe { host::api::networking::tcp_flush(self.id, &mut error_id as *mut u64) } {
             0 => Ok(()),
             _ => {
-                let lunatic_error = LunaticError::from(error_id);
+                let lunatic_error = LunaticError::Error(error_id);
                 Err(Error::new(ErrorKind::Other, lunatic_error))
             }
         }
@@ -337,7 +337,7 @@ impl Read for TcpStream {
         } else if result == TIMEOUT {
             Err(Error::new(ErrorKind::TimedOut, "TcpStream read timed out"))
         } else {
-            let lunatic_error = LunaticError::from(nread_or_error_id);
+            let lunatic_error = LunaticError::Error(nread_or_error_id);
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
