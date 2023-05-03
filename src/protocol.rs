@@ -7,7 +7,7 @@ use std::{any, fmt};
 use crate::function::process::IntoProcess;
 use crate::mailbox::MailboxError;
 use crate::serializer::{Bincode, CanSerialize};
-use crate::{host, LunaticError, Mailbox, MailboxResult, Process, ProcessConfig, Tag};
+use crate::{host, LunaticError, Mailbox, Process, ProcessConfig, Tag};
 
 /// A value that the protocol captures from the parent process.
 ///

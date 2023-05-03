@@ -18,13 +18,12 @@ use self::builder::AbstractProcessBuilder;
 use self::handlers::{DeferredRequest, Handlers, Message, Request};
 use self::messages::{RequestMessage, ReturnAddress, ShutdownMessage, SHUTDOWN_HANDLER};
 use self::tag::AbstractProcessTag;
-
 use crate::function::process::{process_name, ProcessType};
 use crate::mailbox::{MailboxError, MessageSignal};
 use crate::protocol::ProtocolCapture;
 use crate::serializer::CanSerialize;
 use crate::time::{Timeout, TimerRef, WithDelay, WithTimeout};
-use crate::{host, MailboxResult, Process, ProcessConfig, Tag};
+use crate::{host, MailboxResult, Process, ProcessConfig, ProcessName, Tag};
 
 /// Building block for processes that act as a server of a client-server
 /// relation.
