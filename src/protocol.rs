@@ -1,7 +1,8 @@
+use std::any::TypeId;
+use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
 use std::time::Duration;
-use std::{any, marker::PhantomData};
-use std::{any::TypeId, fmt};
+use std::{any, fmt};
 
 use crate::function::process::IntoProcess;
 use crate::serializer::{Bincode, CanSerialize};
@@ -372,7 +373,7 @@ where
                 let child = unsafe { Process::<ProtocolCapture<C>, S>::new(node_id, id) };
 
                 child.send(capture);
-                Ok(Protocol::from_process(child, tag))
+                Ok(Protocol::from_process_with_tag(child, tag))
             }
             Err(err) => Err(err),
         }

@@ -7,15 +7,12 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
+use crate::host::{self, node_id, process_id};
 use crate::mailbox::TIMEOUT;
 use crate::protocol::ProtocolCapture;
 use crate::serializer::{Bincode, CanSerialize};
 use crate::time::TimerRef;
-use crate::{
-    host::{self, node_id, process_id},
-    ProcessName,
-};
-use crate::{MailboxResult, ProcessConfig, Tag};
+use crate::{LunaticError, MailboxResult, ProcessConfig, ProcessName, Tag};
 
 /// Decides what can be turned into a process.
 ///
@@ -132,6 +129,11 @@ pub struct Process<M, S = Bincode> {
 
 impl<M, S> Process<M, S> {
     /// Creates a new process reference from a node_id and process_id.
+    ///
+    /// # Safety
+    ///
+    /// When creating a process from raw IDs you will need to manually specify
+    /// the right types.
     pub unsafe fn new(node_id: u64, process_id: u64) -> Self {
         Self {
             node_id,
@@ -141,6 +143,11 @@ impl<M, S> Process<M, S> {
     }
 
     /// Return reference to self.
+    ///
+    /// # Safety
+    ///
+    /// The right type needs to be manually specified for the deserializer to
+    /// know what messages to expect.
     pub unsafe fn this() -> Self {
         Self::new(node_id(), process_id())
     }

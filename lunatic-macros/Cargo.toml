@@ -13,9 +13,7 @@ convert_case = "0.6"
 darling = "0.14"
 proc-macro2 = "1.0"
 quote = "1"
-syn = { version = "2", features = ["full", "extra-traits"] }
-proc-macro2 = "1.0"
-convert_case = "0.6"
+syn = { version = "1", features = ["full", "extra-traits"] }
 
 [lib]
 proc-macro = true

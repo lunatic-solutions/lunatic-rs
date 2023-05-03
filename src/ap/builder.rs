@@ -1,11 +1,8 @@
 use std::marker::PhantomData;
 
 use super::{lifecycles, AbstractProcess, ProcessRef, StartupError};
-use crate::{
-    function::process::{process_name, ProcessType},
-    ProcessName,
-};
-use crate::{host, Mailbox, Process, ProcessConfig, Tag};
+use crate::function::process::{process_name, ProcessType};
+use crate::{LunaticError, Mailbox, Process, ProcessConfig, ProcessName, Tag};
 
 trait IntoAbstractProcessBuilder<T> {}
 
@@ -150,7 +147,7 @@ where
         name: &N,
         arg: T::Arg,
     ) -> Result<ProcessRef<T>, StartupError<T>> {
-        let name: &str = name.as_ref();
+        let name: &str = name.process_name();
         let name = process_name::<T, T::Serializer>(ProcessType::ProcessRef, name);
         let init_tag = Tag::new();
         let this = unsafe { Process::<Result<(), StartupError<T>>, T::Serializer>::this() };

@@ -10,7 +10,7 @@ license = "Apache-2.0/MIT"
 
 [dependencies]
 quote = "1"
-syn = { version = "2", features = ["full", "extra-traits"] }
+syn = { version = "1", features = ["full", "extra-traits"] }
 
 [dev-dependencies]
 lunatic = { path = "..", features = ["json_serializer", "msgpack_serializer"] }
