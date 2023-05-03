@@ -72,10 +72,10 @@ fn recursive_count_sub((parent, n): (Process<i32>, i32), mailbox: Mailbox<i32>) 
 fn lookup(mailbox: Mailbox<i32>) {
     // Register self under name "hello"
     let this = mailbox.this();
-    this.register("hello");
+    this.register(&"hello");
 
     spawn_link!(|| {
-        let parent = Process::<i32>::lookup("hello").unwrap();
+        let parent = Process::<i32>::lookup(&"hello").unwrap();
         parent.send(1337);
     });
 

@@ -62,7 +62,7 @@ impl AbstractProcess for A {
     type StartupError = ();
 
     fn init(_: Config<Self>, (count, name): Self::Arg) -> Result<A, ()> {
-        if let Some(logger) = ProcessRef::<Logger>::lookup(LOGGER_NAME) {
+        if let Some(logger) = ProcessRef::<Logger>::lookup(&LOGGER_NAME) {
             let log = LogEvent::Init(name);
             logger.request(log);
         }
@@ -70,7 +70,7 @@ impl AbstractProcess for A {
     }
 
     fn terminate(state: Self::State) {
-        if let Some(logger) = ProcessRef::<Logger>::lookup(LOGGER_NAME) {
+        if let Some(logger) = ProcessRef::<Logger>::lookup(&LOGGER_NAME) {
             let log = LogEvent::Shutdown(state.name);
             logger.request(log);
         }
@@ -99,7 +99,7 @@ impl RequestHandler<Count> for A {
 struct Panic;
 impl MessageHandler<Panic> for A {
     fn handle(state: State<Self>, _: Panic) {
-        if let Some(logger) = ProcessRef::<Logger>::lookup(LOGGER_NAME) {
+        if let Some(logger) = ProcessRef::<Logger>::lookup(&LOGGER_NAME) {
             let log = LogEvent::Panic(state.name);
             logger.request(log);
         }
@@ -160,7 +160,7 @@ fn two_failing_process_one_for_one() {
         }
     }
 
-    let logger = Logger::link().start_as(LOGGER_NAME, ()).unwrap();
+    let logger = Logger::link().start_as(&LOGGER_NAME, ()).unwrap();
     let sup = Sup::link().start(()).unwrap();
 
     let (a, b) = sup.children();
@@ -251,7 +251,7 @@ fn two_failing_process_one_for_all() {
         }
     }
 
-    let logger = Logger::link().start_as(LOGGER_NAME, ()).unwrap();
+    let logger = Logger::link().start_as(&LOGGER_NAME, ()).unwrap();
     let sup = Sup::link().start(()).unwrap();
 
     let (a, b) = sup.children();
@@ -354,7 +354,7 @@ fn four_failing_process_rest_for_all() {
         }
     }
 
-    let logger = Logger::link().start_as(LOGGER_NAME, ()).unwrap();
+    let logger = Logger::link().start_as(&LOGGER_NAME, ()).unwrap();
     let sup = Sup::link().start(()).unwrap();
 
     let (_, b, _, _) = sup.children();
@@ -488,7 +488,7 @@ fn shutdown() {
         }
     }
 
-    let logger = Logger::link().start_as(LOGGER_NAME, ()).unwrap();
+    let logger = Logger::link().start_as(&LOGGER_NAME, ()).unwrap();
     let sup = Sup::link().start(()).unwrap();
     sup.shutdown();
     let log = logger.request(TakeLogs);
@@ -526,22 +526,22 @@ fn lookup_children() {
 
     Sup::link().start(()).unwrap();
 
-    let first = ProcessRef::<A>::lookup("first").unwrap();
+    let first = ProcessRef::<A>::lookup(&"first").unwrap();
     assert_eq!(first.request(Count), 0);
-    let second = ProcessRef::<A>::lookup("second").unwrap();
+    let second = ProcessRef::<A>::lookup(&"second").unwrap();
     assert_eq!(second.request(Count), 1);
-    let third = ProcessRef::<A>::lookup("third").unwrap();
+    let third = ProcessRef::<A>::lookup(&"third").unwrap();
     assert_eq!(third.request(Count), 2);
 
     // Kill third and inc count to 4
     third.send(Panic);
     sleep(Duration::from_millis(10));
-    let third = ProcessRef::<A>::lookup("third").unwrap();
+    let third = ProcessRef::<A>::lookup(&"third").unwrap();
     third.send(Inc);
     third.send(Inc);
     assert_eq!(third.request(Count), 4);
     // Holding multiple references is ok
-    let third = ProcessRef::<A>::lookup("third").unwrap();
+    let third = ProcessRef::<A>::lookup(&"third").unwrap();
     assert_eq!(third.request(Count), 4);
 }
 

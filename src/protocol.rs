@@ -2,11 +2,12 @@ use std::any::TypeId;
 use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
 use std::time::Duration;
+use std::{any, fmt};
 
 use crate::function::process::IntoProcess;
 use crate::mailbox::MailboxError;
 use crate::serializer::{Bincode, CanSerialize};
-use crate::{host, Mailbox, Process, ProcessConfig, Tag};
+use crate::{host, LunaticError, Mailbox, MailboxResult, Process, ProcessConfig, Tag};
 
 /// A value that the protocol captures from the parent process.
 ///
@@ -27,7 +28,11 @@ pub struct ProtocolCapture<C> {
 /// It uses session types to check during compile time that all messages
 /// exchanged between two processes are in the correct order and of the correct
 /// type.
-#[derive(Debug, Hash)]
+///
+/// Only `Protocol<End>` or `Protocol<TaskEnd>` can be dropped.
+/// All other protocols will panic if dropped without reaching
+/// `Protocol<End>` or `Protocol<TaskEnd>.
+#[derive(Hash)]
 pub struct Protocol<P: 'static, S = Bincode, Z: 'static = ()> {
     id: u64,
     node_id: u64,
@@ -48,10 +53,30 @@ impl<P: 'static, S, Z: 'static> Drop for Protocol<P, S, Z> {
 }
 
 impl<P, S, Z> Protocol<P, S, Z> {
-    /// Turn a process into a protocol
-    fn from_process<M, S2>(process: Process<M, S2>, tag: Tag) -> Self {
-        // The transformation shouldn't drop the process resource.
-        let process = ManuallyDrop::new(process);
+    /// Returns the process ID for the local node.
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
+    /// Returns the node ID.
+    pub fn node_id(&self) -> u64 {
+        self.node_id
+    }
+
+    /// Returns the protocol tag.
+    pub fn tag(&self) -> Tag {
+        self.tag
+    }
+
+    /// Turn a process into a protocol.
+    ///
+    /// This implicityly creates a new tag.
+    pub fn from_process<M, S2>(process: Process<M, S2>) -> Self {
+        Self::from_process_with_tag(process, Tag::new())
+    }
+
+    /// Turn a process into a protocol using a given `Tag`.
+    pub fn from_process_with_tag<M, S2>(process: Process<M, S2>, tag: Tag) -> Self {
         Self {
             id: process.id(),
             node_id: process.node_id(),
@@ -86,7 +111,7 @@ where
         // Temporarily cast to right process type.
         let process: Process<A, S> = unsafe { Process::new(self_.node_id, self_.id) };
         process.tag_send(self_.tag, message);
-        Protocol::from_process(process, self_.tag)
+        Protocol::from_process_with_tag(process, self_.tag)
     }
 }
 
@@ -143,7 +168,7 @@ where
         // Temporarily cast to right process type.
         let process: Process<bool, S> = unsafe { Process::new(self_.node_id, self_.id) };
         process.tag_send(self_.tag, true);
-        Protocol::from_process(process, self_.tag)
+        Protocol::from_process_with_tag(process, self_.tag)
     }
 
     /// Perform an active choice, selecting protocol `Q`.
@@ -154,7 +179,7 @@ where
         // Temporarily cast to right process type.
         let process: Process<bool, S> = unsafe { Process::new(self_.node_id, self_.id) };
         process.tag_send(self_.tag, false);
-        Protocol::from_process(process, self_.tag)
+        Protocol::from_process_with_tag(process, self_.tag)
     }
 }
 
@@ -197,6 +222,25 @@ impl<P2, S, Z> Protocol<Pop, S, Protocol<P2, S, Z>> {
 impl<P, S, Z> From<Protocol<Rec<P>, S, Z>> for Protocol<P, S, Z> {
     fn from(p: Protocol<Rec<P>, S, Z>) -> Self {
         p.cast()
+    }
+}
+
+impl<P, S, Z> fmt::Debug for Protocol<P, S, Z> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Protocol")
+            .field("id", &self.id)
+            .field("node_id", &self.node_id)
+            .field("tag", &self.tag)
+            .field("protocol", &any::type_name::<P>())
+            .field("serializer", &any::type_name::<S>())
+            .field("Z", &any::type_name::<Z>())
+            .finish()
+    }
+}
+
+impl<P, M, S, S2> From<Process<M, S>> for Protocol<P, S2> {
+    fn from(process: Process<M, S>) -> Self {
+        Protocol::from_process(process)
     }
 }
 
@@ -294,10 +338,11 @@ where
     fn spawn<C>(
         capture: C,
         entry: fn(C, Protocol<P, S, Z>),
+        name: Option<&str>,
         link: Option<Tag>,
         config: Option<&ProcessConfig>,
         node: Option<u64>,
-    ) -> Self::Process
+    ) -> Result<Self::Process, LunaticError>
     where
         S: CanSerialize<ProtocolCapture<C>>,
     {
@@ -308,7 +353,14 @@ where
         // function with generic types C, P & S. We can only send pointer data
         // across processes and this is the only way the Rust compiler will let
         // us transfer this information into the new process.
-        match host::spawn(node, config, link, type_helper_wrapper::<C, P, S, Z>, entry) {
+        match host::spawn(
+            name,
+            node,
+            config,
+            link,
+            type_helper_wrapper::<C, P, S, Z>,
+            entry,
+        ) {
             Ok(id) => {
                 // Use unique tag so that protocol messages are separated from regular messages.
                 let tag = Tag::new();
@@ -322,9 +374,9 @@ where
                 let child = unsafe { Process::<ProtocolCapture<C>, S>::new(node_id, id) };
 
                 child.send(capture);
-                Protocol::from_process(child, tag)
+                Ok(Protocol::from_process_with_tag(child, tag))
             }
-            Err(err) => panic!("Failed to spawn a process: {}", err),
+            Err(err) => Err(err),
         }
     }
 }
@@ -339,7 +391,7 @@ where
 {
     let p_capture = unsafe { Mailbox::<ProtocolCapture<C>, S>::new() }.receive();
     let capture = p_capture.capture;
-    let protocol = Protocol::from_process(p_capture.process, p_capture.tag);
+    let protocol = Protocol::from_process_with_tag(p_capture.process, p_capture.tag);
     let function: fn(C, Protocol<P, S, Z>) = unsafe { std::mem::transmute(function as usize) };
     function(capture, protocol);
 }

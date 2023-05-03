@@ -125,7 +125,7 @@ impl UdpSocket {
                 });
             }
         }
-        let lunatic_error = LunaticError::from(id);
+        let lunatic_error = LunaticError::Error(id);
         Err(Error::new(ErrorKind::Other, lunatic_error))
     }
 
@@ -143,7 +143,7 @@ impl UdpSocket {
             let addr = dns_iter.next().expect("must contain one element");
             Ok(addr)
         } else {
-            let lunatic_error = LunaticError::from(dns_iter_or_error_id);
+            let lunatic_error = LunaticError::Error(dns_iter_or_error_id);
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
@@ -161,7 +161,7 @@ impl UdpSocket {
         } else if result == 1 {
             Err(Error::new(ErrorKind::NotConnected, "not connected"))
         } else {
-            let lunatic_error = LunaticError::from(dns_iter_or_error_id);
+            let lunatic_error = LunaticError::Error(dns_iter_or_error_id);
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
@@ -241,7 +241,7 @@ impl UdpSocket {
                 return Ok(());
             }
         }
-        let lunatic_error = LunaticError::from(id);
+        let lunatic_error = LunaticError::Error(id);
         Err(Error::new(ErrorKind::Other, lunatic_error))
     }
 
@@ -272,7 +272,7 @@ impl UdpSocket {
         if result == 0 {
             Ok(nsend_or_error_id as usize)
         } else {
-            let lunatic_error = LunaticError::from(nsend_or_error_id);
+            let lunatic_error = LunaticError::Error(nsend_or_error_id);
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
@@ -345,7 +345,7 @@ impl UdpSocket {
                 return Ok(nsend_or_error_id as usize);
             }
         }
-        let lunatic_error = LunaticError::from(nsend_or_error_id);
+        let lunatic_error = LunaticError::Error(nsend_or_error_id);
         Err(Error::new(ErrorKind::Other, lunatic_error))
     }
 
@@ -386,7 +386,7 @@ impl UdpSocket {
         if result == 0 {
             Ok(nrecv_or_error_id as usize)
         } else {
-            let lunatic_error = LunaticError::from(nrecv_or_error_id);
+            let lunatic_error = LunaticError::Error(nrecv_or_error_id);
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
@@ -426,7 +426,7 @@ impl UdpSocket {
             let peer = dns_iter.next().expect("must contain one element");
             Ok((nrecv_or_error_id as usize, peer))
         } else {
-            let lunatic_error = LunaticError::from(nrecv_or_error_id);
+            let lunatic_error = LunaticError::Error(nrecv_or_error_id);
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }

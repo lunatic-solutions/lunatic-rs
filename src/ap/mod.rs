@@ -18,6 +18,7 @@ use self::builder::AbstractProcessBuilder;
 use self::handlers::{DeferredRequest, Handlers, Message, Request};
 use self::messages::{RequestMessage, ReturnAddress, ShutdownMessage, SHUTDOWN_HANDLER};
 use self::tag::AbstractProcessTag;
+
 use crate::function::process::{process_name, ProcessType};
 use crate::mailbox::{MailboxError, MessageSignal};
 use crate::protocol::ProtocolCapture;
@@ -210,8 +211,8 @@ where
     /// name registration will be performed on the local node and not the remote
     /// one.
     #[track_caller]
-    fn start_as<S: AsRef<str>>(
-        name: S,
+    fn start_as<N: ProcessName>(
+        name: &N,
         arg: Self::Arg,
     ) -> Result<ProcessRef<Self>, StartupError<Self>> {
         AbstractProcessBuilder::<Self>::new().start_as(name, arg)
@@ -392,9 +393,8 @@ where
 
     /// Returns a process registered under `name` if it exists and the signature
     /// matches.
-    pub fn lookup<S: AsRef<str>>(name: S) -> Option<Self> {
-        let name: &str = name.as_ref();
-        let name = process_name::<T, T::Serializer>(ProcessType::ProcessRef, name);
+    pub fn lookup<N: ProcessName>(name: &N) -> Option<Self> {
+        let name = process_name::<T, T::Serializer>(ProcessType::ProcessRef, name.process_name());
         let mut id = 0;
         let mut node_id = 0;
         let result =
@@ -407,9 +407,8 @@ where
     }
 
     /// Registers process under `name`.
-    pub fn register<S: AsRef<str>>(&self, name: S) {
-        let name: &str = name.as_ref();
-        let name = process_name::<T, T::Serializer>(ProcessType::ProcessRef, name);
+    pub fn register<N: ProcessName>(&self, name: &N) {
+        let name = process_name::<T, T::Serializer>(ProcessType::ProcessRef, name.process_name());
         unsafe { host::api::registry::put(name.as_ptr(), name.len(), self.node_id(), self.id()) };
     }
 
@@ -688,7 +687,7 @@ where
     fn clone(&self) -> Self {
         match self {
             Self::InitPanicked => Self::InitPanicked,
-            Self::NameAlreadyRegistered(arg0) => Self::NameAlreadyRegistered(arg0.clone()),
+            Self::NameAlreadyRegistered(arg0) => Self::NameAlreadyRegistered(*arg0),
             Self::Custom(arg0) => Self::Custom(arg0.clone()),
         }
     }

@@ -1,9 +1,12 @@
 #[allow(unused_extern_crates)]
 extern crate proc_macro;
 use proc_macro::TokenStream;
-use quote::quote;
+use process_name::ProcessNameDerive;
+use quote::{quote, ToTokens};
+use syn::parse_macro_input;
 
 mod abstract_process;
+mod process_name;
 
 /// Marks the main function to be executed by the lunatic runtime as the root
 /// process.
@@ -126,6 +129,37 @@ pub fn abstract_process(args: TokenStream, item: TokenStream) -> TokenStream {
         Ok(abstract_process) => abstract_process.expand().into(),
         Err(err) => err.into_compile_error().into(),
     }
+}
+
+/// ProcessName implements the `lunatic::ProcessName` trait by generating a unique name
+/// in the following format:
+///
+/// ```text
+/// "<pkg_name>@<pkg_version>::<module_path>::<ident>"
+/// ```
+///
+/// # Example
+///
+/// ```ignore
+/// #[derive(ProcessName)]
+/// struct LoggingProcess;
+///
+/// assert_eq!(LoggingProcess.process_name(), "lunatic@0.12.1::logging::LoggingProcess");
+/// ```
+///
+/// The process name can be overridden with the `#[lunatic(process_name = "...")]` attribute.
+///
+/// ```ignore
+/// #[derive(ProcessName)]
+/// #[lunatic(process_name = "global_logging_process")]
+/// struct LoggingProcess;
+///
+/// assert_eq!(LoggingProcess.process_name(), "global_logging_process");
+/// ```
+#[proc_macro_derive(ProcessName, attributes(lunatic))]
+pub fn process_name(input: TokenStream) -> TokenStream {
+    let process_name_derive = parse_macro_input!(input as ProcessNameDerive);
+    process_name_derive.to_token_stream().into()
 }
 
 fn token_stream_with_error(mut tokens: TokenStream, error: syn::Error) -> TokenStream {

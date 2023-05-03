@@ -103,6 +103,7 @@ mod macros;
 mod mailbox;
 mod module;
 mod process_local;
+mod process_name;
 mod tag;
 
 pub mod ap;
@@ -126,7 +127,7 @@ pub use ap::AbstractProcess;
 pub use config::ProcessConfig;
 pub use error::LunaticError;
 pub use function::process::Process;
-pub use lunatic_macros::{abstract_process, main};
+pub use lunatic_macros::{abstract_process, main, ProcessName};
 pub use lunatic_sys::*;
 pub use lunatic_test::test;
 pub use mailbox::{
@@ -137,6 +138,7 @@ pub use module::{Param, WasmModule};
 #[doc(hidden)]
 pub use process_local::statik::Key as __StaticProcessLocalInner;
 pub use process_local::ProcessLocal;
+pub use process_name::ProcessName;
 pub use tag::Tag;
 
 /// Implemented for all resources held by the VM.

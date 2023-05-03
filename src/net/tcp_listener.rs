@@ -105,7 +105,7 @@ impl TcpListener {
                 return Ok(Self { id });
             }
         }
-        let lunatic_error = LunaticError::from(id);
+        let lunatic_error = LunaticError::Error(id);
         Err(Error::new(ErrorKind::Other, lunatic_error))
     }
 
@@ -131,7 +131,7 @@ impl TcpListener {
             let peer = dns_iter.next().expect("must contain one element");
             Ok((tcp_stream, peer))
         } else {
-            let lunatic_error = LunaticError::from(tcp_stream_or_error_id);
+            let lunatic_error = LunaticError::Error(tcp_stream_or_error_id);
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
@@ -150,7 +150,7 @@ impl TcpListener {
             let addr = dns_iter.next().expect("must contain one element");
             Ok(addr)
         } else {
-            let lunatic_error = LunaticError::from(dns_iter_or_error_id);
+            let lunatic_error = LunaticError::Error(dns_iter_or_error_id);
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
