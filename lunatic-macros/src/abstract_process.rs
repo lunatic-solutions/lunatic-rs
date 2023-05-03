@@ -5,7 +5,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
-use syn::{PathArguments, Token, Type, FnArg};
+use syn::{FnArg, PathArguments, Token, Type};
 
 pub struct AbstractProcess {
     /// Arguments passed to the `#[abstract_process(...)]` macro.
@@ -234,7 +234,9 @@ impl AbstractProcess {
             .map(|impl_item_method| self.expand_handler_wrapper(impl_item_method, false));
 
         // Exclude last element that is a `DeferredResponse`
-        let dr_wrappers = self.deferred_request_handlers.iter()
+        let dr_wrappers = self
+            .deferred_request_handlers
+            .iter()
             .map(|impl_item_method| self.expand_handler_wrapper(impl_item_method, true));
         quote! {
             #( #wrappers )*
@@ -247,7 +249,11 @@ impl AbstractProcess {
     /// ```ignore
     /// __MsgWrap(Param1, Param2);
     /// ```
-    fn expand_handler_wrapper(&self, impl_item_method: &syn::ImplItemMethod, exclude_last: bool) -> TokenStream {
+    fn expand_handler_wrapper(
+        &self,
+        impl_item_method: &syn::ImplItemMethod,
+        exclude_last: bool,
+    ) -> TokenStream {
         let vis = &self.args.visibility;
         let ident = Self::handler_wrapper_ident(&impl_item_method.sig.ident);
         let (_, ty_generics, _) = &self.item_impl.generics.split_for_impl();
@@ -258,7 +264,7 @@ impl AbstractProcess {
                 let mut a: Vec<FnArg> = impl_item_method.sig.inputs.clone().into_iter().collect();
                 a.pop();
                 a
-            },
+            }
             false => impl_item_method.sig.inputs.clone().into_iter().collect(),
         };
         let fields = filter_typed_args(inputs.iter()).map(|field| &*field.ty);
@@ -620,7 +626,7 @@ impl AbstractProcess {
                     fn #ident #generics (&self #(, #args )*) -> Self::#return_ty_type;
                 }
             });
-        
+
         let deferred_request_handler_defs = deferred_request_handlers
             .iter()
             .zip(repeat(true)) // is_deferred = true
@@ -838,7 +844,6 @@ impl AbstractProcess {
                 }
             });
 
-
         quote! {
             impl #impl_generics #message_trait_name #ty_generics for lunatic::ap::ProcessRef<#self_ty> #where_clause {
                 #( #message_handler_impls )*
@@ -1006,26 +1011,26 @@ impl<'a> HandlerStructure<'a> {
             .map(|(ident, ty)| quote! { #ident: #ty })
             .collect();
         let return_ty = if is_deferred {
-             match &inputs.last() {
+            match &inputs.last() {
                 Some(FnArg::Typed(path)) => match &*path.ty {
-                        Type::Path(path) => {
-                            let last = path.path.segments.last().unwrap();
-                            match &last.arguments {
-                                PathArguments::AngleBracketed(generics) => {
-                                    let response_type = generics.args.first().unwrap();
-                                    quote!{ #response_type }
-                                },
-                                _ => quote!{()},
+                    Type::Path(path) => {
+                        let last = path.path.segments.last().unwrap();
+                        match &last.arguments {
+                            PathArguments::AngleBracketed(generics) => {
+                                let response_type = generics.args.first().unwrap();
+                                quote! { #response_type }
                             }
-                        },
-                        _ => quote!{()},
+                            _ => quote! {()},
+                        }
+                    }
+                    _ => quote! {()},
                 },
-                _ => quote!{()},
+                _ => quote! {()},
             }
         } else {
             match output {
-                syn::ReturnType::Default =>  quote!{()},
-                syn::ReturnType::Type(_, ty) =>  quote!{#ty},
+                syn::ReturnType::Default => quote! {()},
+                syn::ReturnType::Type(_, ty) => quote! {#ty},
             }
         };
         let message_type = AbstractProcess::handler_wrapper_ident(ident);
