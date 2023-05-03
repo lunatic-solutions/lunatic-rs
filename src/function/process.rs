@@ -357,12 +357,12 @@ impl<M, S> Process<M, S> {
         T::spawn(capture, entry, Some(name), Some(tag), Some(config), None)
     }
 
-    /// Returns a local node process ID.
+    /// Returns the process ID for the local node.
     pub fn id(&self) -> u64 {
         self.id
     }
 
-    /// Returns a node ID.
+    /// Returns the node ID.
     pub fn node_id(&self) -> u64 {
         self.node_id
     }
