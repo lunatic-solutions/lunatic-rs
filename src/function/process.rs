@@ -26,10 +26,11 @@ pub trait IntoProcess<M, S> {
     fn spawn<C>(
         capture: C,
         entry: fn(C, Self),
+        name: Option<&str>,
         link: Option<Tag>,
         config: Option<&ProcessConfig>,
         node: Option<u64>,
-    ) -> Self::Process
+    ) -> Result<Self::Process, LunaticError>
     where
         S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>;
 }
@@ -130,7 +131,8 @@ pub struct Process<M, S = Bincode> {
 }
 
 impl<M, S> Process<M, S> {
-    pub(crate) fn new(node_id: u64, process_id: u64) -> Self {
+    /// Creates a new process reference from a node_id and process_id.
+    pub unsafe fn new(node_id: u64, process_id: u64) -> Self {
         Self {
             node_id,
             id: process_id,
@@ -139,7 +141,7 @@ impl<M, S> Process<M, S> {
     }
 
     /// Return reference to self.
-    pub(crate) fn this() -> Self {
+    pub unsafe fn this() -> Self {
         Self::new(node_id(), process_id())
     }
 
@@ -156,26 +158,58 @@ impl<M, S> Process<M, S> {
     }
 
     /// Spawn a process.
+    #[track_caller]
     pub fn spawn<C, T>(capture: C, entry: fn(C, T)) -> T::Process
     where
         S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
         T: NoLink,
     {
-        T::spawn(capture, entry, None, None, None)
+        T::spawn(capture, entry, None, None, None, None).unwrap()
+    }
+
+    /// Spawn a named process.
+    pub(crate) fn name_spawn<C, T>(
+        name: &str,
+        capture: C,
+        entry: fn(C, T),
+    ) -> Result<T::Process, LunaticError>
+    where
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
+        T: IntoProcess<M, S>,
+        T: NoLink,
+    {
+        T::spawn(capture, entry, Some(name), None, None, None)
     }
 
     /// Spawn a process on a remote node.
+    #[track_caller]
     pub fn spawn_node<C, T>(node_id: u64, capture: C, entry: fn(C, T)) -> T::Process
     where
         S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
         T: NoLink,
     {
-        T::spawn(capture, entry, None, None, Some(node_id))
+        T::spawn(capture, entry, None, None, None, Some(node_id)).unwrap()
+    }
+
+    /// Spawn a named process on a remote node.
+    pub(crate) fn name_spawn_node<C, T>(
+        name: &str,
+        node_id: u64,
+        capture: C,
+        entry: fn(C, T),
+    ) -> Result<T::Process, LunaticError>
+    where
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
+        T: IntoProcess<M, S>,
+        T: NoLink,
+    {
+        T::spawn(capture, entry, Some(name), None, None, Some(node_id))
     }
 
     /// Spawn a process on a remote node.
+    #[track_caller]
     pub fn spawn_node_config<C, T>(
         node_id: u64,
         config: &ProcessConfig,
@@ -187,40 +221,98 @@ impl<M, S> Process<M, S> {
         T: IntoProcess<M, S>,
         T: NoLink,
     {
-        T::spawn(capture, entry, None, Some(config), Some(node_id))
+        T::spawn(capture, entry, None, None, Some(config), Some(node_id)).unwrap()
+    }
+
+    /// Spawn a named process on a remote node.
+    pub(crate) fn name_spawn_node_config<C, T>(
+        name: &str,
+        node_id: u64,
+        config: &ProcessConfig,
+        capture: C,
+        entry: fn(C, T),
+    ) -> Result<T::Process, LunaticError>
+    where
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
+        T: IntoProcess<M, S>,
+        T: NoLink,
+    {
+        T::spawn(
+            capture,
+            entry,
+            Some(name),
+            None,
+            Some(config),
+            Some(node_id),
+        )
     }
 
     /// Spawn a linked process.
+    #[track_caller]
     pub fn spawn_link<C, T>(capture: C, entry: fn(C, T)) -> T::Process
     where
         S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
     {
-        T::spawn(capture, entry, Some(Tag::new()), None, None)
+        T::spawn(capture, entry, None, Some(Tag::new()), None, None).unwrap()
     }
 
     /// Spawn a linked process with a tag.
     ///
     /// Allows the caller to provide a tag for the link.
+    #[track_caller]
     pub fn spawn_link_tag<C, T>(capture: C, tag: Tag, entry: fn(C, T)) -> T::Process
     where
         S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
     {
-        T::spawn(capture, entry, Some(tag), None, None)
+        T::spawn(capture, entry, None, Some(tag), None, None).unwrap()
+    }
+
+    /// Spawn a named linked process with a tag.
+    ///
+    /// Allows the caller to provide a tag for the link.
+    pub(crate) fn name_spawn_link_tag<C, T>(
+        name: &str,
+        capture: C,
+        tag: Tag,
+        entry: fn(C, T),
+    ) -> Result<T::Process, LunaticError>
+    where
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
+        T: IntoProcess<M, S>,
+    {
+        T::spawn(capture, entry, Some(name), Some(tag), None, None)
     }
 
     /// Spawn a process with a custom configuration.
+    #[track_caller]
     pub fn spawn_config<C, T>(config: &ProcessConfig, capture: C, entry: fn(C, T)) -> T::Process
     where
         S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
         T: NoLink,
     {
-        T::spawn(capture, entry, None, Some(config), None)
+        T::spawn(capture, entry, None, None, Some(config), None).unwrap()
+    }
+
+    /// Spawn a named process with a custom configuration.
+    pub(crate) fn name_spawn_config<C, T>(
+        name: &str,
+        config: &ProcessConfig,
+        capture: C,
+        entry: fn(C, T),
+    ) -> Result<T::Process, LunaticError>
+    where
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
+        T: IntoProcess<M, S>,
+        T: NoLink,
+    {
+        T::spawn(capture, entry, Some(name), None, Some(config), None)
     }
 
     /// Spawn a linked process with a custom configuration.
+    #[track_caller]
     pub fn spawn_link_config<C, T>(
         config: &ProcessConfig,
         capture: C,
@@ -230,11 +322,12 @@ impl<M, S> Process<M, S> {
         S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
     {
-        T::spawn(capture, entry, Some(Tag::new()), Some(config), None)
+        T::spawn(capture, entry, None, Some(Tag::new()), Some(config), None).unwrap()
     }
 
     /// Spawn a linked process with a custom configuration & provide tag for
     /// linking.
+    #[track_caller]
     pub fn spawn_link_config_tag<C, T>(
         config: &ProcessConfig,
         capture: C,
@@ -245,7 +338,23 @@ impl<M, S> Process<M, S> {
         S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
         T: IntoProcess<M, S>,
     {
-        T::spawn(capture, entry, Some(tag), Some(config), None)
+        T::spawn(capture, entry, None, Some(tag), Some(config), None).unwrap()
+    }
+
+    /// Spawn a named linked process with a custom configuration & provide tag
+    /// for linking.
+    pub(crate) fn name_spawn_link_config_tag<C, T>(
+        name: &str,
+        config: &ProcessConfig,
+        capture: C,
+        tag: Tag,
+        entry: fn(C, T),
+    ) -> Result<T::Process, LunaticError>
+    where
+        S: CanSerialize<C> + CanSerialize<ProtocolCapture<C>>,
+        T: IntoProcess<M, S>,
+    {
+        T::spawn(capture, entry, Some(name), Some(tag), Some(config), None)
     }
 
     /// Returns a local node process ID.

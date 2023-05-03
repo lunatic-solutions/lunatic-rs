@@ -1,27 +1,26 @@
-use std::{
-    cell::UnsafeCell,
-    io::{Error, ErrorKind, IoSlice, Read, Result, Write},
-    time::Duration,
-};
+use std::cell::UnsafeCell;
+use std::io::{Error, ErrorKind, IoSlice, Read, Result, Write};
+use std::time::Duration;
 
-use serde::{
-    de::{self, Visitor},
-    Deserialize, Deserializer, Serialize, Serializer,
-};
+use serde::de::{self, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::{error::LunaticError, host};
+use crate::error::LunaticError;
+use crate::host;
 
 const TIMEOUT: u32 = 9027;
 
 /// A TCP connection.
 ///
-/// A [`TlsStream`] can be created by [`connect`][`TlsStream::connect()`]ing to an endpoint or by
-/// [`accept`][`super::TcpListener::accept()`]ing an incoming connection.
+/// A [`TlsStream`] can be created by [`connect`][`TlsStream::connect()`]ing to
+/// an endpoint or by [`accept`][`super::TcpListener::accept()`]ing an incoming
+/// connection.
 ///
-/// [`TlsStream`] is a bidirectional stream that implements traits [`Read`] and [`Write`].
+/// [`TlsStream`] is a bidirectional stream that implements traits [`Read`] and
+/// [`Write`].
 ///
-/// Cloning a [`TlsStream`] creates another handle to the same socket. The socket will be closed
-/// when all handles to it are dropped.
+/// Cloning a [`TlsStream`] creates another handle to the same socket. The
+/// socket will be closed when all handles to it are dropped.
 ///
 /// The Transmission Control Protocol is specified in [IETF RFC 793].
 ///
@@ -102,27 +101,33 @@ impl TlsStream {
 
     /// Creates a TLS connection to the specified address.
     ///
-    /// This method will create a new TLS socket and attempt to connect it to the provided `addr`,
+    /// This method will create a new TLS socket and attempt to connect it to
+    /// the provided `addr`,
     ///
-    /// If `addr` yields multiple addresses, connecting will be attempted with each of the
-    /// addresses until connecting to one succeeds. If none of the addresses result in a successful
-    /// connection, the error from the last connect attempt is returned.
+    /// If `addr` yields multiple addresses, connecting will be attempted with
+    /// each of the addresses until connecting to one succeeds. If none of
+    /// the addresses result in a successful connection, the error from the
+    /// last connect attempt is returned.
     pub fn connect(addr: &str, port: u32) -> Result<Self> {
         TlsStream::connect_timeout_(addr, None, port, vec![])
     }
 
-    /// Creates a TLS connection to the specified address with custom certificates.
+    /// Creates a TLS connection to the specified address with custom
+    /// certificates.
     ///
-    /// This method will create a new TLS socket and attempt to connect it to the provided `addr`,
+    /// This method will create a new TLS socket and attempt to connect it to
+    /// the provided `addr`,
     ///
-    /// If `addr` yields multiple addresses, connecting will be attempted with each of the
-    /// addresses until connecting to one succeeds. If none of the addresses result in a successful
-    /// connection, the error from the last connect attempt is returned.
+    /// If `addr` yields multiple addresses, connecting will be attempted with
+    /// each of the addresses until connecting to one succeeds. If none of
+    /// the addresses result in a successful connection, the error from the
+    /// last connect attempt is returned.
     pub fn connect_with_certs(addr: &str, port: u32, certs: Vec<Vec<u8>>) -> Result<Self> {
         TlsStream::connect_timeout_(addr, None, port, certs)
     }
 
-    /// Same as [`TlsStream::connect`], but only waits for the duration of timeout to connect.
+    /// Same as [`TlsStream::connect`], but only waits for the duration of
+    /// timeout to connect.
     pub fn connect_timeout(
         addr: &str,
         timeout: Duration,
@@ -161,14 +166,15 @@ impl TlsStream {
         if result == 0 {
             return Ok(TlsStream::from(id));
         }
-        let lunatic_error = LunaticError::from(id);
+        let lunatic_error = LunaticError::Error(id);
         Err(Error::new(ErrorKind::Other, lunatic_error))
     }
 
     /// Sets write timeout for TlsStream
     ///
-    /// This method will change the timeout for everyone holding a reference to the TlsStream
-    /// Once a timeout is set, it can be removed by sending `None`
+    /// This method will change the timeout for everyone holding a reference to
+    /// the TlsStream Once a timeout is set, it can be removed by sending
+    /// `None`
     pub fn set_write_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
         unsafe {
             host::api::networking::set_tls_write_timeout(
@@ -193,8 +199,9 @@ impl TlsStream {
 
     /// Sets read timeout for TlsStream
     ///
-    /// This method will change the timeout for everyone holding a reference to the TlsStream
-    /// Once a timeout is set, it can be removed by sending `None`
+    /// This method will change the timeout for everyone holding a reference to
+    /// the TlsStream Once a timeout is set, it can be removed by sending
+    /// `None`
     pub fn set_read_timeout(&mut self, duration: Option<Duration>) -> Result<()> {
         unsafe {
             host::api::networking::set_tls_read_timeout(
@@ -239,7 +246,7 @@ impl Write for TlsStream {
         } else if result == TIMEOUT {
             Err(Error::new(ErrorKind::TimedOut, "TlsStream write timed out"))
         } else {
-            let lunatic_error = LunaticError::from(nwritten_or_error_id);
+            let lunatic_error = LunaticError::Error(nwritten_or_error_id);
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
@@ -249,7 +256,7 @@ impl Write for TlsStream {
         match unsafe { host::api::networking::tls_flush(self.id, &mut error_id as *mut u64) } {
             0 => Ok(()),
             _ => {
-                let lunatic_error = LunaticError::from(error_id);
+                let lunatic_error = LunaticError::Error(error_id);
                 Err(Error::new(ErrorKind::Other, lunatic_error))
             }
         }
@@ -272,7 +279,7 @@ impl Read for TlsStream {
         } else if result == TIMEOUT {
             Err(Error::new(ErrorKind::TimedOut, "TlsStream read timed out"))
         } else {
-            let lunatic_error = LunaticError::from(nread_or_error_id);
+            let lunatic_error = LunaticError::Error(nread_or_error_id);
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }

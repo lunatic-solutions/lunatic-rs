@@ -14,36 +14,34 @@ use crate::host::api::error;
 pub enum LunaticError {
     Error(u64),
     PermissionDenied,
+    /// A process under this name already exists (node_id, process_id)
+    NameAlreadyRegistered(u64, u64),
 }
 
 impl Drop for LunaticError {
     fn drop(&mut self) {
         match self {
-            LunaticError::Error(id) => {
+            Self::Error(id) => {
                 unsafe { error::drop(*id) };
             }
-            LunaticError::PermissionDenied => (),
+            Self::PermissionDenied => (),
+            Self::NameAlreadyRegistered(_, _) => (),
         }
-    }
-}
-
-impl LunaticError {
-    pub(crate) fn from(id: u64) -> Self {
-        LunaticError::Error(id)
     }
 }
 
 impl Debug for LunaticError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
-            LunaticError::Error(id) => {
+            Self::Error(id) => {
                 let size = unsafe { error::string_size(*id) };
                 let mut buff = vec![0; size as usize];
                 unsafe { error::to_string(*id, buff.as_mut_ptr()) };
                 let error = std::str::from_utf8(&buff).unwrap();
                 write!(f, "{}", error)
             }
-            LunaticError::PermissionDenied => write!(f, "Permission denied"),
+            Self::PermissionDenied => write!(f, "Permission denied"),
+            Self::NameAlreadyRegistered(_, _) => write!(f, "Name is already registered"),
         }
     }
 }
@@ -51,14 +49,15 @@ impl Debug for LunaticError {
 impl Display for LunaticError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
-            LunaticError::Error(id) => {
+            Self::Error(id) => {
                 let size = unsafe { error::string_size(*id) };
                 let mut buff = vec![0; size as usize];
                 unsafe { error::to_string(*id, buff.as_mut_ptr()) };
                 let error = std::str::from_utf8(&buff).unwrap();
                 write!(f, "{}", error)
             }
-            LunaticError::PermissionDenied => write!(f, "Permission denied"),
+            Self::PermissionDenied => write!(f, "Permission denied"),
+            Self::NameAlreadyRegistered(_, _) => write!(f, "Name is already registered"),
         }
     }
 }

@@ -243,6 +243,19 @@ pub mod process {
             params_len: usize,
             id: *mut u64,
         ) -> u32;
+        pub fn get_or_spawn(
+            name: *const u8,
+            name_len: usize,
+            link: i64,
+            config_id: i64,
+            module_id: i64,
+            function: *const u8,
+            function_len: usize,
+            params: *const u8,
+            params_len: usize,
+            node_id: *mut u64,
+            id: *mut u64,
+        ) -> u32;
         pub fn sleep_ms(millis: u64);
         pub fn die_when_link_dies(trap: u32);
         pub fn process_id() -> u64;
@@ -258,12 +271,6 @@ pub mod registry {
     extern "C" {
         pub fn put(name: *const u8, name_len: usize, node_id: u64, process_id: u64);
         pub fn get(
-            name: *const u8,
-            name_len: usize,
-            node_id: *mut u64,
-            process_id: *mut u64,
-        ) -> u32;
-        pub fn get_or_put_later(
             name: *const u8,
             name_len: usize,
             node_id: *mut u64,

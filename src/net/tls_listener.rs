@@ -2,13 +2,15 @@ use std::io::{Error, ErrorKind, Result};
 use std::net::SocketAddr;
 
 use super::SocketAddrIterator;
-use crate::{error::LunaticError, host, net::TlsStream};
+use crate::error::LunaticError;
+use crate::host;
+use crate::net::TlsStream;
 
 /// A TLS server, listening for connections.
 ///
-/// After creating a [`TlsListener`] by [`bind`][`TlsListener::bind()`]ing it to an address, it
-/// listens for incoming encrypted TCP (TLS) connections. These can be accepted by calling
-/// [`accept()`][`TlsListener::accept()`].
+/// After creating a [`TlsListener`] by [`bind`][`TlsListener::bind()`]ing it to
+/// an address, it listens for incoming encrypted TCP (TLS) connections. These
+/// can be accepted by calling [`accept()`][`TlsListener::accept()`].
 ///
 /// The Transmission Control Protocol is specified in [IETF RFC 793].
 ///
@@ -54,12 +56,13 @@ impl Drop for TlsListener {
 impl TlsListener {
     /// Creates a new [`TlsListener`] bound to the given address.
     ///
-    /// Binding with a port number of 0 will request that the operating system assigns an available
-    /// port to this listener.
+    /// Binding with a port number of 0 will request that the operating system
+    /// assigns an available port to this listener.
     ///
-    /// If `addr` yields multiple addresses, binding will be attempted with each of the addresses
-    /// until one succeeds and returns the listener. If none of the addresses succeed in creating a
-    /// listener, the error from the last attempt is returned.
+    /// If `addr` yields multiple addresses, binding will be attempted with each
+    /// of the addresses until one succeeds and returns the listener. If
+    /// none of the addresses succeed in creating a listener, the error from
+    /// the last attempt is returned.
     pub fn bind<A>(addr: A, certs: Vec<u8>, keys: Vec<u8>) -> Result<Self>
     where
         A: super::ToSocketAddrs,
@@ -110,13 +113,14 @@ impl TlsListener {
                 return Ok(Self { id });
             }
         }
-        let lunatic_error = LunaticError::from(id);
+        let lunatic_error = LunaticError::Error(id);
         Err(Error::new(ErrorKind::Other, lunatic_error))
     }
 
     /// Accepts a new incoming connection.
     ///
-    /// This will block and typically needs its own dedicated child process loop.
+    /// This will block and typically needs its own dedicated child process
+    /// loop.
     ///
     /// Returns a TLS stream and the peer address.
     pub fn accept(&self) -> Result<(TlsStream, SocketAddr)> {
@@ -135,14 +139,15 @@ impl TlsListener {
             let peer = dns_iter.next().expect("must contain one element");
             Ok((tls_stream, peer))
         } else {
-            let lunatic_error = LunaticError::from(tls_stream_or_error_id);
+            let lunatic_error = LunaticError::Error(tls_stream_or_error_id);
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }
 
     /// Returns the local address that this listener is bound to.
     ///
-    /// This can be useful, for example, to identify when binding to port 0 which port was assigned by the OS.
+    /// This can be useful, for example, to identify when binding to port 0
+    /// which port was assigned by the OS.
     pub fn local_addr(&self) -> Result<SocketAddr> {
         let mut dns_iter_or_error_id = 0;
         let result = unsafe {
@@ -153,7 +158,7 @@ impl TlsListener {
             let addr = dns_iter.next().expect("must contain one element");
             Ok(addr)
         } else {
-            let lunatic_error = LunaticError::from(dns_iter_or_error_id);
+            let lunatic_error = LunaticError::Error(dns_iter_or_error_id);
             Err(Error::new(ErrorKind::Other, lunatic_error))
         }
     }

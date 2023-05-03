@@ -35,14 +35,14 @@ pub fn lookup_nodes(query: &'static str) -> Result<Vec<u64>, LunaticError> {
         )
     };
     if result == 1 {
-        return Err(LunaticError::from(error_id));
+        return Err(LunaticError::Error(error_id));
     }
     let mut nodes = vec![0; nodes_len as usize];
     let copied_cnt = unsafe {
         copy_lookup_nodes_results(query_id, nodes.as_mut_ptr(), nodes_len, &mut error_id)
     };
     if copied_cnt < 0 {
-        return Err(LunaticError::from(error_id));
+        return Err(LunaticError::Error(error_id));
     }
     nodes.truncate(copied_cnt as usize);
     Ok(nodes)
@@ -68,6 +68,6 @@ pub fn spawn(node_id: u64, config_id: i64, entry: fn(i32), arg: i32) -> Result<u
     if result == 0 {
         Ok(id)
     } else {
-        Err(LunaticError::from(id))
+        Err(LunaticError::Error(id))
     }
 }

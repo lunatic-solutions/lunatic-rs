@@ -274,7 +274,7 @@ impl<AP: AbstractProcess> Config<AP> {
 
     /// Get a reference to the running [`AbstractProcess`].
     pub fn self_ref(&self) -> ProcessRef<AP> {
-        let process = Process::this();
+        let process = unsafe { Process::this() };
         ProcessRef { process }
     }
 }
@@ -318,7 +318,7 @@ pub struct State<'a, AP: AbstractProcess> {
 impl<'a, AP: AbstractProcess> State<'a, AP> {
     /// Get a reference to the running [`AbstractProcess`].
     pub fn self_ref(&self) -> ProcessRef<AP> {
-        let process = Process::this();
+        let process = unsafe { Process::this() };
         ProcessRef { process }
     }
 }
