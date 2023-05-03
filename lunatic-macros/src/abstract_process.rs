@@ -556,7 +556,7 @@ impl AbstractProcess {
                     fn handle(
                         mut state: lunatic::ap::State<Self>,
                         request: #request_type #ty_generics,
-                        deferred_response: lunatic::ap::DeferredResponse<Self::Response, Self>) {                        
+                        deferred_response: lunatic::ap::DeferredResponse<Self::Response, Self>) {
                             state.#fn_ident(#( #request_fields, )* deferred_response);
                     }
                 }
