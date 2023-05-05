@@ -149,8 +149,13 @@ impl ProcessConfig {
         }
     }
 
+    #[rustversion::before(1.67)]
     /// Mark a directory as pre-opened.
-    pub fn preopen_dir(&self, dir: &str) {
+    ///
+    /// This API is only available in Rust 1.66 and below. See:
+    /// - https://github.com/rust-lang/rust/issues/107635
+    /// - https://github.com/rust-lang/rust/pull/108097
+    pub fn preopen_dir(&mut self, dir: &str) {
         unsafe { host::api::wasi::config_preopen_dir(self.id() as u64, dir.as_ptr(), dir.len()) }
     }
 }

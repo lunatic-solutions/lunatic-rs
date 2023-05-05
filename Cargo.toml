@@ -1,6 +1,6 @@
 [package]
 name = "lunatic"
-version = "0.13.0"
+version = "0.13.1"
 edition = "2021"
 authors = ["Bernard Kolobara <bernard@lunatic.solutions>"]
 description = "Helper library for building Rust applications that run on lunatic."
@@ -19,6 +19,7 @@ sqlite = ["lunatic-sqlite-api"]
 
 [dependencies]
 thiserror = "1.0"
+rustversion = "1.0"
 paste = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 bincode = "1.3"

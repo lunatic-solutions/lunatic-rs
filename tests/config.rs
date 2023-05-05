@@ -114,3 +114,16 @@ fn config_cli_args() {
     });
     let _ = task.result();
 }
+
+#[rustversion::before(1.67)]
+#[test]
+fn config_file_operations() {
+    let mut config = ProcessConfig::new().unwrap();
+    config.preopen_dir(".");
+
+    let task = spawn_link!(@task &config, || {
+        // Should be able to open
+        std::fs::read_dir(".").unwrap();
+    });
+    let _ = task.result();
+}
