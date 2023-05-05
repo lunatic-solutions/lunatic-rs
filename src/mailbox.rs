@@ -338,7 +338,7 @@ pub enum Signal {
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub struct LinkDiedSignal(Tag);
+pub struct LinkDiedSignal(pub Tag);
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct ProcessDiedSignal(pub u64);
