@@ -323,23 +323,31 @@ pub enum MessageSignal<T, U> {
     Signal(U),
 }
 
+/// An error returned when receiving from a mailbox.
 #[derive(Error, Debug)]
 pub enum MailboxError {
+    /// Message failed to be deserialized.
     #[error("deserialization failed: {0}")]
     DeserializationFailed(#[from] DecodeError),
+    /// Receive message timed out.
     #[error("timed out")]
     TimedOut,
 }
 
+/// A signal received when a link dies or monitored process dies.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum Signal {
+    /// A linked process died.
     LinkDied(Tag),
+    /// A monitored process died.
     ProcessDied(u64),
 }
 
+/// A linked process died.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct LinkDiedSignal(pub Tag);
 
+/// A monitored process died.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct ProcessDiedSignal(pub u64);
 
@@ -372,15 +380,18 @@ impl<T, U> MessageSignal<T, U> {
 }
 
 impl MailboxError {
+    /// Returns true if the error is a [`MailboxError::TimedOut`].
     pub fn is_timed_out(&self) -> bool {
         matches!(self, MailboxError::TimedOut)
     }
 
+    /// Returns true if the error is a [`MailboxError::DeserializationFailed`].
     pub fn is_deserialization_failed(&self) -> bool {
         matches!(self, MailboxError::DeserializationFailed(_))
     }
 }
 
+/// Error returned when converting a [`MessageSignal`].
 #[derive(Clone, Copy, Debug)]
 pub struct MessageSignalConvertError;
 
