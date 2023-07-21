@@ -4,7 +4,7 @@ use lunatic::ap::handlers::{Message, Request};
 use lunatic::ap::{AbstractProcess, Config, MessageHandler, ProcessRef, RequestHandler, State};
 use lunatic::serializer::{Json, MessagePack};
 use lunatic::supervisor::{Supervisor, SupervisorConfig, SupervisorStrategy};
-use lunatic::{sleep, spawn, test};
+use lunatic::{sleep, spawn, test, ProcessConfig};
 
 const LOGGER_NAME: &'static str = "logger/assert_order";
 
@@ -58,7 +58,12 @@ impl AbstractProcess for A {
     type Arg = (u32, char);
     type State = A;
     type Serializer = MessagePack;
-    type Handlers = (Message<Inc>, Request<Count>, Message<Panic>);
+    type Handlers = (
+        Message<Inc>,
+        Request<Count>,
+        Message<Panic>,
+        Request<GetEnvVar>,
+    );
     type StartupError = ();
 
     fn init(_: Config<Self>, (count, name): Self::Arg) -> Result<A, ()> {
@@ -107,6 +112,19 @@ impl MessageHandler<Panic> for A {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+struct GetEnvVar(String);
+impl RequestHandler<GetEnvVar> for A {
+    type Response = Option<String>;
+
+    fn handle(_: State<Self>, env_var: GetEnvVar) -> Option<String> {
+        // Look up environment variable inside the process and return it.
+        let mut vars = std::env::vars();
+        vars.find(|(key, _)| key == &env_var.0)
+            .map(|(_, value)| value)
+    }
+}
+
 #[test]
 fn one_failing_process() {
     struct Sup;
@@ -117,7 +135,7 @@ fn one_failing_process() {
         fn init(config: &mut SupervisorConfig<Self>, _: ()) {
             config.set_strategy(SupervisorStrategy::OneForOne);
             let starting_state = (4, ' ');
-            config.children_args(((starting_state, None),));
+            config.set_args((starting_state,));
         }
     }
 
@@ -156,7 +174,7 @@ fn two_failing_process_one_for_one() {
             config.set_strategy(SupervisorStrategy::OneForOne);
             let starting_state_a = (33, 'a');
             let starting_state_b = (44, 'b');
-            config.children_args(((starting_state_a, None), (starting_state_b, None)));
+            config.set_args((starting_state_a, starting_state_b));
         }
     }
 
@@ -247,7 +265,7 @@ fn two_failing_process_one_for_all() {
             config.set_strategy(SupervisorStrategy::OneForAll);
             let starting_state_a = (33, 'a');
             let starting_state_b = (44, 'b');
-            config.children_args(((starting_state_a, None), (starting_state_b, None)));
+            config.set_args((starting_state_a, starting_state_b));
         }
     }
 
@@ -345,11 +363,11 @@ fn four_failing_process_rest_for_all() {
             let starting_state_b = (44, 'b');
             let starting_state_c = (55, 'c');
             let starting_state_d = (66, 'd');
-            config.children_args((
-                (starting_state_a, None),
-                (starting_state_b, None),
-                (starting_state_c, None),
-                (starting_state_d, None),
+            config.set_args((
+                starting_state_a,
+                starting_state_b,
+                starting_state_c,
+                starting_state_d,
             ));
         }
     }
@@ -435,17 +453,17 @@ fn ten_children_sup() {
 
         fn init(config: &mut SupervisorConfig<Self>, _: ()) {
             config.set_strategy(SupervisorStrategy::OneForOne);
-            config.children_args((
-                ((0, ' '), None),
-                ((0, ' '), None),
-                ((0, ' '), None),
-                ((0, ' '), None),
-                ((0, ' '), None),
-                ((0, ' '), None),
-                ((0, ' '), None),
-                ((0, ' '), None),
-                ((0, ' '), None),
-                ((0, ' '), None),
+            config.set_args((
+                (0, ' '),
+                (0, ' '),
+                (0, ' '),
+                (0, ' '),
+                (0, ' '),
+                (0, ' '),
+                (0, ' '),
+                (0, ' '),
+                (0, ' '),
+                (0, ' '),
             ));
         }
     }
@@ -479,12 +497,7 @@ fn shutdown() {
 
         fn init(config: &mut SupervisorConfig<Self>, _: ()) {
             config.set_strategy(SupervisorStrategy::OneForOne);
-            config.children_args((
-                ((0, 'a'), None),
-                ((0, 'b'), None),
-                ((0, 'c'), None),
-                ((0, 'd'), None),
-            ));
+            config.set_args(((0, 'a'), (0, 'b'), (0, 'c'), (0, 'd')));
         }
     }
 
@@ -516,11 +529,12 @@ fn lookup_children() {
 
         fn init(config: &mut SupervisorConfig<Self>, _: ()) {
             config.set_strategy(SupervisorStrategy::OneForOne);
-            config.children_args((
-                ((0, ' '), Some("first".to_owned())),
-                ((1, ' '), Some("second".to_owned())),
-                ((2, ' '), Some("third".to_owned())),
-            ));
+            config.set_args(((0, ' '), (1, ' '), (2, ' ')));
+            config.set_names((
+                Some("first".to_owned()),
+                Some("second".to_owned()),
+                Some("third".to_owned()),
+            ))
         }
     }
 
@@ -554,7 +568,7 @@ fn wait_on_shutdown() {
 
         fn init(config: &mut SupervisorConfig<Self>, _: ()) {
             config.set_strategy(SupervisorStrategy::OneForOne);
-            config.children_args((((0, ' '), None),));
+            config.set_args(((0, ' '),));
         }
     }
 
@@ -570,4 +584,40 @@ fn wait_on_shutdown() {
     // block main process until supervisor shuts down
     // the test will hang if block_until_shutdown() fails
     sup_cloned.wait_on_shutdown()
+}
+
+#[test]
+fn env_var_config() {
+    struct Sup;
+    impl Supervisor for Sup {
+        type Arg = ();
+        type Children = (A,);
+
+        fn init(config: &mut SupervisorConfig<Self>, _: ()) {
+            config.set_strategy(SupervisorStrategy::OneForOne);
+            config.set_args(((0, ' '),));
+            config.set_names((Some("named".to_owned()),));
+            let mut process_config = ProcessConfig::new().unwrap();
+            process_config.add_environment_variable("Hello", "world");
+            config.set_configs((Some(process_config),));
+        }
+    }
+
+    Sup::link().start(()).unwrap();
+
+    let named = ProcessRef::<A>::lookup(&"named").unwrap();
+    assert_eq!(
+        named.request(GetEnvVar("Hello".to_string())),
+        Some("world".to_string())
+    );
+    assert_eq!(named.request(GetEnvVar("no".to_string())), None);
+    // Kill
+    named.send(Panic);
+    sleep(Duration::from_millis(10));
+    let named = ProcessRef::<A>::lookup(&"named").unwrap();
+    assert_eq!(
+        named.request(GetEnvVar("Hello".to_string())),
+        Some("world".to_string())
+    );
+    assert_eq!(named.request(GetEnvVar("no".to_string())), None);
 }

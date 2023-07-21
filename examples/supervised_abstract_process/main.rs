@@ -16,8 +16,10 @@ impl Supervisor for Sup {
     fn init(config: &mut SupervisorConfig<Self>, _: ()) {
         // If the child fails, just restart it.
         config.set_strategy(SupervisorStrategy::OneForOne);
-        // Start named child "hello".
-        config.children_args(((0, Some("hello".to_owned())),));
+        // Start child with stat 0
+        config.set_args((0,));
+        // Name child 'hello'
+        config.set_names((Some("hello".to_owned()),));
     }
 }
 

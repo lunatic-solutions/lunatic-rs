@@ -87,6 +87,8 @@ where
             );
         }
 
+        sup_config.start_link();
+
         Ok(sup_config)
     }
 
@@ -174,6 +176,8 @@ where
     strategy: SupervisorStrategy,
     children: Option<<<T as Supervisor>::Children as Supervisable<T>>::Processes>,
     children_args: Option<<<T as Supervisor>::Children as Supervisable<T>>::Args>,
+    children_names: Option<<<T as Supervisor>::Children as Supervisable<T>>::Names>,
+    children_configs: Option<<<T as Supervisor>::Children as Supervisable<T>>::Configs>,
     children_tags: Option<<<T as Supervisor>::Children as Supervisable<T>>::Tags>,
     terminate_subscribers: Vec<DeferredResponse<(), T>>,
     phantom: PhantomData<T>,
@@ -187,14 +191,29 @@ where
         self.strategy = strategy;
     }
 
-    pub fn children_args(&mut self, args: <<T as Supervisor>::Children as Supervisable<T>>::Args) {
-        T::Children::start_links(self, args)
+    pub fn set_args(&mut self, args: <<T as Supervisor>::Children as Supervisable<T>>::Args) {
+        self.children_args = Some(args);
+    }
+
+    pub fn set_names(&mut self, names: <<T as Supervisor>::Children as Supervisable<T>>::Names) {
+        self.children_names = Some(names);
+    }
+
+    pub fn set_configs(
+        &mut self,
+        configs: <<T as Supervisor>::Children as Supervisable<T>>::Configs,
+    ) {
+        self.children_configs = Some(configs);
     }
 
     pub(crate) fn get_children(
         &self,
     ) -> <<T as Supervisor>::Children as Supervisable<T>>::Processes {
         self.children.as_ref().unwrap().clone()
+    }
+
+    pub fn start_link(&mut self) {
+        T::Children::start_links(self);
     }
 
     fn terminate(mut self) {
@@ -218,6 +237,8 @@ where
             phantom: PhantomData,
             children: None,
             children_args: None,
+            children_names: None,
+            children_configs: None,
             children_tags: None,
             terminate_subscribers: vec![],
             strategy: SupervisorStrategy::OneForOne,
@@ -231,9 +252,11 @@ where
 {
     type Processes: serde::Serialize + serde::de::DeserializeOwned + Clone;
     type Args: Clone;
+    type Names;
+    type Configs;
     type Tags;
 
-    fn start_links(config: &mut SupervisorConfig<T>, args: Self::Args);
+    fn start_links(config: &mut SupervisorConfig<T>);
     fn terminate(config: SupervisorConfig<T>);
     fn handle_failure(config: &mut SupervisorConfig<T>, tag: Tag);
 }
@@ -259,6 +282,18 @@ mod macros {
     macro_rules! tag {
         ($t:ident) => {
             Tag
+        };
+    }
+
+    macro_rules! ignore_type {
+        ($_:ident, $ret:ty) => {
+            $ret
+        };
+    }
+
+    macro_rules! ignore_expr {
+        ($_:ident, $ret:expr) => {
+            $ret
         };
     }
 
@@ -300,17 +335,34 @@ mod macros {
                     )*
                 {
                     type Processes = ($(ProcessRef<$t>,)*);
-                    type Args = ($(($t ::Arg, Option<String>),)*);
+                    type Args = ($($t ::Arg,)*);
+                    type Names = ($(macros::ignore_type!($t, Option<String>),)*);
+                    type Configs = ($(macros::ignore_type!($t, Option<crate::ProcessConfig>),)*);
                     type Tags = ($(macros::tag!($t),)*);
 
-                    fn start_links(config: &mut SupervisorConfig<K>, args: Self::Args) {
-                        config.children_args = Some(args.clone());
+                    #[allow(unused_variables)]
+                    fn start_links(config: &mut SupervisorConfig<K>) {
+                        let args = config.children_args.clone().unwrap();
+                        let names = match &config.children_names {
+                            Some(names) => names,
+                            None => { &( $(macros::ignore_expr!($t, None),)* ) }
+                        };
+                        let configs = match &config.children_configs {
+                            Some(configs) => configs,
+                            None => { &( $(macros::ignore_expr!($t, None),)* ) }
+                        };
 
                         $(
                             let [<tag$i>] = Tag::new();
-                            let result = match args.$i.1 {
-                                Some(name) => $t::link_with([<tag$i>]).start_as(&name, args.$i.0),
-                                None => $t::link_with([<tag$i>]).start(args.$i.0),
+                            let proc_builder = $t::link_with([<tag$i>]);
+                            let proc_builder = if let Some(config) = &configs.$i {
+                                proc_builder.configure(&config)
+                            } else {
+                                proc_builder
+                            };
+                            let result = match &names.$i {
+                                Some(name) => proc_builder.start_as(name, args.$i),
+                                None => proc_builder.start(args.$i),
                             };
                             let [<proc$i>] = match result {
                                 Ok(proc) => proc,
@@ -334,19 +386,31 @@ mod macros {
                                 $(
 
                                     if tag == config.children_tags.unwrap().$i {
-                                        let args = (
-                                            config.children_args.as_ref().unwrap().$i.0.clone(),
-                                            config.children_args.as_ref().unwrap().$i.1.as_deref(),
-                                        );
+                                        let args = config.children_args.as_ref().unwrap().$i.clone();
+                                        let name = match &config.children_names {
+                                            Some(names) => &names.$i,
+                                            None => &None
+                                        };
+                                        let proc_config = match &config.children_configs {
+                                            Some(configs) => &configs.$i,
+                                            None => &None
+                                        };
+
                                         let link_tag = Tag::new();
-                                        let result = match args.1 {
+                                        let proc_builder = $t::link_with(link_tag);
+                                        let proc_builder = if let Some(config) = proc_config {
+                                            proc_builder.configure(&config)
+                                        } else {
+                                            proc_builder
+                                        };
+                                        let result = match &name {
                                             Some(name) => {
                                                 // Remove first the previous registration
-                                                let remove = process_name::<$t, $t::Serializer>(ProcessType::ProcessRef, name);
+                                                let remove = process_name::<$t, $t::Serializer>(ProcessType::ProcessRef, &name);
                                                 unsafe { host::api::registry::remove(remove.as_ptr(), remove.len()) };
-                                                $t::link().start_as(&name, args.0)
+                                                proc_builder.start_as(name, args)
                                             },
-                                            None => $t::link_with(link_tag).start(args.0),
+                                            None => proc_builder.start(args),
                                         };
                                         let proc = match result {
                                             Ok(proc) => proc,
@@ -384,19 +448,31 @@ mod macros {
                                 // restart all
                                 $(
 
-                                    let args = (
-                                        config.children_args.as_ref().unwrap().$i.0.clone(),
-                                        config.children_args.as_ref().unwrap().$i.1.as_deref(),
-                                    );
+                                    let args = config.children_args.as_ref().unwrap().$i.clone();
+                                    let name = match &config.children_names {
+                                        Some(names) => &names.$i,
+                                        None => &None
+                                    };
+                                    let proc_config = match &config.children_configs {
+                                        Some(configs) => &configs.$i,
+                                        None => &None
+                                    };
+
                                     let link_tag = Tag::new();
-                                    let result = match args.1 {
+                                    let proc_builder = $t::link_with(link_tag);
+                                    let proc_builder = if let Some(config) = proc_config {
+                                        proc_builder.configure(&config)
+                                    } else {
+                                        proc_builder
+                                    };
+                                    let result = match name {
                                         Some(name) => {
                                             // Remove first the previous registration
-                                            let remove = process_name::<$t, $t::Serializer>(ProcessType::ProcessRef, name);
+                                            let remove = process_name::<$t, $t::Serializer>(ProcessType::ProcessRef, &name);
                                             unsafe { host::api::registry::remove(remove.as_ptr(), remove.len()) };
-                                            $t::link().start_as(&name, args.0)
+                                            proc_builder.start_as(name, args)
                                         },
-                                        None => $t::link_with(link_tag).start(args.0),
+                                        None => proc_builder.start(args),
                                     };
                                     let proc = match result {
                                         Ok(proc) => proc,
@@ -435,19 +511,31 @@ mod macros {
                                         if seen_tag == true || tag == config.children_tags.unwrap().$i {
                                             seen_tag = true;
 
-                                            let args = (
-                                                config.children_args.as_ref().unwrap().$i.0.clone(),
-                                                config.children_args.as_ref().unwrap().$i.1.as_deref(),
-                                            );
+                                            let args = config.children_args.as_ref().unwrap().$i.clone();
+                                            let name = match &config.children_names {
+                                                Some(names) => &names.$i,
+                                                None => &None
+                                            };
+                                            let proc_config = match &config.children_configs {
+                                                Some(configs) => &configs.$i,
+                                                None => &None
+                                            };
+
                                             let link_tag = Tag::new();
-                                            let result = match args.1 {
+                                            let proc_builder = $t::link_with(link_tag);
+                                            let proc_builder = if let Some(config) = proc_config {
+                                                proc_builder.configure(config)
+                                            } else {
+                                                proc_builder
+                                            };
+                                            let result = match name {
                                                 Some(name) => {
                                                     // Remove first the previous registration
-                                                    let remove = process_name::<$t, $t::Serializer>(ProcessType::ProcessRef, name);
+                                                    let remove = process_name::<$t, $t::Serializer>(ProcessType::ProcessRef, &name);
                                                     unsafe { host::api::registry::remove(remove.as_ptr(), remove.len()) };
-                                                    $t::link().start_as(&name, args.0)
+                                                    proc_builder.start_as(name, args)
                                                 },
-                                                None => $t::link_with(link_tag).start(args.0),
+                                                None => proc_builder.start(args),
                                             };
                                             let proc = match result {
                                                 Ok(proc) => proc,
@@ -468,7 +556,7 @@ mod macros {
         };
     }
 
-    pub(crate) use {impl_supervisable, reverse_shutdown, tag};
+    pub(crate) use {ignore_expr, ignore_type, impl_supervisable, reverse_shutdown, tag};
 }
 
 #[cfg(test)]
@@ -500,7 +588,7 @@ mod tests {
         type Children = (SimpleServer,);
 
         fn init(config: &mut SupervisorConfig<Self>, _: ()) {
-            config.children_args((((), None),));
+            config.set_args(((),));
         }
     }
 

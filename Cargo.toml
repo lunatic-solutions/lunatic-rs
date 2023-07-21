@@ -1,6 +1,6 @@
 [package]
 name = "lunatic"
-version = "0.13.1"
+version = "0.14.0"
 edition = "2021"
 authors = ["Bernard Kolobara <bernard@lunatic.solutions>"]
 description = "Helper library for building Rust applications that run on lunatic."
@@ -29,7 +29,7 @@ protobuf = { version = "3.1", optional = true }
 lunatic-sqlite-api = { version = "0.13", optional = true }
 lunatic-macros = { version = "0.13", path = "./lunatic-macros" }
 lunatic-test = { version = "0.13", path = "./lunatic-test" }
-lunatic-sys = { version = "0.13", path = "./lunatic-sys" }
+lunatic-sys = { version = "0.14", path = "./lunatic-sys" }
 
 [dev-dependencies]
 criterion = { version = "0.4", default-features = false }

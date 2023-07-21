@@ -35,11 +35,3 @@ fn re_entry<R, F: FnOnce() -> R>(pointer: usize) -> usize {
     let result = Box::new(result);
     Box::<R>::into_raw(result) as usize
 }
-
-/// This export is used by the host as a trampoline to re-enter the Wasm
-/// instance. Every re-entrance can be used as a point to catch a Wasm trap.
-#[export_name = "_lunatic_catch_trap"]
-extern "C" fn _lunatic_catch_trap(function: usize, pointer: usize) -> usize {
-    let function: fn(usize) -> usize = unsafe { std::mem::transmute(function) };
-    function(pointer)
-}
