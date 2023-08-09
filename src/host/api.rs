@@ -351,11 +351,78 @@ pub mod version {
 pub mod metrics {
     #[link(wasm_import_module = "lunatic::metrics")]
     extern "C" {
-        pub fn counter(name: *const u8, name_len: usize, value: u64);
-        pub fn increment_counter(name: *const u8, name_len: usize);
-        pub fn gauge(name: *const u8, name_len: usize, value: f64);
-        pub fn increment_gauge(name: *const u8, name_len: usize, value: f64);
-        pub fn decrement_gauge(name: *const u8, name_len: usize, value: f64);
-        pub fn histogram(name: *const u8, name_len: usize, value: f64);
+        pub fn span_start(
+            parent_span: u64,
+            name: *const u8,
+            name_len: usize,
+            attributes: *const u8,
+            attributes_len: usize,
+        ) -> u64;
+        pub fn span_drop(id: u64);
+
+        pub fn meter(name_ptr: *const u8, name_len: usize) -> u64;
+        pub fn meter_drop(id: u64);
+
+        pub fn event(
+            span_id: u64,
+            name: *const u8,
+            name_len: usize,
+            attributes: *const u8,
+            attributes_len: usize,
+        );
+
+        pub fn counter(
+            meter: u64,
+            name: *const u8,
+            name_len: usize,
+            description: *const u8,
+            description_len: usize,
+            unit: *const u8,
+            unit_len: usize,
+        ) -> u64;
+        pub fn counter_add(
+            span: u64,
+            counter: u64,
+            amount: f64,
+            attributes_ptr: *const u8,
+            attributes_len: usize,
+        );
+        pub fn counter_drop(id: u64);
+
+        pub fn up_down_counter(
+            meter: u64,
+            name: *const u8,
+            name_len: usize,
+            description: *const u8,
+            description_len: usize,
+            unit: *const u8,
+            unit_len: usize,
+        ) -> u64;
+        pub fn up_down_counter_add(
+            span: u64,
+            counter: u64,
+            amount: f64,
+            attributes_ptr: *const u8,
+            attributes_len: usize,
+        );
+        pub fn up_down_counter_drop(id: u64);
+
+        pub fn histogram(
+            meter: u64,
+            name: *const u8,
+            name_len: usize,
+            description: *const u8,
+            description_len: usize,
+            unit: *const u8,
+            unit_len: usize,
+        ) -> u64;
+        pub fn histogram_record(
+            span: u64,
+            histogram: u64,
+            value: f64,
+            attributes_ptr: *const u8,
+            attributes_len: usize,
+        );
+        pub fn histogram_drop(id: u64);
     }
 }
