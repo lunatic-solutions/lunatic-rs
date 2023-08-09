@@ -392,7 +392,7 @@ where
 
     /// Returns a process registered under `name` if it exists and the signature
     /// matches.
-    pub fn lookup<N: ProcessName>(name: &N) -> Option<Self> {
+    pub fn lookup<N: ProcessName + ?Sized>(name: &N) -> Option<Self> {
         let name = process_name::<T, T::Serializer>(ProcessType::ProcessRef, name.process_name());
         let mut id = 0;
         let mut node_id = 0;

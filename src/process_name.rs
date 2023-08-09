@@ -3,8 +3,8 @@
 /// It is implemented for common string types such as `&str` and `String`,
 /// but can be implemented on a custom type to create a process name type.
 ///
-/// It is best used with the [ProcessName](lunatic_macros::ProcessName) derive macro
-/// to generate a unique name.
+/// It is best used with the [ProcessName](lunatic_macros::ProcessName) derive
+/// macro to generate a unique name.
 ///
 /// # Example
 ///
@@ -28,7 +28,8 @@
 /// }
 /// ```
 ///
-/// For more information, see the [derive macro](lunatic_macros::ProcessName) docs.
+/// For more information, see the [derive macro](lunatic_macros::ProcessName)
+/// docs.
 pub trait ProcessName {
     fn process_name(&self) -> &str;
 }

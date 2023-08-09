@@ -400,7 +400,7 @@ impl<M, S> Process<M, S> {
     }
 
     /// Look up a process.
-    pub fn lookup<N: ProcessName>(name: &N) -> Option<Self> {
+    pub fn lookup<N: ProcessName + ?Sized>(name: &N) -> Option<Self> {
         let name = process_name::<M, S>(ProcessType::Process, name.process_name());
         let mut id = 0;
         let mut node_id = 0;
