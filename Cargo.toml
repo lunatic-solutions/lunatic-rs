@@ -32,7 +32,7 @@ lunatic-test = { version = "0.13", path = "./lunatic-test" }
 lunatic-sys = { version = "0.14", path = "./lunatic-sys" }
 
 [dev-dependencies]
-criterion = { version = "0.4", default-features = false }
+criterion = { version = "0.5", default-features = false }
 serde_bytes = "0.11"
 lunatic = { path = ".", features = ["json_serializer", "msgpack_serializer"] }
 
