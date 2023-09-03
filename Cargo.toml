@@ -36,6 +36,13 @@ criterion = { version = "0.4", default-features = false }
 serde_bytes = "0.11"
 lunatic = { path = ".", features = ["json_serializer", "msgpack_serializer"] }
 
+[build-dependencies]
+wlr-libpy = { git = "https://github.com/vmware-labs/webassembly-language-runtimes.git", features = ["build"] }
+
+[dependencies.pyo3]
+version = "0.19.1"
+features = ["auto-initialize","abi3-py311"]#,"extension-module"]#, "generate-import-lib"]#,
+
 [[bench]]
 name = "serializer"
 harness = false
